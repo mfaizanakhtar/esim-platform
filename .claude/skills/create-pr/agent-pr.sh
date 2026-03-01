@@ -81,10 +81,11 @@ PR_URL=$(gh pr create \
   --base main \
   --head "$BRANCH_NAME" \
   --title "$COMMIT_MSG" \
-  --body "$(printf "## Summary\nAutomated PR created by agent.\n\n## Branch\n\`%s\`\n\n## Checklist\n- [x] Lint passed\n- [x] Type-check passed\n- [x] Tests passed" "$BRANCH_NAME")" \
-  --json url --jq '.url')
+  --body "$(printf "## Summary\nAutomated PR created by agent.\n\n## Branch\n\`%s\`\n\n## Checklist\n- [x] Lint passed\n- [x] Type-check passed\n- [x] Tests passed" "$BRANCH_NAME")")
 
-PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+# Fetch PR number via gh pr view after creation
+PR_NUMBER=$(gh pr view "$BRANCH_NAME" --json number --jq '.number')
+PR_URL=$(gh pr view "$BRANCH_NAME" --json url --jq '.url')
 echo "✅ PR created: ${PR_URL}"
 
 # ── Wait for CI checks via GraphQL ───────────────────────────────────────────
