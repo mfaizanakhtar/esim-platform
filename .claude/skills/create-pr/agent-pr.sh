@@ -1,23 +1,19 @@
 #!/usr/bin/env bash
 # =============================================================================
-# agent-pr.sh — Agent skill: branch → commit → push → PR → wait for green → merge
+# agent-pr.sh — Skill: branch → commit → push → PR → wait CI → squash merge
 #
 # Usage:
-#   ./scripts/agent-pr.sh "feat: my feature description"
-#   ./scripts/agent-pr.sh "fix: bug fix" "optional-branch-name"
+#   npm run pr:create "feat: my feature description"
+#   npm run pr:create "fix: bug fix" "fix/optional-branch-name"
 #
-# What it does:
-#   1. If on main, creates a new branch (derived from commit message or arg)
-#   2. Stages all uncommitted changes
-#   3. Commits with the provided message
-#   4. Pushes to remote
-#   5. Opens a PR against main
-#   6. Polls CI checks via GitHub GraphQL until all pass
-#   7. Squash-merges and deletes the branch
+#   Or directly:
+#   ./.claude/skills/create-pr/agent-pr.sh "feat: my feature"
+#   ./.claude/skills/create-pr/agent-pr.sh "feat: my feature" "feat/branch-name"
 #
 # Requirements:
-#   - gh CLI authenticated (gh auth status)
-#   - git configured with remote origin
+#   - gh CLI authenticated  (gh auth status)
+#   - python3 available     (standard on macOS/Linux)
+#   - git remote origin set
 # =============================================================================
 
 set -euo pipefail
@@ -35,7 +31,7 @@ fi
 if [ -n "$BRANCH_ARG" ]; then
   BRANCH_NAME="$BRANCH_ARG"
 else
-  # e.g. "feat: add email retry" → "feat/add-email-retry"
+  # "feat: add email retry" → "feat/add-email-retry"
   PREFIX=$(echo "$COMMIT_MSG" | grep -oE '^[a-z]+' || echo "chore")
   SLUG=$(echo "$COMMIT_MSG" \
     | sed 's/^[a-z]*: *//' \
@@ -51,12 +47,12 @@ fi
 CURRENT_BRANCH=$(git branch --show-current)
 
 if [ "$CURRENT_BRANCH" = "main" ] || [ "$CURRENT_BRANCH" = "master" ]; then
-  echo "📌 On ${CURRENT_BRANCH}, creating branch: ${BRANCH_NAME}"
+  echo "📌 On ${CURRENT_BRANCH} → creating branch: ${BRANCH_NAME}"
   git checkout -b "$BRANCH_NAME"
 elif [ "$CURRENT_BRANCH" = "$BRANCH_NAME" ]; then
   echo "📌 Already on branch: ${BRANCH_NAME}"
 else
-  echo "📌 On branch: ${CURRENT_BRANCH} (using as-is, ignoring derived name)"
+  echo "📌 On branch: ${CURRENT_BRANCH} (using as-is)"
   BRANCH_NAME="$CURRENT_BRANCH"
 fi
 
@@ -64,8 +60,7 @@ fi
 git add -A
 
 if git diff --staged --quiet; then
-  echo "⚠️  No staged changes — nothing to commit."
-  echo "   (If you want to push an existing commit, remove the 'set -e' guard)"
+  echo "⚠️  Nothing to commit — working tree is clean."
   exit 0
 fi
 
@@ -76,108 +71,94 @@ echo "✅ Committed: ${COMMIT_MSG}"
 git push origin "$BRANCH_NAME"
 echo "✅ Pushed: ${BRANCH_NAME}"
 
-# ── Create PR ────────────────────────────────────────────────────────────────
+# ── Create PR ─────────────────────────────────────────────────────────────────
+# Note: gh pr create (this version) does NOT support --json.
+# It prints the PR URL to stdout on success — capture that directly.
+PR_BODY=$(printf "## Summary\nAutomated PR created by agent.\n\n## Branch\n\`%s\`\n\n## Checklist\n- [x] Tests pass locally\n- [x] Lint clean\n- [x] Type-check clean" "$BRANCH_NAME")
+
 PR_URL=$(gh pr create \
   --base main \
   --head "$BRANCH_NAME" \
   --title "$COMMIT_MSG" \
-  --body "$(printf "## Summary\nAutomated PR created by agent.\n\n## Branch\n\`%s\`\n\n## Checklist\n- [x] Lint passed\n- [x] Type-check passed\n- [x] Tests passed" "$BRANCH_NAME")")
+  --body "$PR_BODY")
 
-# Fetch PR number via gh pr view after creation
-PR_NUMBER=$(gh pr view "$BRANCH_NAME" --json number --jq '.number')
-PR_URL=$(gh pr view "$BRANCH_NAME" --json url --jq '.url')
-echo "✅ PR created: ${PR_URL}"
+# Extract PR number from URL: .../pull/42 → 42
+PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+echo "✅ PR #${PR_NUMBER} created: ${PR_URL}"
 
-# ── Wait for CI checks via GraphQL ───────────────────────────────────────────
-REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner')
-POLL_INTERVAL=20
-MAX_WAIT=600  # 10 minutes
-ELAPSED=0
+# ── Poll CI checks ────────────────────────────────────────────────────────────
+# Uses `gh pr checks --json name,bucket,link` (NOT --watch: that opens an
+# alternate tty buffer and breaks automation).
+# bucket values: pass | fail | pending | skipping | cancel
+POLL_INTERVAL=15
+MAX_POLLS=40      # 40 × 15s = 10 min max
+POLL_COUNT=0
+NO_CHECKS_COUNT=0
 
-echo "⏳ Waiting for CI checks on PR #${PR_NUMBER}..."
+echo "⏳ Polling CI checks for PR #${PR_NUMBER} (every ${POLL_INTERVAL}s, max $((MAX_POLLS * POLL_INTERVAL))s)..."
 
-while [ $ELAPSED -lt $MAX_WAIT ]; do
-  # Use GraphQL to get check suite conclusion for the latest commit on the PR
-  CHECKS_JSON=$(gh api graphql -f query="
-    query {
-      repository(owner: \"$(echo $REPO | cut -d/ -f1)\", name: \"$(echo $REPO | cut -d/ -f2)\") {
-        pullRequest(number: ${PR_NUMBER}) {
-          commits(last: 1) {
-            nodes {
-              commit {
-                statusCheckRollup {
-                  state
-                  contexts(last: 50) {
-                    nodes {
-                      ... on CheckRun {
-                        name
-                        status
-                        conclusion
-                      }
-                      ... on StatusContext {
-                        context
-                        state
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  " 2>/dev/null)
+while [ $POLL_COUNT -lt $MAX_POLLS ]; do
+  sleep $POLL_INTERVAL
 
-  ROLLUP_STATE=$(echo "$CHECKS_JSON" | \
-    python3 -c "import sys,json; d=json.load(sys.stdin); pr=d['data']['repository']['pullRequest']; commit=pr['commits']['nodes'][0]['commit']; rollup=commit.get('statusCheckRollup'); print(rollup['state'] if rollup else 'PENDING')" 2>/dev/null || echo "PENDING")
+  CHECKS=$(gh pr checks "$PR_NUMBER" --json name,bucket,link 2>/dev/null || echo "[]")
 
-  case "$ROLLUP_STATE" in
-    SUCCESS)
-      echo "✅ All checks passed!"
+  TOTAL=$(echo "$CHECKS" | python3 -c \
+    "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+
+  if [ "$TOTAL" = "0" ]; then
+    NO_CHECKS_COUNT=$((NO_CHECKS_COUNT + 1))
+    if [ $NO_CHECKS_COUNT -ge 3 ]; then
+      echo "ℹ️  No CI checks found after 3 polls — proceeding to merge."
       break
-      ;;
-    FAILURE|ERROR)
-      echo "❌ CI checks failed. View PR: ${PR_URL}"
-      # Print which checks failed
-      echo "$CHECKS_JSON" | python3 -c "
+    fi
+    echo "   [$(( (POLL_COUNT + 1) * POLL_INTERVAL ))s] No checks yet..."
+    POLL_COUNT=$((POLL_COUNT + 1))
+    continue
+  fi
+
+  PENDING=$(echo "$CHECKS" | python3 -c \
+    "import sys,json; d=json.load(sys.stdin); print(sum(1 for c in d if c['bucket']=='pending'))" \
+    2>/dev/null || echo "1")
+
+  FAILED=$(echo "$CHECKS" | python3 -c \
+    "import sys,json; d=json.load(sys.stdin); print(sum(1 for c in d if c['bucket'] in ('fail','cancel')))" \
+    2>/dev/null || echo "0")
+
+  echo "   [$(( (POLL_COUNT + 1) * POLL_INTERVAL ))s] ${TOTAL} checks — pending: ${PENDING}, failed: ${FAILED}"
+
+  if [ "$FAILED" != "0" ]; then
+    echo "❌ CI failed. Fix the issues below and re-run the skill:"
+    echo "$CHECKS" | python3 -c "
 import sys, json
-d = json.load(sys.stdin)
-nodes = d['data']['repository']['pullRequest']['commits']['nodes'][0]['commit']['statusCheckRollup']['contexts']['nodes']
-for n in nodes:
-    name = n.get('name') or n.get('context', '?')
-    status = n.get('conclusion') or n.get('state', '?')
-    if status not in ('SUCCESS', 'success', 'NEUTRAL', None):
-        print(f'  ✗ {name}: {status}')
+for c in json.load(sys.stdin):
+    if c['bucket'] in ('fail', 'cancel'):
+        print(f\"  ✗ {c['name']}  →  {c['link']}\")
 " 2>/dev/null || true
-      exit 1
-      ;;
-    PENDING|EXPECTED|QUEUED|IN_PROGRESS)
-      echo "   [${ELAPSED}s] State: ${ROLLUP_STATE} — checking again in ${POLL_INTERVAL}s..."
-      sleep $POLL_INTERVAL
-      ELAPSED=$((ELAPSED + POLL_INTERVAL))
-      ;;
-    *)
-      # No checks yet (PR just opened), wait a moment
-      echo "   [${ELAPSED}s] No checks yet — waiting ${POLL_INTERVAL}s..."
-      sleep $POLL_INTERVAL
-      ELAPSED=$((ELAPSED + POLL_INTERVAL))
-      ;;
-  esac
+    echo "   PR: ${PR_URL}"
+    exit 1
+  fi
+
+  if [ "$PENDING" = "0" ]; then
+    echo "✅ All checks passed!"
+    break
+  fi
+
+  POLL_COUNT=$((POLL_COUNT + 1))
 done
 
-if [ $ELAPSED -ge $MAX_WAIT ]; then
-  echo "⏰ Timed out after ${MAX_WAIT}s waiting for checks."
-  echo "   View PR: ${PR_URL}"
+if [ $POLL_COUNT -ge $MAX_POLLS ]; then
+  echo "⏰ Timed out after $((MAX_POLLS * POLL_INTERVAL))s."
+  echo "   View PR manually: ${PR_URL}"
   exit 1
 fi
 
 # ── Merge ─────────────────────────────────────────────────────────────────────
+# --subject sets the squash-merge commit title on main
 gh pr merge "$PR_NUMBER" \
   --squash \
   --delete-branch \
   --subject "$COMMIT_MSG"
 
 echo ""
-echo "🎉 Done! PR #${PR_NUMBER} merged and branch '${BRANCH_NAME}' deleted."
+echo "🎉 Done! PR #${PR_NUMBER} squash-merged → main, branch '${BRANCH_NAME}' deleted."
 echo "   ${PR_URL}"

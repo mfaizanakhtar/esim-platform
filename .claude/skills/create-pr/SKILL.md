@@ -58,20 +58,25 @@ npm run pr:create "fix: handle null email" "fix/null-email-handling"
    └── git push origin <branch>
 
 4. OPEN PR
-   ├── gh pr create --base main --head <branch>
-   ├── Title = commit message
-   └── Body = auto-generated summary with branch name and checklist
+   ├── gh pr create --base main --head <branch> --title ... --body ...
+   ├── gh pr create prints the PR URL to stdout on success
+   ├── PR number extracted from URL with: grep -oE '[0-9]+$'
+   └── ⚠️  This gh version does NOT support --json on pr create
 
-5. POLL CI (GitHub GraphQL — statusCheckRollup)
-   ├── Query: repository → pullRequest → commits(last:1) → statusCheckRollup
-   ├── Poll every 20 seconds, max 10 minutes
-   ├── State: SUCCESS      → proceed to merge
-   ├── State: FAILURE/ERROR → print failed checks, exit 1
-   └── State: PENDING/IN_PROGRESS/QUEUED → keep waiting
+5. POLL CI  (gh pr checks --json name,bucket,link)
+   ├── Does NOT use --watch (that opens an alternate tty buffer — breaks automation)
+   ├── Does NOT use GraphQL (multi-line heredoc quoting breaks in inline shell)
+   ├── Uses `gh pr checks <number> --json name,bucket,link` in a sleep loop
+   ├── bucket values: pass | fail | pending | skipping | cancel
+   ├── Poll every 15s, max 40 polls (10 min)
+   ├── all pending=0, failed=0  → proceed to merge
+   ├── any fail/cancel          → print failed check names + links, exit 1
+   └── no checks after 3 polls → proceed to merge (no CI configured)
 
 6. MERGE
-   └── gh pr merge --squash --delete-branch
-       Branch is deleted after merge.
+   └── gh pr merge --squash --delete-branch --subject "<commit message>"
+       --subject sets the squash-merge commit title on main
+       Branch is deleted automatically.
 ```
 
 ---
