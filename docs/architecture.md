@@ -1,3 +1,12 @@
+# System Architecture
+
+> **Document Type**: Architecture & Design  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: High-level system architecture overview
+
+---
+
 ```mermaid
 graph TB
   %% Shopify eSIM Fulfillment - MVP Architecture

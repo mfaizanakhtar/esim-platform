@@ -1,5 +1,12 @@
 # Phase 2: Shopify Frontend Setup - Step-by-Step Guide
 
+> **Document Type**: Feature  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Shopify theme frontend for usage tracking (Phase 2)
+
+---
+
 This guide provides complete instructions for implementing the eSIM usage tracking page in your Shopify theme.
 
 ---

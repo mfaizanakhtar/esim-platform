@@ -25,6 +25,20 @@ async function run() {
     }
   });
 
+  // Log jobs that have exhausted all retries (ended up in failed state)
+  await boss.onComplete('provision-esim', async (job: unknown) => {
+    const j = job as Record<string, unknown>;
+    const state = j.state as string | undefined;
+    if (state === 'failed') {
+      const data = (j.data as Record<string, unknown>) || {};
+      const request = (data.request as Record<string, unknown>) || {};
+      const deliveryId = request.deliveryId ? String(request.deliveryId) : 'unknown';
+      console.error(
+        `[Worker] ⚠️  Job permanently failed after all retries. deliveryId=${deliveryId} jobId=${j.id}`,
+      );
+    }
+  });
+
   console.log('[Worker] Worker registered and ready to process jobs');
 
   // Graceful shutdown

@@ -1,5 +1,12 @@
 # Railway Deployment Guide
 
+> **Document Type**: Setup & Deployment  
+> **Status**: ✅ Current (Production deployment)  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Railway-specific deployment instructions
+
+---
+
 ## Simple GitHub-based Deployment
 
 ### Step 1: Push to GitHub

@@ -1,5 +1,12 @@
 # Shopify Integration Setup
 
+> **Document Type**: Integration  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Shopify Custom App setup and webhook configuration
+
+---
+
 ## Overview
 
 This backend integrates with Shopify to automatically provision and deliver eSIMs when orders are paid.

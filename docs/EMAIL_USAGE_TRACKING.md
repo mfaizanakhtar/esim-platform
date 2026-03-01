@@ -1,5 +1,12 @@
 # Email Usage Tracking Update
 
+> **Document Type**: Feature  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Usage tracking links in delivery emails
+
+---
+
 ## Overview
 Updated the eSIM delivery email template to include a direct link to the customer usage tracking page.
 

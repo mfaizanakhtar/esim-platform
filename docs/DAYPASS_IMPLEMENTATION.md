@@ -1,5 +1,12 @@
 # Daypass Package Implementation
 
+> **Document Type**: Feature  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Short-term eSIM plan implementation
+
+---
+
 ## Overview
 
 Daypass packages provide daily data allowances (e.g., "1GB per day for 3 days = 3GB total"), unlike fixed packages which provide a total data allowance valid for a period (e.g., "1GB valid for 3 days total").

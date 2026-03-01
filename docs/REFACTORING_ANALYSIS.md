@@ -1,5 +1,12 @@
 # Codebase Analysis & Refactoring Recommendations
 
+> **Document Type**: Status & Internal  
+> **Status**: 🗂️ Historical  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Code quality analysis and refactoring recommendations
+
+---
+
 ## Executive Summary
 
 Your eSIM backend is well-structured with a clean separation between API, worker, and vendor layers. However, there are opportunities to improve:

@@ -1,5 +1,12 @@
 # SKU Pipeline Documentation
 
+> **Document Type**: Architecture & Design  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Data flow and transformation pipeline
+
+---
+
 ## Overview
 
 The SKU pipeline processes Shopify product exports and creates mappings to FiRoam eSIM packages. This enables automatic eSIM provisioning after successful Shopify payments.

@@ -1,4 +1,3 @@
-// Vendor client stub — implement per FiRoam_documentation.txt
 import axios, { AxiosInstance } from 'axios';
 import crypto from 'crypto';
 import { encrypt } from '../utils/crypto';

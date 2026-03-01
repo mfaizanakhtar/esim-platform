@@ -1,5 +1,12 @@
 # Railway Deployment Guide
 
+> **Document Type**: Setup & Deployment  
+> **Status**: ⚠️ Generic (prefer RAILWAY_DEPLOY.md for production)  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: General deployment guide for any platform
+
+---
+
 ## 🚀 Quick Setup
 
 ### 1. Install Railway CLI

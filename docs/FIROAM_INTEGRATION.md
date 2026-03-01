@@ -1,5 +1,12 @@
 # FiRoam eSIM API Integration
 
+> **Document Type**: Integration  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: FiRoam vendor API client implementation
+
+---
+
 ## Overview
 
 Complete integration with FiRoam's eSIM provisioning API for ordering and managing eSIM cards.
