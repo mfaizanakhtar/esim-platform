@@ -9,10 +9,7 @@ export default {
     // Test file patterns
     // Unit tests (__tests__/) and component tests (*.component.test.ts)
     // For integration tests run: npm run test:integration
-    include: [
-      'src/**/__tests__/**/*.test.ts',
-      'src/**/*.component.test.ts',
-    ],
+    include: ['src/**/__tests__/**/*.test.ts', 'src/**/*.component.test.ts'],
     exclude: ['node_modules', 'dist', 'scripts'],
 
     // Coverage configuration
