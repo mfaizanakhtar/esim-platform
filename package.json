@@ -32,6 +32,8 @@
     "test:watch": "vitest watch",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:all": "vitest run && vitest run --config vitest.integration.config.ts",
     "test:component": "vitest run src/tests/firoam.component.test.ts --reporter verbose",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",

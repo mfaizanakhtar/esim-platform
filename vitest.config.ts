@@ -7,7 +7,12 @@ export default {
     globals: true,
 
     // Test file patterns
-    include: ['src/**/*.{test,spec}.ts'],
+    // Unit tests (__tests__/) and component tests (*.component.test.ts)
+    // For integration tests run: npm run test:integration
+    include: [
+      'src/**/__tests__/**/*.test.ts',
+      'src/**/*.component.test.ts',
+    ],
     exclude: ['node_modules', 'dist', 'scripts'],
 
     // Coverage configuration
@@ -34,13 +39,13 @@ export default {
         'src/server.ts', // Server setup
       ],
 
-      // Coverage thresholds - adjusted to match current test coverage
+      // Coverage thresholds - these apply to unit + component tests only
       // TODO: Increase these as more tests are added
       thresholds: {
-        lines: 25,
-        functions: 25,
-        branches: 35,
-        statements: 25,
+        lines: 20,
+        functions: 20,
+        branches: 30,
+        statements: 20,
       },
 
       // Show all files, even those with 0% coverage
