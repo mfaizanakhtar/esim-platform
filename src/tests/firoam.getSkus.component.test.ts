@@ -11,6 +11,8 @@ describe('FiRoamClient.getSkus', () => {
   beforeEach(() => {
     process.env.FIROAM_BASE_URL = BASE_URL;
     process.env.FIROAM_SIGN_KEY = '1234567890qwertyuiopasdfghjklzxc';
+    process.env.FIROAM_PHONE = 'mock-phone';
+    process.env.FIROAM_PASSWORD = 'mock-password';
     client = new FiRoamClient();
   });
 
