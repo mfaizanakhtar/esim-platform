@@ -1,5 +1,12 @@
 # Shopify GraphQL Variables Migration
 
+> **Document Type**: Developer  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Migration from old to new Shopify SDK
+
+---
+
 ## ✅ What Changed
 
 We've migrated from **manual string interpolation** to **GraphQL variables** for all Shopify API calls. This is the industry-standard, production-ready approach.

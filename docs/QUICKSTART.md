@@ -1,5 +1,12 @@
 # Shopify eSIM Backend - Quick Start Guide
 
+> **Document Type**: Setup & Deployment  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Local development environment setup
+
+---
+
 ## 🎯 Overview
 
 This backend automatically provisions and delivers eSIMs after a successful Shopify payment. It uses:

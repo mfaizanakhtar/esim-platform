@@ -1,5 +1,12 @@
 # GraphQL: String Interpolation vs Variables
 
+> **Document Type**: Developer  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Shopify GraphQL variable handling
+
+---
+
 ## The Problem You Were Facing
 
 When working with GraphQL, you were building queries like this:

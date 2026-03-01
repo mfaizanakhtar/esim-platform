@@ -1,5 +1,12 @@
 # Shopify Webhook Integration - Implementation Summary
 
+> **Document Type**: Integration  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Webhook handler implementation details and flow
+
+---
+
 ## 🎯 What Was Built
 
 Successfully integrated Shopify order webhooks to automatically provision eSIMs when orders are paid.

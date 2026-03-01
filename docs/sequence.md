@@ -1,3 +1,12 @@
+# Sequence Diagrams
+
+> **Document Type**: Architecture & Design  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Sequence diagrams for key flows
+
+---
+
 ```mermaid
 sequenceDiagram
   autonumber

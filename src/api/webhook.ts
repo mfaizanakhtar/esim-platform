@@ -1,9 +1,7 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/prisma';
 import { verifyShopifyWebhook } from '../shopify/webhooks';
 import { getJobQueue } from '../queue/jobQueue';
-
-const prisma = new PrismaClient();
 
 interface ShopifyOrderPaidWebhook {
   id: number;
@@ -135,16 +133,24 @@ export default function webhookRoutes(
 
         app.log.info(`[Webhook] Created delivery record ${delivery.id} for ${orderName}`);
 
-        // Enqueue provisioning job
-        await queue.send('provision-esim', {
-          deliveryId: delivery.id,
-          orderId,
-          orderName,
-          lineItemId,
-          variantId,
-          customerEmail,
-          sku: lineItem.sku || null,
-        });
+        // Enqueue provisioning job with retry policy
+        await queue.send(
+          'provision-esim',
+          {
+            deliveryId: delivery.id,
+            orderId,
+            orderName,
+            lineItemId,
+            variantId,
+            customerEmail,
+            sku: lineItem.sku || null,
+          },
+          {
+            retryLimit: 3, // up to 3 retries
+            retryDelay: 60, // wait 60s between retries
+            expireInSeconds: 3600, // give up after 1 hour
+          },
+        );
 
         app.log.info(`[Webhook] Enqueued provisioning job for delivery ${delivery.id}`);
       }

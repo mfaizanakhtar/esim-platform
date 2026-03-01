@@ -1,5 +1,12 @@
 # Shopify Usage Page Integration Guide
 
+> **Document Type**: Feature  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Backend API for usage tracking (Phase 1)
+
+---
+
 ## Overview
 
 This guide documents the integration between the eSIM backend and a Shopify custom page for displaying real-time eSIM usage data to customers.

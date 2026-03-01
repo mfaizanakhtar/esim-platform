@@ -1,5 +1,12 @@
 # Branch Protection & PR Pipeline Setup
 
+> **Document Type**: Setup & Deployment  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: GitHub branch protection and CI configuration
+
+---
+
 This guide explains how to configure GitHub branch protection rules to ensure code quality and prevent breaking changes from reaching `main`.
 
 ---

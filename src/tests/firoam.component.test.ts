@@ -98,12 +98,7 @@ describe('FiRoamClient component test (mocked by default)', () => {
     expect(result.db?.id).toBe('mock-db-id');
   });
 
-  // NOTE: queryEsimOrder tests are temporarily skipped due to Vitest module caching issue.
-  // The method exists and works correctly (verified via Node.js direct import and integration tests).
-  // Vitest appears to cache a version of FiRoamClient before queryEsimOrder was added.
-  // The method will work in production. See integration test for live API verification.
-
-  it.skip('should query eSIM order and return usage data (mock)', async () => {
+  it('should query eSIM order and return usage data (mock)', async () => {
     // Ensure credentials are set
     process.env.FIROAM_PHONE = process.env.FIROAM_PHONE || 'mock-phone';
     process.env.FIROAM_PASSWORD = process.env.FIROAM_PASSWORD || 'mock-pass';
@@ -180,7 +175,7 @@ describe('FiRoamClient component test (mocked by default)', () => {
     expect(pkg?.status).toBe(1);
   });
 
-  it.skip('should handle queryEsimOrder failure gracefully', async () => {
+  it('should handle queryEsimOrder failure gracefully', async () => {
     // Ensure credentials are set
     process.env.FIROAM_PHONE = process.env.FIROAM_PHONE || 'mock-phone';
     process.env.FIROAM_PASSWORD = process.env.FIROAM_PASSWORD || 'mock-pass';

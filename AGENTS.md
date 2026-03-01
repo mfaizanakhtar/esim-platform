@@ -181,52 +181,73 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 
 ### 🚀 Setup & Deployment
 
-| Document | Purpose | When to Use |
-|----------|---------|-------------|
-| [README.md](README.md) | Project overview, quick links | First time viewing project |
-| [docs/QUICKSTART.md](docs/QUICKSTART.md) | Local development setup | Setting up dev environment |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | General deployment guide | Deploying to any platform |
-| [docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md) | Railway-specific deployment | Deploying to Railway (current prod) |
+| Document | Purpose | When to Use | Status |
+|----------|---------|-------------|--------|
+| [README.md](README.md) | Project overview, quick links | First time viewing project | ✅ Current |
+| [docs/QUICKSTART.md](docs/QUICKSTART.md) | Local development setup | Setting up dev environment | ✅ Current |
+| [docs/TESTING_QUICKSTART.md](docs/TESTING_QUICKSTART.md) | Testing setup & CI/CD quickstart | Running tests, understanding test infrastructure | ✅ Current |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | General deployment guide | Deploying to any platform | ⚠️ Generic |
+| [docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md) | Railway-specific deployment | Deploying to Railway (current prod) | ✅ Current |
+| [docs/BRANCH_PROTECTION.md](docs/BRANCH_PROTECTION.md) | GitHub branch protection & CI setup | Configuring PR workflow and CI checks | ✅ Current |
 
 ### 🔌 Integration Documentation
 
-| Document | Purpose | When to Use |
-|----------|---------|-------------|
-| [docs/SHOPIFY_INTEGRATION.md](docs/SHOPIFY_INTEGRATION.md) | Shopify Custom App setup, webhook config | Setting up Shopify store integration |
-| [docs/WEBHOOK_IMPLEMENTATION.md](docs/WEBHOOK_IMPLEMENTATION.md) | Webhook handler implementation details | Understanding/modifying webhook logic |
-| [docs/FIROAM_INTEGRATION.md](docs/FIROAM_INTEGRATION.md) | FiRoam API client implementation | Working with FiRoam vendor API |
-| [FiRoam_documentation.txt](FiRoam_documentation.txt) | Official FiRoam API reference | Source of truth for FiRoam endpoints |
+| Document | Purpose | When to Use | Status |
+|----------|---------|-------------|--------|
+| [docs/SHOPIFY_INTEGRATION.md](docs/SHOPIFY_INTEGRATION.md) | Shopify Custom App setup, webhook config | Setting up Shopify store integration | ✅ Current |
+| [docs/WEBHOOK_IMPLEMENTATION.md](docs/WEBHOOK_IMPLEMENTATION.md) | Webhook handler implementation details | Understanding/modifying webhook logic | ✅ Current |
+| [docs/FIROAM_INTEGRATION.md](docs/FIROAM_INTEGRATION.md) | FiRoam API client implementation | Working with FiRoam vendor API | ✅ Current |
+| [FiRoam_documentation.txt](FiRoam_documentation.txt) | Official FiRoam API reference | Source of truth for FiRoam endpoints | ✅ Vendor doc |
 
 ### 🎨 Feature Documentation
 
-| Document | Purpose | When to Use |
-|----------|---------|-------------|
-| [docs/EMAIL_USAGE_TRACKING.md](docs/EMAIL_USAGE_TRACKING.md) | Usage tracking link in delivery emails | Understanding email delivery flow |
-| [docs/SHOPIFY_USAGE_INTEGRATION.md](docs/SHOPIFY_USAGE_INTEGRATION.md) | Backend API for usage tracking (Phase 1) | Setting up usage API backend |
-| [docs/SHOPIFY_FRONTEND_SETUP.md](docs/SHOPIFY_FRONTEND_SETUP.md) | Shopify theme frontend for usage (Phase 2) | Creating Shopify usage page |
-| [docs/DAYPASS_IMPLEMENTATION.md](docs/DAYPASS_IMPLEMENTATION.md) | Day pass eSIM implementation | Working with short-term eSIM plans |
-| [docs/SKU_MAPPING_FORMAT.md](docs/SKU_MAPPING_FORMAT.md) | SKU to FiRoam mapping strategy | Managing product-to-plan mappings |
+| Document | Purpose | When to Use | Status |
+|----------|---------|-------------|--------|
+| [docs/EMAIL_USAGE_TRACKING.md](docs/EMAIL_USAGE_TRACKING.md) | Usage tracking link in delivery emails | Understanding email delivery flow | ✅ Current |
+| [docs/SHOPIFY_USAGE_INTEGRATION.md](docs/SHOPIFY_USAGE_INTEGRATION.md) | Backend API for usage tracking (Phase 1) | Setting up usage API backend | ✅ Current |
+| [docs/SHOPIFY_FRONTEND_SETUP.md](docs/SHOPIFY_FRONTEND_SETUP.md) | Shopify theme frontend for usage (Phase 2) | Creating Shopify usage page | ✅ Current |
+| [docs/DAYPASS_IMPLEMENTATION.md](docs/DAYPASS_IMPLEMENTATION.md) | Day pass eSIM implementation | Working with short-term eSIM plans | ✅ Current |
+| [docs/SKU_MAPPING_FORMAT.md](docs/SKU_MAPPING_FORMAT.md) | SKU to FiRoam mapping strategy | Managing product-to-plan mappings | ✅ Current |
 
 ### 🏗️ Architecture & Design
 
-| Document | Purpose | When to Use |
-|----------|---------|-------------|
-| [docs/architecture.md](docs/architecture.md) | System architecture overview | Understanding high-level design |
-| [docs/sequence.md](docs/sequence.md) | Sequence diagrams for key flows | Visualizing order fulfillment flow |
-| [docs/PIPELINE.md](docs/PIPELINE.md) | Data flow pipeline documentation | Understanding data transformations |
+| Document | Purpose | When to Use | Status |
+|----------|---------|-------------|--------|
+| [docs/architecture.md](docs/architecture.md) | System architecture overview | Understanding high-level design | ✅ Current |
+| [docs/sequence.md](docs/sequence.md) | Sequence diagrams for key flows | Visualizing order fulfillment flow | ✅ Current |
+| [docs/PIPELINE.md](docs/PIPELINE.md) | Data flow pipeline documentation | Understanding data transformations | ✅ Current |
 
 ### 🔧 Developer Documentation
 
-| Document | Purpose | When to Use |
-|----------|---------|-------------|
-| [docs/UPDATE.md](docs/UPDATE.md) | Change log, version history | Checking what changed between versions |
-| [docs/SHOPIFY_SDK_MIGRATION.md](docs/SHOPIFY_SDK_MIGRATION.md) | Migration from old to new Shopify SDK | Upgrading Shopify dependencies |
-| [docs/GRAPHQL_VARIABLES_EXPLAINED.md](docs/GRAPHQL_VARIABLES_EXPLAINED.md) | Shopify GraphQL variable handling | Working with Shopify GraphQL API |
+| Document | Purpose | When to Use | Status |
+|----------|---------|-------------|--------|
+| [docs/UPDATE.md](docs/UPDATE.md) | Change log, version history | Checking what changed between versions | 🔄 Living doc |
+| [docs/SHOPIFY_SDK_MIGRATION.md](docs/SHOPIFY_SDK_MIGRATION.md) | Migration from old to new Shopify SDK | Upgrading Shopify dependencies | ✅ Current |
+| [docs/GRAPHQL_VARIABLES_EXPLAINED.md](docs/GRAPHQL_VARIABLES_EXPLAINED.md) | Shopify GraphQL variable handling | Working with Shopify GraphQL API | ✅ Current |
+
+### 📊 Status & Internal Documentation
+
+| Document | Purpose | When to Use | Status |
+|----------|---------|-------------|--------|
+| [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) | Test & CI/CD setup completion summary | Reference for what testing infrastructure exists | 🗂️ Historical |
+| [docs/REFACTORING_ANALYSIS.md](docs/REFACTORING_ANALYSIS.md) | Code quality analysis & recommendations | Planning refactoring work, understanding tech debt | 🗂️ Historical |
 
 ### 📁 Data Files (Not Documentation)
 - `FiRoam.pdf` - FiRoam vendor documentation (PDF format)
 - `firoam-data/*.csv` - FiRoam package data exports
 - `csv-exports/*.csv` - Shopify product/SKU mapping exports
+
+---
+
+### 📖 Status Legend
+
+- **✅ Current** - Up to date, actively maintained, safe to follow
+- **⚠️ Generic** - Supplementary guide, prefer specific docs when available
+- **🔄 Living doc** - Frequently updated, check for latest changes
+- **🗂️ Historical** - Reference/archive, may contain outdated information
+
+> 💡 **Tip**: Always check `docs/UPDATE.md` for recent changes that might affect your task.
+> 📅 **Last index update**: 2026-03-01
 
 ---
 

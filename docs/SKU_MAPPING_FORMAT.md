@@ -1,5 +1,12 @@
 # SKU Mapping Format
 
+> **Document Type**: Feature  
+> **Status**: ✅ Current  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: SKU to FiRoam plan mapping strategy
+
+---
+
 ## Overview
 
 The `ProviderSkuMapping` table stores mappings between Shopify product SKUs and provider-specific package identifiers.

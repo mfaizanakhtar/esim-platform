@@ -1,5 +1,12 @@
 # Workspace Update
 
+> **Document Type**: Developer  
+> **Status**: 🔄 Living doc  
+> **Last Updated**: 2026-03-01  
+> **Purpose**: Change log and version history
+
+---
+
 Date: 2025-12-26
 
 Purpose: concise handoff and next steps after recent FiRoam & schema work.
