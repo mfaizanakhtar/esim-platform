@@ -166,6 +166,16 @@ src/
 
 ## Documentation Index
 
+### 🤖 Agent Skills Index
+
+Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow + details) and an executable script.
+
+| Skill | Directory | Purpose | npm script |
+|-------|-----------|---------|------------|
+| Create PR | [`.claude/skills/create-pr/`](.claude/skills/create-pr/SKILL.md) | Branch → commit → push → PR → wait for CI green → squash merge | `npm run pr:create "<message>"` |
+
+---
+
 ### 📋 Core Documentation (You Are Here)
 - **AGENTS.md** (this file) - Master index, coding standards, testing strategy
 
@@ -264,10 +274,11 @@ src/
 ### When Starting a New Task
 
 1. **Read this file first** (AGENTS.md) to understand context
-2. **Identify the relevant doc** from the index above
-3. **Read the specific doc** for detailed instructions
-4. **Check UPDATE.md** for recent changes that might affect your task
-5. **Review code in src/** to understand current implementation
+2. **Check `.claude/skills/`** for reusable agent skills (see [Agent Skills Index](#agent-skills-index) below)
+3. **Identify the relevant doc** from the index above
+4. **Read the specific doc** for detailed instructions
+5. **Check UPDATE.md** for recent changes that might affect your task
+6. **Review code in src/** to understand current implementation
 
 ### When Making Changes
 
@@ -304,6 +315,33 @@ npx eslint . --ext .ts --quiet
 - These checks catch issues before deployment
 
 **When to skip:** NEVER. Always verify after making changes.
+
+### PR Workflow Skill (Branch → Commit → PR → Merge)
+
+**Skill**: [`.claude/skills/create-pr/`](.claude/skills/create-pr/SKILL.md) — read `SKILL.md` for full flow details.
+
+**Use this instead of pushing directly to main.**
+
+```bash
+# Full automated flow — runs CI, waits for green, then merges
+npm run pr:create "feat: add email retry logic"
+
+# With explicit branch name
+npm run pr:create "fix: handle null email" "fix/null-email-handling"
+```
+
+**What `.claude/skills/create-pr/agent-pr.sh` does automatically:**
+1. Creates a branch from `main` (name derived from commit message, e.g. `feat/add-email-retry-logic`)
+2. Stages all uncommitted changes (`git add -A`)
+3. Commits with your message
+4. Pushes the branch
+5. Opens a PR against `main` via `gh pr create`
+6. Polls GitHub GraphQL (`statusCheckRollup`) every 20s until all CI checks pass
+7. Squash-merges and deletes the branch on success — or exits with error details on failure
+
+**When CI fails:** the script prints which checks failed and exits — you fix the code and re-run.
+
+**Requirements:** `gh` CLI authenticated (`gh auth status`)
 
 ### When Documenting
 
