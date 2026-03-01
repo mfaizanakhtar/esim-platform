@@ -213,11 +213,12 @@ async function main() {
       const region = getRegion(record.firoamCountryName);
       // Format: skuId:apiCode:priceId (e.g., "120:826-0-?-1-G-D:14094")
       // This ensures we always have both the apiCode (for reference) and numeric priceId (for ordering)
-      const providerSku = record.firoamPriceId && record.firoamApiCode
-        ? `${record.firoamSkuId}:${record.firoamApiCode}:${record.firoamPriceId}`
-        : record.firoamApiCode
-          ? `${record.firoamSkuId}:${record.firoamApiCode}`
-          : `${record.firoamSkuId}:unknown`;
+      const providerSku =
+        record.firoamPriceId && record.firoamApiCode
+          ? `${record.firoamSkuId}:${record.firoamApiCode}:${record.firoamPriceId}`
+          : record.firoamApiCode
+            ? `${record.firoamSkuId}:${record.firoamApiCode}`
+            : `${record.firoamSkuId}:unknown`;
 
       outputLines.push(`    {`);
       outputLines.push(`      shopifySku: '${record.shopifySKU}',`);

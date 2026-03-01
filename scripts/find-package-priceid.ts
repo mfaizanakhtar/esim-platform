@@ -7,10 +7,10 @@ import FiRoamClient from '../src/vendor/firoamClient';
 async function main() {
   const client = new FiRoamClient();
   const { packageData } = await client.getPackages('26'); // Japan
-  
+
   if (packageData) {
     // Find the 300MB package
-    const pkg = packageData.esimPackageDtoList.find(p => p.apiCode === '392-1-1-300-M');
+    const pkg = packageData.esimPackageDtoList.find((p) => p.apiCode === '392-1-1-300-M');
     if (pkg) {
       console.log('Found package:');
       console.log(`  API Code: ${pkg.apiCode}`);

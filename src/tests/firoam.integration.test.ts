@@ -576,9 +576,10 @@ describe('FiRoam API - Live Integration Tests', () => {
     // -1: token expire
     // -2: params is not null
     // 3: data not exist
+    // -8: refundOrder fail (order not eligible for cancellation)
     // 22: Non-personal orders
     // -30: sign wrong
-    const validErrorCodes = [-1, -2, 3, 22, -30];
+    const validErrorCodes = [-1, -2, 3, -8, 22, -30];
     const code = typeof result.raw.code === 'string' ? parseInt(result.raw.code) : result.raw.code;
     expect(validErrorCodes).toContain(code);
 

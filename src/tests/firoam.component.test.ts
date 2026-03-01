@@ -1,15 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import nock from 'nock';
+import type { EsimOrder } from '@prisma/client';
 import FiRoamClient from '../vendor/firoamClient';
+import prisma from '../db/prisma';
 
 // Mock Prisma - must match the import path in firoamClient.ts
-vi.mock('../db/prisma', () => ({
-  default: {
-    esimOrder: {
-      create: vi.fn().mockResolvedValue({ id: 'mock-db-id' }),
+vi.mock('../db/prisma', () => {
+  const mockCreate = vi.fn().mockResolvedValue({ id: 'mock-db-id' });
+  return {
+    default: {
+      esimOrder: {
+        create: mockCreate,
+      },
     },
-  },
-}));
+  };
+});
 
 describe('FiRoamClient component test (mocked by default)', () => {
   const base = process.env.FIROAM_BASE_URL || 'https://bpm.roamwifi.hk';
@@ -17,12 +22,21 @@ describe('FiRoamClient component test (mocked by default)', () => {
 
   beforeEach(() => {
     nock.cleanAll();
+    vi.clearAllMocks();
+    // Reset the mock implementation
+    vi.mocked(prisma.esimOrder.create).mockResolvedValue({
+      id: 'mock-db-id',
+    } as Partial<EsimOrder> as EsimOrder);
+    // Ensure ENCRYPTION_KEY is set before any tests run
+    process.env.ENCRYPTION_KEY =
+      process.env.ENCRYPTION_KEY || 'test-encryption-key-should-be-32-bytes!';
   });
 
   it('should login, place order and return canonical payload (mock)', async () => {
     // Ensure credentials are set for login flow (we mock network responses)
     process.env.FIROAM_PHONE = process.env.FIROAM_PHONE || 'mock-phone';
     process.env.FIROAM_PASSWORD = process.env.FIROAM_PASSWORD || 'mock-pass';
+
     // Mock login (uses GET per Python example in FiRoam docs)
     nock(base)
       .get('/api_order/login')
@@ -34,18 +48,22 @@ describe('FiRoamClient component test (mocked by default)', () => {
       .post('/api_esim/addEsimOrder')
       .reply(200, { code: 0, data: { orderNum: 'EP-MOCK-1' } });
 
-    // Mock getOrderInfo -> returns card info
+    // Mock getOrderInfo -> returns card info with proper field names
+    // Note: This is called automatically by addEsimOrder in two-step flow
     nock(base)
       .post('/api_esim/getOrderInfo')
       .reply(200, {
         code: 0,
         data: {
-          cards: [{ lpa: 'lpa-mock', activation_code: 'ACT-MOCK', iccid: '8901000000000000001' }],
+          cards: [
+            {
+              lpa: 'lpa-mock',
+              activation_code: 'ACT-MOCK',
+              iccid: '8901000000000000001',
+            },
+          ],
         },
       });
-
-    process.env.ENCRYPTION_KEY =
-      process.env.ENCRYPTION_KEY || 'test-encryption-key-should-be-32-bytes!';
 
     const client = new FiRoamClient();
     const result = await client.addEsimOrder({
@@ -54,6 +72,14 @@ describe('FiRoamClient component test (mocked by default)', () => {
       count: '1',
       otherOrderId: 'external-1',
     });
+
+    // Debug: Check for any nock errors
+    if (!nock.isDone()) {
+      console.log('Pending mocks:', nock.pendingMocks());
+    }
+    if (result.error) {
+      console.log('Error in result:', result.error);
+    }
 
     // Verify the raw response
     expect(result.raw).toBeDefined();

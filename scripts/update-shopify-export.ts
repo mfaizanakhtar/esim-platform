@@ -74,13 +74,6 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-function escapeCSVField(field: string): string {
-  if (field.includes(',') || field.includes('"') || field.includes('\n')) {
-    return `"${field.replace(/"/g, '""')}"`;
-  }
-  return field;
-}
-
 interface SKUMapping {
   handle: string;
   title: string;

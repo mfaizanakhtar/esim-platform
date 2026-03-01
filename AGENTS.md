@@ -277,6 +277,33 @@ src/
 4. **Add entry to UPDATE.md** if it's a notable change
 5. **Verify build passes**: `npm run build`
 6. **Run tests**: `npm test`
+7. **Check for linting errors**: `npx eslint . --ext .ts --quiet`
+8. **Verify TypeScript compilation**: Check VS Code problems panel or run `npm run build`
+
+### Verification Checklist (REQUIRED After Every Code Change)
+
+**After making ANY code changes, you MUST run these verification steps:**
+
+```bash
+# 1. TypeScript compilation
+npm run build
+
+# 2. Run tests
+npm test -- --run
+
+# 3. Check linting
+npx eslint . --ext .ts --quiet
+
+# 4. If all pass, commit is safe
+```
+
+**Why this matters:**
+- TypeScript errors break production builds
+- Linting errors indicate code quality issues
+- Test failures mean broken functionality
+- These checks catch issues before deployment
+
+**When to skip:** NEVER. Always verify after making changes.
 
 ### When Documenting
 

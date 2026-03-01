@@ -25,7 +25,7 @@ function parseCSVRows(content: string): string[] {
     const char = content[i];
 
     if (char === '"') {
-      // Handle escaped quotes ("") 
+      // Handle escaped quotes ("")
       if (i + 1 < content.length && content[i + 1] === '"') {
         currentRow += '""';
         i++; // Skip next quote
