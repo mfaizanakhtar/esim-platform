@@ -152,3 +152,72 @@ export type SkuNewDto = z.infer<typeof SkuNewDtoSchema>;
 export function validateSkuByGroup(payload: unknown) {
   return GetSkuByGroupSchema.parse(payload);
 }
+
+// ---------------------------------------------------------------------------
+// Raw FiRoam API response shapes — used to eliminate `unknown` casts in
+// firoamClient.ts.  These are plain interfaces (not Zod schemas) because the
+// raw responses arrive before any validation step.
+// ---------------------------------------------------------------------------
+
+/** Common response envelope returned by every FiRoam endpoint. */
+export interface FiRoamApiResponse {
+  code: number | string;
+  message?: string;
+  /** Payload varies per endpoint — narrow with a concrete interface at call sites. */
+  data?: unknown;
+}
+
+/** eSIM card credentials included in order responses.
+ *  FiRoam uses different field names across API versions, so all variants are
+ *  listed as optional. */
+export interface FiRoamCard {
+  /** LPA string (v1 field name) */
+  code?: string;
+  lpa?: string;
+  lpaString?: string;
+  sm_dp_address?: string;
+  activationCode?: string;
+  activation_code?: string;
+  iccid?: string;
+  /** Sometimes used as ICCID in older response formats. */
+  mobileNumber?: string;
+}
+
+/** Order details object inside the `data` field of order responses. */
+export interface FiRoamOrderData {
+  orderNum?: string;
+  cardApiDtoList?: FiRoamCard[];
+  cards?: FiRoamCard[];
+  cardList?: FiRoamCard[];
+}
+
+/** Package / usage entry inside a `queryEsimOrder` row. */
+export interface FiRoamPackageUsage {
+  iccid?: string;
+  flows?: number;
+  unit?: string;
+  usedMb?: number;
+  days?: number;
+  name?: string;
+  beginDate?: string;
+  endDate?: string;
+  status?: string;
+  priceId?: string;
+}
+
+/** Order row returned in the paginated `queryEsimOrder` response. */
+export interface FiRoamOrderRow {
+  orderNum?: string;
+  skuId?: string;
+  skuName?: string;
+  createTime?: string;
+  status?: string;
+  packageList?: FiRoamPackageUsage[];
+}
+
+/** Paginated wrapper inside the `data` field of a `queryEsimOrder` response. */
+export interface FiRoamQueryData {
+  rows?: FiRoamOrderRow[];
+  total?: number;
+  page?: number;
+}

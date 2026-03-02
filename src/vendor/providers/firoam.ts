@@ -5,6 +5,7 @@ import type {
   EsimProvisionResult,
 } from '../types';
 import FiRoamClient from '../firoamClient';
+import type { FiRoamOrderData } from '../firoamSchemas';
 
 /**
  * FiRoam vendor implementation of VendorProvider.
@@ -139,9 +140,7 @@ export class FiRoamProvider implements VendorProvider {
     //
     const rawData = result.raw.data;
     const vendorOrderId =
-      typeof rawData === 'string'
-        ? rawData
-        : ((rawData as Record<string, unknown>)?.orderNum as string | undefined);
+      typeof rawData === 'string' ? rawData : (rawData as FiRoamOrderData | undefined)?.orderNum;
 
     if (!vendorOrderId) {
       throw new Error('No order number in FiRoam response');

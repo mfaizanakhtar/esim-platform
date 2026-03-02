@@ -17,8 +17,7 @@ interface ProvisionJobData {
   orderPayload?: Record<string, unknown>;
 }
 
-export async function handleProvision(jobData: Record<string, unknown>) {
-  const data = jobData as unknown as ProvisionJobData;
+export async function handleProvision(data: ProvisionJobData) {
   const deliveryId = String(data.deliveryId || '');
   if (!deliveryId) throw new Error('missing deliveryId');
 
