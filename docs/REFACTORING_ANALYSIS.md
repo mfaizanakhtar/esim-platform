@@ -22,7 +22,7 @@
 | `providerConfig` schema field | ✅ Done (2026-03-02, PR #8) |
 | Reduce `unknown` types | ✅ Done (2026-03-02, PR #9) |
 | Extract email templates | ✅ Done (2026-03-02, PR #9) |
-| Standardize error handling | ❌ Not started — **next up** |
+| Standardize error handling | ✅ Done (2026-03-02, PR #12) |
 | Request ID tracking | ❌ Not started |
 | Input validation (Zod) | ❌ Not started |
 | SonarCloud setup | ❌ Not started |
@@ -33,7 +33,7 @@
 
 Your eSIM backend is well-structured with a clean separation between API, worker, and vendor layers. However, there are opportunities to improve:
 - **Logging infrastructure** (structured logging) ← ✅ Done (PR #10)
-- **Error handling** (consistent patterns) ← **TODO**
+- **Error handling** (consistent patterns) ← ✅ Done (PR #12)
 - **Test coverage** (webhook, worker, email flows) ← ✅ Done
 - **Type safety** (reduce `unknown` types) ← ✅ Done (PR #9)
 - **Code duplication** (email templates, response handling) ← ✅ Done (PR #9)
@@ -74,13 +74,30 @@ Your eSIM backend is well-structured with a clean separation between API, worker
 ~~- Query logs in production~~
 ~~- Add contextual metadata (requestId, userId, etc.)~~
 
-#### 1.2 Standardize Error Handling — ❌ NOT DONE
-**Problem:** Inconsistent error handling patterns:
-- Some functions throw errors
-- Some return `{ error: string }`
-- Some catch and log but don't rethrow
+#### 1.2 Standardize Error Handling — ✅ DONE (2026-03-02, PR #12)
 
-**Example Issues:**
+**Implemented in PR #12.** All bare `throw new Error()` in production code replaced with typed error classes. Worker now skips pg-boss retries for non-recoverable errors.
+
+**Changes:**
+- `src/utils/errors.ts` (new) — `AppError` base class + three subclasses:
+  - `JobDataError` (`'JOB_DATA_ERROR'`) — bad job payload; NOT retryable
+  - `MappingError` (`'MAPPING_ERROR'`) — DB/config problem needing human fix; NOT retryable
+  - `VendorError` (`'VENDOR_ERROR'`) — FiRoam API failure; RETRYABLE
+  - `isRetryable(err)` helper — returns `true` only for `VendorError`
+- `src/worker/jobs/provisionEsim.ts` — 5 `throw new Error()` sites replaced with `JobDataError` / `MappingError` / `VendorError`
+- `src/vendor/providers/firoam.ts` — 6 `throw new Error()` sites replaced
+- `src/vendor/firoamClient.ts` — 2 `throw new Error()` sites replaced (missing creds → `MappingError`, login failure → `VendorError`)
+- `src/vendor/registry.ts` — unsupported provider → `MappingError`
+- `src/worker/index.ts` — catch block now calls `isRetryable(err)`: rethrows only `VendorError` (lets pg-boss retry transient API failures); silently logs `MappingError`/`JobDataError` (config won't self-heal)
+
+**Value:** Prevents pg-boss burning retry slots (and ~3 min delay) on bad SKU configs; makes error cause immediately obvious in logs via `error.name` + `error.code`.
+
+~~**Problem:** Inconsistent error handling patterns:~~
+~~- Some functions throw errors~~
+~~- Some return `{ error: string }`~~
+~~- Some catch and log but don't rethrow~~
+
+~~**Example Issues:**~~
 ```typescript
 // src/worker/jobs/provisionEsim.ts - mixes patterns
 throw new Error('Missing SKU');  // ✓ Good
@@ -93,8 +110,8 @@ catch (error) {
 }
 ```
 
-**Recommendation:**
-Create custom error classes + centralized error handler.
+~~**Recommendation:**~~
+~~Create custom error classes + centralized error handler.~~
 
 ```typescript
 // src/utils/errors.ts
@@ -462,7 +479,7 @@ export default defineConfig({
 5. ✅ **Add email service tests** — 9 tests in `src/services/__tests__/email.test.ts`
 
 ### Phase 3: Quality Gates — ❌ NOT DONE
-6. ❌ **Standardize error handling** — custom error classes not created; throw patterns still inconsistent
+6. ✅ **Standardize error handling** — `JobDataError`, `MappingError`, `VendorError` + `isRetryable()` in worker (2026-03-02, PR #12)
 7. ❌ **Setup SonarCloud** — not configured
 
 ### Phase 4: Refinement — 🔄 PARTIALLY DONE

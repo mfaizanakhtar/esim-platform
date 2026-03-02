@@ -7,6 +7,7 @@ import type {
 import FiRoamClient from '../firoamClient';
 import type { FiRoamOrderData } from '../firoamSchemas';
 import { logger } from '../../utils/logger';
+import { MappingError, VendorError } from '../../utils/errors';
 
 /**
  * FiRoam vendor implementation of VendorProvider.
@@ -42,7 +43,7 @@ export class FiRoamProvider implements VendorProvider {
     //
     const parts = config.providerSku.split(':');
     if (parts.length < 2) {
-      throw new Error(
+      throw new MappingError(
         `Invalid providerSku format: ${config.providerSku}. Expected "skuId:apiCode:priceId" or "skuId:apiCode".`,
       );
     }
@@ -66,7 +67,7 @@ export class FiRoamProvider implements VendorProvider {
     //
     if (config.packageType === 'daypass') {
       if (!config.daysCount) {
-        throw new Error(
+        throw new MappingError(
           `Daypass package requires daysCount in mapping (providerSku: ${config.providerSku})`,
         );
       }
@@ -89,7 +90,7 @@ export class FiRoamProvider implements VendorProvider {
 
         const packagesResult = await this.client.getPackages(skuId);
         if (!packagesResult.packageData) {
-          throw new Error(
+          throw new VendorError(
             `Failed to fetch packages for skuId ${skuId}: ${String(packagesResult.error) || 'Unknown error'}`,
           );
         }
@@ -113,7 +114,9 @@ export class FiRoamProvider implements VendorProvider {
             },
             'Available packages',
           );
-          throw new Error(`No matching daypass package found for apiCode: ${apiCodeWithDays}`);
+          throw new MappingError(
+            `No matching daypass package found for apiCode: ${apiCodeWithDays}`,
+          );
         }
 
         orderPayload.priceId = String(matchingPkg.priceid);
@@ -136,7 +139,7 @@ export class FiRoamProvider implements VendorProvider {
         ? `FiRoam error: ${String(result.error)}`
         : 'FiRoam returned unexpected response';
       logger.error({ errorMsg, raw: result.raw }, 'Provision failed');
-      throw new Error(errorMsg);
+      throw new VendorError(errorMsg);
     }
 
     //
@@ -147,7 +150,7 @@ export class FiRoamProvider implements VendorProvider {
       typeof rawData === 'string' ? rawData : (rawData as FiRoamOrderData | undefined)?.orderNum;
 
     if (!vendorOrderId) {
-      throw new Error('No order number in FiRoam response');
+      throw new VendorError('No order number in FiRoam response');
     }
 
     logger.info({ vendorOrderId }, 'Order created');

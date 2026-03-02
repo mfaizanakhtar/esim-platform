@@ -1,33 +1,42 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import prisma from '../db/prisma';
 import { verifyShopifyWebhook } from '../shopify/webhooks';
 import { getJobQueue } from '../queue/jobQueue';
 
-interface ShopifyOrderPaidWebhook {
-  id: number;
-  name: string;
-  email: string;
-  contact_email?: string;
-  customer?: {
-    id: number;
-    email: string;
-    first_name: string;
-    last_name: string;
-    phone?: string;
-  };
-  billing_address?: {
-    email?: string;
-  };
-  line_items: Array<{
-    id: number;
-    variant_id: number;
-    quantity: number;
-    product_id: number;
-    title: string;
-    name: string;
-    sku?: string;
-  }>;
-}
+const ShopifyLineItemSchema = z.object({
+  id: z.number(),
+  variant_id: z.number(),
+  quantity: z.number().default(1),
+  product_id: z.number(),
+  title: z.string(),
+  name: z.string(),
+  sku: z.string().nullable().optional(),
+});
+
+const ShopifyOrderPaidSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  email: z.string().default(''),
+  contact_email: z.string().optional(),
+  customer: z
+    .object({
+      id: z.number(),
+      email: z.string(),
+      first_name: z.string(),
+      last_name: z.string(),
+      phone: z.string().optional(),
+    })
+    .optional(),
+  billing_address: z
+    .object({
+      email: z.string().optional(),
+    })
+    .optional(),
+  line_items: z.array(ShopifyLineItemSchema),
+});
+
+type ShopifyOrderPaidWebhook = z.infer<typeof ShopifyOrderPaidSchema>;
 
 export default function webhookRoutes(
   app: FastifyInstance,
@@ -68,8 +77,16 @@ export default function webhookRoutes(
         return reply.code(401).send({ error: 'Invalid signature' });
       }
 
-      // Parse webhook payload
-      const webhook: ShopifyOrderPaidWebhook = JSON.parse(rawBody);
+      // Parse and validate webhook payload shape
+      const parseResult = ShopifyOrderPaidSchema.safeParse(JSON.parse(rawBody));
+      if (!parseResult.success) {
+        app.log.error(
+          { issues: parseResult.error.issues },
+          '[Webhook] Invalid webhook payload shape',
+        );
+        return reply.code(400).send({ error: 'Invalid webhook payload' });
+      }
+      const webhook: ShopifyOrderPaidWebhook = parseResult.data;
       const orderId = webhook.id.toString();
       const orderName = webhook.name;
 
@@ -138,6 +155,7 @@ export default function webhookRoutes(
           'provision-esim',
           {
             deliveryId: delivery.id,
+            requestId: request.id,
             orderId,
             orderName,
             lineItemId,

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { initializeJobQueue, stopJobQueue } from '../queue/jobQueue';
 import { handleProvision } from './jobs/provisionEsim';
 import { logger } from '../utils/logger';
+import { isRetryable } from '../utils/errors';
 
 async function run() {
   logger.info('Starting worker process');
@@ -13,16 +14,21 @@ async function run() {
     const j = job as Record<string, unknown>;
     const jobId = j.id ? String(j.id) : 'unknown';
     const jobData = (j.data as Record<string, unknown>) || {};
+    const requestId = jobData.requestId ? String(jobData.requestId) : undefined;
 
-    logger.info({ jobId }, 'Processing job');
+    logger.info({ jobId, requestId }, 'Processing job');
 
     try {
       await handleProvision(jobData as unknown as Parameters<typeof handleProvision>[0]);
-      logger.info({ jobId }, 'Job completed successfully');
+      logger.info({ jobId, requestId }, 'Job completed successfully');
     } catch (err) {
-      logger.error({ jobId, err }, 'Job failed');
-      // Re-throw to let pg-boss handle retries
-      throw err;
+      logger.error({ jobId, requestId, err }, 'Job failed');
+      if (isRetryable(err)) {
+        // VendorError — rethrow so pg-boss retries (vendor may recover)
+        throw err;
+      }
+      // JobDataError / MappingError — config won't self-heal, skip retries
+      logger.warn({ jobId, requestId }, 'Non-retryable error — skipping pg-boss retries');
     }
   });
 
