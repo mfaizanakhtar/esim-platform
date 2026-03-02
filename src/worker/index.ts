@@ -16,7 +16,7 @@ async function run() {
     console.log(`[Worker] Processing job ${jobId}`);
 
     try {
-      await handleProvision(jobData);
+      await handleProvision(jobData as unknown as Parameters<typeof handleProvision>[0]);
       console.log(`[Worker] Job ${jobId} completed successfully`);
     } catch (err) {
       console.error(`[Worker] Job ${jobId} failed:`, err);

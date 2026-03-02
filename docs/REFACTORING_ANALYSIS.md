@@ -2,25 +2,26 @@
 
 > **Document Type**: Status & Internal  
 > **Status**: � In Progress  
-> **Last Updated**: 2026-03-01  
+> **Last Updated**: 2026-03-02  
 > **Purpose**: Code quality analysis and refactoring recommendations
 
 ---
 
-## Progress Snapshot (as of 2026-03-01)
+## Progress Snapshot (as of 2026-03-02)
 
 | Area | Status |
 |------|--------|
-| Test coverage | ✅ Done — 99 tests / 11 files (was ~25%) |
+| Test coverage | ✅ Done — 99 tests / 11 files |
 | Prisma singleton | ✅ Done |
 | ESLint rules | ✅ Done |
 | tsconfig for test files | ✅ Done |
-| Structured logging (pino) | ❌ Not started |
+| Structured logging (pino) | ❌ Not started — **next up** |
 | Standardize error handling | ❌ Not started |
 | Reduce `unknown` types | ❌ Not started |
 | Extract email templates | ❌ Not started |
-| Vendor strategy pattern | ❌ Not started — see §8 for full plan |
-| Multi-vendor support | ❌ Not started — see §8 for full plan |
+| Vendor strategy pattern | ✅ Done (2026-03-02, PR #8) |
+| Multi-vendor admin CRUD | ✅ Done (2026-03-02, PR #8) |
+| `providerConfig` schema field | ✅ Done (2026-03-02, PR #8) |
 | Request ID tracking | ❌ Not started |
 | Input validation (Zod) | ❌ Not started |
 | SonarCloud setup | ❌ Not started |
@@ -204,34 +205,22 @@ const prisma = new PrismaClient();
 import prisma from '../db/prisma';
 ```
 
-#### 1.6 Extract Vendor-Specific Logic to Strategies — ❌ NOT DONE
-**Problem:** [src/worker/jobs/provisionEsim.ts](src/worker/jobs/provisionEsim.ts#L78) hardcodes FiRoam logic.
+#### 1.6 Extract Vendor-Specific Logic to Strategies — ✅ DONE (2026-03-02)
 
-**Current:**
-```typescript
-if (mapping.provider !== 'firoam') {
-  throw new Error(`Unsupported provider: ${mapping.provider}`);
-}
-// ... 100 lines of FiRoam-specific code
-```
+**Implemented in PR #8.** `provisionEsim.ts` is now pure orchestration (~80 lines of business logic). All FiRoam-specific provisioning has been extracted.
 
-**Recommended Pattern:**
-```typescript
-// src/vendor/providers/ProviderStrategy.ts
-interface ProviderStrategy {
-  provision(mapping: ProviderSkuMapping): Promise<EsimPayload>;
-}
+**New files:**
+- [`src/vendor/types.ts`](../src/vendor/types.ts) — `VendorProvider` interface, `EsimProvisionResult`, `ProviderMappingConfig`, `ProvisionContext`
+- [`src/vendor/providers/firoam.ts`](../src/vendor/providers/firoam.ts) — `FiRoamProvider implements VendorProvider` (SKU parsing, daypass logic, `addEsimOrder` call, response normalisation)
+- [`src/vendor/registry.ts`](../src/vendor/registry.ts) — `getProvider(name)` factory backed by a `Map`
+- `prisma/migrations/…/add_provider_config` — adds `providerConfig Json?` to `ProviderSkuMapping`
 
-class FiRoamStrategy implements ProviderStrategy {
-  async provision(mapping: ProviderSkuMapping) {
-    // FiRoam-specific logic
-  }
-}
+**Modified:**
+- `provisionEsim.ts` — 293 → 214 lines; FiRoam block replaced with `getProvider().provision()`; module-level singleton removed
+- `src/api/admin.ts` — 5 new SKU mapping CRUD endpoints (`GET/POST /admin/sku-mappings`, `GET/PUT/DELETE /admin/sku-mappings/:id`)
+- `prisma/schema.prisma` — `providerConfig Json?` added
 
-// Usage
-const strategy = providerFactory.get(mapping.provider);
-const esim = await strategy.provision(mapping);
-```
+**To add a new vendor**: create `src/vendor/providers/<vendor>.ts`, register in `registry.ts`, insert DB rows via admin API. Zero changes to job handler.
 
 ### 🟢 **Low Priority** (Nice to Have)
 
@@ -522,10 +511,11 @@ export default defineConfig({
 6. ❌ **Standardize error handling** — custom error classes not created; throw patterns still inconsistent
 7. ❌ **Setup SonarCloud** — not configured
 
-### Phase 4: Refinement — ❌ NOT DONE
-8. ❌ **Extract email templates** (4-5 hours)
-9. ❌ **Improve type safety / reduce `unknown`** (ongoing)
-10. ❌ **Add request tracing** (2-3 hours)
+### Phase 4: Refinement — 🔄 PARTIALLY DONE
+8. ✅ **Vendor strategy pattern** — done 2026-03-02 (PR #8)
+9. ❌ **Extract email templates** (4-5 hours)
+10. ❌ **Improve type safety / reduce `unknown`** (ongoing)
+11. ❌ **Add request tracing** (2-3 hours)
 
 ---
 
@@ -855,15 +845,15 @@ Zero changes to `provisionEsim.ts`, `webhook.ts`, email, or Shopify fulfillment 
 
 ### 8.8 Migration Path (Non-Breaking)
 
-This refactoring is **fully backwards-compatible**. The migration is:
+This refactoring is **complete as of 2026-03-02 (PR #8)**. All steps were executed:
 
-1. ✅ Create `src/vendor/types.ts` — new file, nothing depends on it yet
-2. ✅ Create `src/vendor/providers/firoam.ts` — extract logic from `provisionEsim.ts`
-3. ✅ Create `src/vendor/registry.ts` — register FiRoamProvider
-4. ✅ Update `provisionEsim.ts` — replace ~130 lines with `getProvider()` call
-5. ✅ Add `providerConfig`/`isActive`/`updatedAt` to Prisma schema — non-breaking, all nullable
-6. ✅ Run `prisma migrate dev` — existing rows unaffected
-7. ✅ Add admin API endpoints for SKU mapping CRUD
+1. ✅ Created `src/vendor/types.ts`
+2. ✅ Created `src/vendor/providers/firoam.ts`
+3. ✅ Created `src/vendor/registry.ts`
+4. ✅ Updated `provisionEsim.ts` — uses `getProvider()` call
+5. ✅ Added `providerConfig`/`isActive`/`updatedAt` to Prisma schema
+6. ✅ Ran `prisma migrate dev`
+7. ✅ Added admin API endpoints for SKU mapping CRUD
 
 At no point does FiRoam stop working. The behaviour is identical — just reorganized.
 

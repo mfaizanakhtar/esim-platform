@@ -14,6 +14,10 @@ import {
   PackageItem,
   validateSkuByGroup,
   SkuByGroup,
+  FiRoamApiResponse,
+  FiRoamCard,
+  FiRoamOrderData,
+  FiRoamQueryData,
 } from './firoamSchemas';
 
 function createSign(params: Record<string, unknown>, signKey: string) {
@@ -31,40 +35,29 @@ function createSign(params: Record<string, unknown>, signKey: string) {
 /**
  * Check if FiRoam API response indicates success
  */
-function isSuccessResponse(resp: unknown): boolean {
-  const response = resp as Record<string, unknown>;
-  return response && (response.code === 0 || response.code === '0');
+function isSuccessResponse(resp: FiRoamApiResponse): boolean {
+  return resp.code === 0 || resp.code === '0';
 }
 
 /**
- * Extract card data from various possible response structures
+ * Extract card data from various possible response structures.
+ * Handles the three field-name variants used across FiRoam API versions.
  */
-function extractCardData(orderDetails: unknown): unknown[] {
-  const details = orderDetails as Record<string, unknown>;
-  const data = details?.data as Record<string, unknown> | undefined;
-  return (
-    (data?.cardApiDtoList as unknown[]) ||
-    (data?.cards as unknown[]) ||
-    (data?.cardList as unknown[]) ||
-    []
-  );
+function extractCardData(orderDetails: FiRoamApiResponse): FiRoamCard[] {
+  const data = orderDetails.data as FiRoamOrderData | undefined;
+  return data?.cardApiDtoList ?? data?.cards ?? data?.cardList ?? [];
 }
 
 /**
- * Normalize card data to canonical eSIM payload format
+ * Normalize card data to canonical eSIM payload format.
+ * Resolves the multiple field-name variants FiRoam uses across API versions.
  */
-function normalizeCardToCanonical(card: unknown, orderNum: string): Record<string, unknown> {
-  const cardData = card as Record<string, unknown>;
+function normalizeCardToCanonical(card: FiRoamCard, orderNum: string): CanonicalEsimPayload {
   return {
     vendorId: orderNum,
-    lpa:
-      cardData?.code ||
-      cardData?.lpa ||
-      cardData?.lpaString ||
-      cardData?.sm_dp_address ||
-      undefined,
-    activationCode: cardData?.activationCode || cardData?.activation_code || undefined,
-    iccid: cardData?.iccid || cardData?.mobileNumber || undefined,
+    lpa: card.code ?? card.lpa ?? card.lpaString ?? card.sm_dp_address,
+    activationCode: card.activationCode ?? card.activation_code,
+    iccid: card.iccid ?? card.mobileNumber,
   };
 }
 
@@ -116,7 +109,7 @@ export default class FiRoamClient {
     path: string,
     params: Record<string, unknown>,
     retryOnExpire = true,
-  ): Promise<Record<string, unknown>> {
+  ): Promise<FiRoamApiResponse> {
     await this.loginIfNeeded();
     const body: Record<string, unknown> = { ...params, token: this.token };
     body['sign'] = createSign(body, this.signKey);
@@ -181,27 +174,29 @@ export default class FiRoamClient {
   }
 
   /**
-   * Extract order number from API response (handles both string and object formats)
+   * Extract order number from API response (handles both string and object formats).
+   * FiRoam returns `data` as a bare string (orderNum) for simple cases and as
+   * a FiRoamOrderData object for the one-step backInfo flow.
    */
-  private extractOrderNumber(data: unknown): string | undefined {
-    const response = data as Record<string, unknown>;
-    const responseData = response.data;
+  private extractOrderNumber(data: FiRoamApiResponse): string | undefined {
+    const responseData = data.data;
     return typeof responseData === 'string'
       ? responseData
-      : ((responseData as Record<string, unknown>)?.orderNum as string | undefined);
+      : (responseData as FiRoamOrderData | undefined)?.orderNum;
   }
 
   /**
-   * Fetch full order details (one-step or two-step flow)
+   * Fetch full order details (one-step or two-step flow).
+   * When backInfo="1" is set the initial response already contains card data
+   * (one-step); otherwise we fetch it with a separate getOrderInfo call.
    */
-  private async fetchOrderDetails(data: unknown, orderNum: string): Promise<unknown> {
-    const response = data as Record<string, unknown>;
-    const responseData = response.data as Record<string, unknown> | undefined;
+  private async fetchOrderDetails(
+    data: FiRoamApiResponse,
+    orderNum: string,
+  ): Promise<FiRoamApiResponse> {
+    const responseData = data.data as FiRoamOrderData | undefined;
     const hasFullDetails =
-      responseData &&
-      typeof responseData === 'object' &&
-      responseData.orderNum &&
-      responseData.cardApiDtoList;
+      responseData != null && responseData.orderNum != null && responseData.cardApiDtoList != null;
 
     if (hasFullDetails) {
       return data; // One-step flow: already have full details
@@ -214,11 +209,11 @@ export default class FiRoamClient {
    * Extract and validate canonical eSIM payload from order details
    */
   private extractAndValidateCanonical(
-    orderDetails: unknown,
+    orderDetails: FiRoamApiResponse,
     orderNum: string,
   ): CanonicalEsimPayload | undefined {
     const cards = extractCardData(orderDetails);
-    const firstCard = cards[0] || {};
+    const firstCard: FiRoamCard = cards[0] ?? {};
     const canonicalRaw = normalizeCardToCanonical(firstCard, orderNum);
 
     try {
@@ -249,7 +244,7 @@ export default class FiRoamClient {
    */
   private async persistInvalidOrder(
     orderNum: string,
-    canonicalRaw: Record<string, unknown>,
+    canonicalRaw: CanonicalEsimPayload,
     error: unknown,
   ) {
     await prisma.esimOrder.create({
@@ -355,7 +350,7 @@ export default class FiRoamClient {
     return {
       raw: resp,
       success: isSuccessResponse(resp),
-      message: resp?.message || 'Unknown error',
+      message: resp.message ?? 'Unknown error',
     };
   }
 
@@ -396,41 +391,37 @@ export default class FiRoamClient {
       return {
         raw: resp,
         success: false,
-        error: resp?.message || 'Query failed',
+        error: resp.message ?? 'Query failed',
       };
     }
 
     // Extract order data
-    const data = resp.data as Record<string, unknown> | undefined;
-    const rows = (data?.rows as unknown[]) || [];
+    const data = resp.data as FiRoamQueryData | undefined;
+    const rows = data?.rows ?? [];
 
     // Normalize usage data for each package
-    const orders = rows.map((order: unknown) => {
-      const orderData = order as Record<string, unknown>;
-      const packageList = (orderData.packageList as unknown[]) || [];
+    const orders = rows.map((order) => {
+      const packageList = order.packageList ?? [];
 
-      const packages = packageList.map((pkg: unknown) => {
-        const pkgData = pkg as Record<string, unknown>;
-        return {
-          iccid: pkgData.iccid,
-          flows: pkgData.flows, // Total data in MB/GB
-          unit: pkgData.unit, // MB or GB
-          usedMb: pkgData.usedMb, // Used data in MB
-          days: pkgData.days,
-          name: pkgData.name,
-          beginDate: pkgData.beginDate,
-          endDate: pkgData.endDate,
-          status: pkgData.status,
-          priceId: pkgData.priceId,
-        };
-      });
+      const packages = packageList.map((pkg) => ({
+        iccid: pkg.iccid,
+        flows: pkg.flows, // Total data in MB/GB
+        unit: pkg.unit, // MB or GB
+        usedMb: pkg.usedMb, // Used data in MB
+        days: pkg.days,
+        name: pkg.name,
+        beginDate: pkg.beginDate,
+        endDate: pkg.endDate,
+        status: pkg.status,
+        priceId: pkg.priceId,
+      }));
 
       return {
-        orderNum: orderData.orderNum,
-        skuId: orderData.skuId,
-        skuName: orderData.skuName,
-        createTime: orderData.createTime,
-        status: orderData.status,
+        orderNum: order.orderNum,
+        skuId: order.skuId,
+        skuName: order.skuName,
+        createTime: order.createTime,
+        status: order.status,
         packages,
       };
     });
@@ -439,8 +430,8 @@ export default class FiRoamClient {
       raw: resp,
       success: true,
       orders,
-      total: data?.total || 0,
-      page: data?.page || 1,
+      total: data?.total ?? 0,
+      page: data?.page ?? 1,
     };
   }
 }
