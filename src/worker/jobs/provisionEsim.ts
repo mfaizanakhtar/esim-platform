@@ -4,9 +4,11 @@ import { getShopifyClient } from '../../shopify/client';
 import { getProvider } from '../../vendor/registry';
 import type { EsimProvisionResult } from '../../vendor/types';
 import { logger } from '../../utils/logger';
+import { JobDataError, MappingError, VendorError } from '../../utils/errors';
 
 interface ProvisionJobData {
   deliveryId: string;
+  requestId?: string;
   orderId?: string;
   orderName?: string;
   lineItemId?: string;
@@ -20,10 +22,10 @@ interface ProvisionJobData {
 
 export async function handleProvision(data: ProvisionJobData) {
   const deliveryId = String(data.deliveryId || '');
-  if (!deliveryId) throw new Error('missing deliveryId');
+  if (!deliveryId) throw new JobDataError('missing deliveryId');
 
   const delivery = await prisma.esimDelivery.findUnique({ where: { id: deliveryId } });
-  if (!delivery) throw new Error(`EsimDelivery ${deliveryId} not found`);
+  if (!delivery) throw new JobDataError(`EsimDelivery ${deliveryId} not found`);
 
   if (delivery.status === 'delivered') {
     return { ok: true, reason: 'already delivered' };
@@ -31,7 +33,10 @@ export async function handleProvision(data: ProvisionJobData) {
 
   await prisma.esimDelivery.update({ where: { id: deliveryId }, data: { status: 'provisioning' } });
 
-  logger.info({ deliveryId, orderName: delivery.orderName }, 'Processing delivery');
+  logger.info(
+    { deliveryId, requestId: data.requestId, orderName: delivery.orderName },
+    'Processing delivery',
+  );
 
   try {
     let esimResult: EsimProvisionResult;
@@ -50,11 +55,11 @@ export async function handleProvision(data: ProvisionJobData) {
     } else {
       // Primary path: resolve SKU mapping → dispatch to the correct vendor provider.
       const sku = data.sku;
-      if (!sku) throw new Error('Missing SKU in job data');
+      if (!sku) throw new JobDataError('Missing SKU in job data');
 
       const mapping = await prisma.providerSkuMapping.findUnique({ where: { shopifySku: sku } });
-      if (!mapping) throw new Error(`No provider mapping found for SKU: ${sku}`);
-      if (!mapping.isActive) throw new Error(`SKU mapping is inactive: ${sku}`);
+      if (!mapping) throw new MappingError(`No provider mapping found for SKU: ${sku}`);
+      if (!mapping.isActive) throw new MappingError(`SKU mapping is inactive: ${sku}`);
 
       mappingInfo = {
         name: mapping.name || undefined,
@@ -196,7 +201,7 @@ async function provisionViaDirectPayload(
     const errorMsg = result.error
       ? `FiRoam error: ${String(result.error)}`
       : 'FiRoam returned unexpected response';
-    throw new Error(errorMsg);
+    throw new VendorError(errorMsg);
   }
 
   const rawData = result.raw.data;
@@ -206,7 +211,7 @@ async function provisionViaDirectPayload(
       : ((rawData as Record<string, unknown>)?.orderNum as string | undefined);
 
   if (!vendorOrderId) {
-    throw new Error('No order number in FiRoam response');
+    throw new VendorError('No order number in FiRoam response');
   }
 
   return {

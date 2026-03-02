@@ -1,5 +1,6 @@
 import type { VendorProvider } from './types';
 import { FiRoamProvider } from './providers/firoam';
+import { MappingError } from '../utils/errors';
 
 /**
  * Central registry of all eSIM vendor provider implementations.
@@ -26,7 +27,7 @@ export function getProvider(name: string): VendorProvider {
   const provider = registry.get(name);
   if (!provider) {
     const available = [...registry.keys()].join(', ');
-    throw new Error(`Unsupported provider: ${name}. Registered providers: [${available}]`);
+    throw new MappingError(`Unsupported provider: ${name}. Registered providers: [${available}]`);
   }
   return provider;
 }

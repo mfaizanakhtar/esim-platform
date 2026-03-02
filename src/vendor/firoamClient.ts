@@ -4,6 +4,7 @@ import { encrypt } from '../utils/crypto';
 import prisma from '../db/prisma';
 import type { Prisma } from '@prisma/client';
 import { logger } from '../utils/logger';
+import { MappingError, VendorError } from '../utils/errors';
 import {
   validateCanonical,
   CanonicalEsimPayload,
@@ -88,14 +89,15 @@ export default class FiRoamClient {
 
     // Token expired or doesn't exist - login again
     logger.info('Token expired or missing, logging in');
-    if (!this.phone || !this.password) throw new Error('FIROAM_PHONE/FIROAM_PASSWORD not set');
+    if (!this.phone || !this.password)
+      throw new MappingError('FIROAM_PHONE/FIROAM_PASSWORD not set');
     const payload = { phonenumber: this.phone, password: this.password } as Record<string, unknown>;
     payload['sign'] = createSign(payload, this.signKey);
     // Per Python example in documentation: login uses GET with query params, not POST
     const resp = await this.http.get('/api_order/login', { params: payload });
     const data = resp.data;
     if (!data || !data.data || !data.data.token)
-      throw new Error(`FiRoam login failed: ${JSON.stringify(data)}`);
+      throw new VendorError(`FiRoam login failed: ${JSON.stringify(data)}`);
     this.token = data.data.token;
     // Set expiry to 1 hour from now (adjust based on FiRoam's actual token lifetime)
     this.tokenExpiry = Date.now() + 60 * 60 * 1000;
