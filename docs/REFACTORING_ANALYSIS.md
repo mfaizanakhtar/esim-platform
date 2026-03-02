@@ -2,7 +2,7 @@
 
 > **Document Type**: Status & Internal  
 > **Status**: � In Progress  
-> **Last Updated**: 2026-03-02 (PR #10)  
+> **Last Updated**: 2026-03-02 (PR #11)  
 > **Purpose**: Code quality analysis and refactoring recommendations
 
 ---
@@ -16,6 +16,7 @@
 | ESLint rules | ✅ Done |
 | tsconfig for test files | ✅ Done |
 | Structured logging (pino) | ✅ Done (2026-03-02, PR #10) |
+| pino-pretty prod crash fix | ✅ Done (2026-03-02, PR #11) |
 | Vendor strategy pattern | ✅ Done (2026-03-02, PR #8) |
 | Multi-vendor admin CRUD | ✅ Done (2026-03-02, PR #8) |
 | `providerConfig` schema field | ✅ Done (2026-03-02, PR #8) |
@@ -58,6 +59,11 @@ Your eSIM backend is well-structured with a clean separation between API, worker
 - `src/vendor/providers/firoam.ts` — 7 calls replaced with structured objects
 - `src/services/email.ts` — 11 calls replaced; noisy debug steps downgraded to `logger.debug`
 - `src/worker/jobs/provisionEsim.ts` — 15 calls replaced; 4 separate eSIM detail logs collapsed into one `logger.info({ vendorOrderId, lpa, activationCode, iccid }, ...)`
+
+**Hotfix — PR #11 (2026-03-02):** Production crash on Railway — `pino-pretty` is a devDependency and not installed in the prod Docker image, causing a startup crash when `NODE_ENV` was not set.
+- `src/utils/logger.ts` — `buildTransport()` now has two independent guards: (1) bail immediately if `NODE_ENV === 'production'`; (2) `try { require.resolve('pino-pretty') }` runtime check before configuring transport
+- `Dockerfile` — `ENV NODE_ENV=production` added to production stage so guard (1) fires unconditionally in the Railway image
+- `.github/workflows/test.yml` — new **Production smoke test** CI step in the `build` job: reinstalls prod-only deps then loads `dist/src/utils/logger.js` with `NODE_ENV=production`, so this class of bug is caught in CI before reaching Railway
 
 **Architecture:**
 - API layer (Fastify): uses `request.log` / `fastify.log` — pino is already built into Fastify, no extra code
