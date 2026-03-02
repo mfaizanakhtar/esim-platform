@@ -2,7 +2,7 @@
 
 > **Document Type**: Status & Internal  
 > **Status**: � In Progress  
-> **Last Updated**: 2026-03-02 (PR #11)  
+> **Last Updated**: 2026-03-02 (PR #13)  
 > **Purpose**: Code quality analysis and refactoring recommendations
 
 ---
@@ -23,8 +23,8 @@
 | Reduce `unknown` types | ✅ Done (2026-03-02, PR #9) |
 | Extract email templates | ✅ Done (2026-03-02, PR #9) |
 | Standardize error handling | ✅ Done (2026-03-02, PR #12) |
-| Request ID tracking | ❌ Not started |
-| Input validation (Zod) | ❌ Not started |
+| Request ID tracking | ✅ Done (2026-03-02, PR #13) |
+| Input validation (Zod) | ✅ Done (2026-03-02, PR #13) |
 | SonarCloud setup | ❌ Not started |
 
 ---
@@ -33,10 +33,12 @@
 
 Your eSIM backend is well-structured with a clean separation between API, worker, and vendor layers. However, there are opportunities to improve:
 - **Logging infrastructure** (structured logging) ← ✅ Done (PR #10)
-- **Error handling** (consistent patterns) ← ✅ Done (PR #12)
+- **Error handling** (consistent patterns) ← ✅ Done (PR #12 + #13)
 - **Test coverage** (webhook, worker, email flows) ← ✅ Done
 - **Type safety** (reduce `unknown` types) ← ✅ Done (PR #9)
 - **Code duplication** (email templates, response handling) ← ✅ Done (PR #9)
+- **Input validation** (Zod webhook schema) ← ✅ Done (PR #13)
+- **Request tracing** (requestId across webhook → worker) ← ✅ Done (PR #13)
 
 **Test Coverage as of 2026-03-01:** 99 tests, 11 test files — see breakdown in §2  
 **Recommended Target:** 70-80% coverage
@@ -195,41 +197,30 @@ import prisma from '../db/prisma';
 
 ### 🟢 **Low Priority** (Nice to Have)
 
-#### 1.7 Add Request ID Tracking — ❌ NOT DONE
-For distributed tracing across API → Queue → Worker.
+#### 1.7 Add Request ID Tracking — ✅ DONE (2026-03-02, PR #13)
 
-```typescript
-// src/middleware/requestId.ts
-fastify.addHook('onRequest', async (request, reply) => {
-  request.id = crypto.randomUUID();
-  reply.header('X-Request-Id', request.id);
-});
+**Implemented in PR #13.** Fastify's built-in `request.id` is now propagated through the entire provisioning pipeline.
 
-// Pass through queue jobs
-await boss.send('provision-esim', { 
-  ...jobData, 
-  requestId: request.id 
-});
-```
+**Changes:**
+- `src/worker/jobs/provisionEsim.ts` — `ProvisionJobData` gains `requestId?: string`; threaded into `'Processing delivery'` log
+- `src/api/webhook.ts` — `requestId: request.id` added to every `queue.send()` payload
+- `src/worker/index.ts` — worker extracts `requestId` from job data and includes it in all three log calls (`'Processing job'`, `'Job completed successfully'`, `'Job failed'`)
 
-#### 1.8 Add Input Validation Middleware — ❌ NOT DONE
-Use Zod or TypeBox for route validation.
+**Value:** A single `requestId` can now be grepped across the Railway log stream to trace a Shopify webhook → job queue → worker → provisioning call, with zero extra infrastructure.
 
-```typescript
-// src/api/webhook.ts
-const OrderPaidSchema = z.object({
-  id: z.number(),
-  email: z.string().email(),
-  line_items: z.array(z.object({
-    sku: z.string().optional()
-  }))
-});
+~~**Not Done:** For distributed tracing across API → Queue → Worker.~~
 
-app.post('/orders/paid', async (req, reply) => {
-  const order = OrderPaidSchema.parse(req.body);
-  // ...
-});
-```
+#### 1.8 Add Input Validation Middleware — ✅ DONE (2026-03-02, PR #13)
+
+**Implemented in PR #13.** Zod schema validates the Shopify webhook body after HMAC verification.
+
+**Changes:**
+- `src/api/webhook.ts` — replaced TypeScript `interface ShopifyOrderPaidWebhook` with `ShopifyOrderPaidSchema` (Zod) + `ShopifyLineItemSchema`; body now goes through `safeParse()` before any business logic; malformed payloads return `400 Invalid webhook payload` with logged Zod issue details
+- Type is derived via `z.infer<typeof ShopifyOrderPaidSchema>` — single source of truth for both runtime validation and TypeScript type
+
+**Note:** `zod` was already in `package.json` — no new dependency needed.
+
+~~**Not Done:** Use Zod or TypeBox for route validation.~~
 
 ---
 
@@ -482,11 +473,11 @@ export default defineConfig({
 6. ✅ **Standardize error handling** — `JobDataError`, `MappingError`, `VendorError` + `isRetryable()` in worker (2026-03-02, PR #12)
 7. ❌ **Setup SonarCloud** — not configured
 
-### Phase 4: Refinement — 🔄 PARTIALLY DONE
+### Phase 4: Refinement — ✅ DONE
 8. ✅ **Vendor strategy pattern** — done 2026-03-02 (PR #8)
-9. ❌ **Extract email templates** (4-5 hours)
-10. ❌ **Improve type safety / reduce `unknown`** (ongoing)
-11. ❌ **Add request tracing** (2-3 hours)
+9. ✅ **Extract email templates** — done 2026-03-02 (PR #9)
+10. ✅ **Improve type safety / reduce `unknown`** — done 2026-03-02 (PR #9)
+11. ✅ **Add request tracing** — done 2026-03-02 (PR #13)
 
 ---
 
