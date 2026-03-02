@@ -15,4 +15,4 @@ src/**/*.js
 scripts/**/*.js
 
 # Docker
-docker-compose.override.yml
+docker-compose.override.yml.backups/

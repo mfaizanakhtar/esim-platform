@@ -55,42 +55,44 @@ export default function webhookRoutes(
       const shopDomain = request.headers['x-shopify-shop-domain'] as string;
 
       if (!rawBody) {
-        app.log.error('No raw body available');
+        app.log.error('[Webhook] No raw body available');
         return reply.code(400).send({ error: 'Missing request body' });
       }
 
       if (!hmacHeader) {
-        app.log.error('Missing HMAC header');
+        app.log.error('[Webhook] Missing HMAC header');
         return reply.code(401).send({ error: 'Missing HMAC signature' });
       }
 
       // Verify HMAC signature
       const webhookSecret = process.env.SHOPIFY_WEBHOOK_SECRET!;
       if (!webhookSecret) {
-        app.log.error('SHOPIFY_WEBHOOK_SECRET not configured');
+        app.log.error('[Webhook] SHOPIFY_WEBHOOK_SECRET not configured');
         return reply.code(500).send({ error: 'Server misconfiguration' });
       }
 
       const isValid = verifyShopifyWebhook(rawBody, hmacHeader, webhookSecret);
       if (!isValid) {
-        app.log.error('Invalid HMAC signature');
+        app.log.error('[Webhook] Invalid HMAC signature');
         return reply.code(401).send({ error: 'Invalid signature' });
       }
 
       // Parse and validate webhook payload shape
       const parseResult = ShopifyOrderPaidSchema.safeParse(JSON.parse(rawBody));
       if (!parseResult.success) {
-        app.log.error({ issues: parseResult.error.issues }, 'Invalid webhook payload shape');
+        app.log.error(
+          { issues: parseResult.error.issues },
+          '[Webhook] Invalid webhook payload shape',
+        );
         return reply.code(400).send({ error: 'Invalid webhook payload' });
       }
       const webhook: ShopifyOrderPaidWebhook = parseResult.data;
       const orderId = webhook.id.toString();
       const orderName = webhook.name;
 
-      // Log email fields for debugging
+      // Debug: Log email fields
       app.log.info(
-        { orderId, orderName, webhookEmail: webhook.email, customerEmail: webhook.customer?.email },
-        'Email fields',
+        `[Webhook] Order ${orderName} - webhook.email: ${webhook.email}, customer?.email: ${webhook.customer?.email}`,
       );
 
       // Use customer email if available, fallback to order email
@@ -98,20 +100,17 @@ export default function webhookRoutes(
 
       if (!customerEmail) {
         app.log.error(
-          {
-            orderId,
-            orderName,
-            webhookEmail: webhook.email,
-            customerEmail: webhook.customer?.email,
-            contactEmail: webhook.contact_email,
-            billingEmail: webhook.billing_address?.email,
-          },
-          'No email found for order',
+          `[Webhook] No email found for order ${orderName}. Webhook payload: ${JSON.stringify({
+            email: webhook.email,
+            customer: webhook.customer,
+            contact_email: webhook.contact_email,
+            billing_address: webhook.billing_address?.email,
+          })}`,
         );
         return reply.code(400).send({ error: 'No customer email' });
       }
 
-      app.log.info({ orderId, orderName }, 'Received orders/paid');
+      app.log.info(`[Webhook] Received orders/paid for ${orderName} (${orderId})`);
 
       // Get job queue
       const queue = getJobQueue();
@@ -130,7 +129,9 @@ export default function webhookRoutes(
         });
 
         if (existing) {
-          app.log.info({ orderId, orderName, lineItemId }, 'Line item already processed, skipping');
+          app.log.info(
+            `[Webhook] Order ${orderName} line item ${lineItemId} already processed, skipping`,
+          );
           continue;
         }
 
@@ -147,7 +148,7 @@ export default function webhookRoutes(
           },
         });
 
-        app.log.info({ deliveryId: delivery.id, orderId, orderName }, 'Created delivery record');
+        app.log.info(`[Webhook] Created delivery record ${delivery.id} for ${orderName}`);
 
         // Enqueue provisioning job with retry policy
         await queue.send(
@@ -169,14 +170,14 @@ export default function webhookRoutes(
           },
         );
 
-        app.log.info({ deliveryId: delivery.id, orderId }, 'Enqueued provisioning job');
+        app.log.info(`[Webhook] Enqueued provisioning job for delivery ${delivery.id}`);
       }
 
       // Always return 200 quickly to avoid Shopify retries
       return reply.code(200).send({ received: true });
     } catch (error) {
       const err = error as Error;
-      app.log.error({ err }, 'Error processing webhook');
+      app.log.error({ err }, '[Webhook] Error processing webhook');
 
       // Still return 200 to avoid retries - log error for investigation
       return reply.code(200).send({ received: true, error: 'Processing error' });
