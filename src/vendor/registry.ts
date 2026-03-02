@@ -26,9 +26,7 @@ export function getProvider(name: string): VendorProvider {
   const provider = registry.get(name);
   if (!provider) {
     const available = [...registry.keys()].join(', ');
-    throw new Error(
-      `Unsupported provider: ${name}. Registered providers: [${available}]`,
-    );
+    throw new Error(`Unsupported provider: ${name}. Registered providers: [${available}]`);
   }
   return provider;
 }
