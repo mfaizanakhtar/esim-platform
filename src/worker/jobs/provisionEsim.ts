@@ -63,7 +63,9 @@ export async function handleProvision(jobData: Record<string, unknown>) {
         validity: mapping.validity || undefined,
       };
 
-      console.log(`[ProvisionJob] Using provider: ${mapping.provider}, SKU: ${mapping.providerSku}`);
+      console.log(
+        `[ProvisionJob] Using provider: ${mapping.provider}, SKU: ${mapping.providerSku}`,
+      );
 
       const provider = getProvider(mapping.provider);
       esimResult = await provider.provision(
