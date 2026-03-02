@@ -27,6 +27,7 @@ const createMockMapping = (overrides: Partial<ProviderSkuMapping> = {}): Provide
   shopifySku: 'ESIM-USA-10GB',
   provider: 'firoam',
   providerSku: '120:826-0-?-1-G-D:14094',
+  providerConfig: null,
   isActive: true,
   name: 'USA 10GB',
   region: null,

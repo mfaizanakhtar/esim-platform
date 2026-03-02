@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
 import prisma from '../db/prisma';
+import { Prisma } from '@prisma/client';
 import { getJobQueue } from '../queue/jobQueue';
 import { sendDeliveryEmail, type EsimPayload } from '../services/email';
 import { decrypt } from '../utils/crypto';
@@ -149,11 +150,6 @@ export default function adminRoutes(
     return reply.send({ ok: true, message: `Delivery ${id} re-enqueued` });
   });
 
-  /**
-   * POST /admin/deliveries/:id/resend-email
-   * Re-send the delivery email for an already-delivered eSIM.
-   * Decrypts the payload and calls sendDeliveryEmail again.
-   */
   app.post('/deliveries/:id/resend-email', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
@@ -202,6 +198,192 @@ export default function adminRoutes(
     app.log.info(`[Admin] Resent delivery email for ${id}: ${emailResult.messageId}`);
 
     return reply.send({ ok: true, messageId: emailResult.messageId });
+  });
+
+  // ---------------------------------------------------------------------------
+  // SKU Mapping CRUD
+  // Manage Shopify SKU → vendor provider mappings at runtime (no deploy needed).
+  // ---------------------------------------------------------------------------
+
+  /**
+   * GET /admin/sku-mappings
+   * List all SKU mappings, optionally filtered.
+   * Query params: provider=firoam, isActive=true|false, limit=50, offset=0
+   */
+  app.get('/sku-mappings', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const query = request.query as {
+      provider?: string;
+      isActive?: string;
+      limit?: string;
+      offset?: string;
+    };
+    const limit = Math.min(parseInt(query.limit || '100', 10), 500);
+    const offset = parseInt(query.offset || '0', 10);
+
+    const where: Record<string, unknown> = {};
+    if (query.provider) where.provider = query.provider;
+    if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
+
+    const [mappings, total] = await Promise.all([
+      prisma.providerSkuMapping.findMany({
+        where,
+        orderBy: { shopifySku: 'asc' },
+        take: limit,
+        skip: offset,
+      }),
+      prisma.providerSkuMapping.count({ where }),
+    ]);
+
+    return reply.send({ total, limit, offset, mappings });
+  });
+
+  /**
+   * GET /admin/sku-mappings/:id
+   * Get a single SKU mapping by ID.
+   */
+  app.get('/sku-mappings/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { id } = request.params as { id: string };
+    const mapping = await prisma.providerSkuMapping.findUnique({ where: { id } });
+
+    if (!mapping) {
+      return reply.code(404).send({ error: 'SKU mapping not found' });
+    }
+
+    return reply.send(mapping);
+  });
+
+  /**
+   * POST /admin/sku-mappings
+   * Create a new Shopify SKU → vendor provider mapping.
+   *
+   * Body (JSON):
+   *   shopifySku     string  required  — Shopify variant SKU (must be unique)
+   *   provider       string  required  — e.g. 'firoam', 'airalo'
+   *   providerSku    string  required  — vendor-specific identifier
+   *   name           string  optional
+   *   region         string  optional
+   *   dataAmount     string  optional
+   *   validity       string  optional
+   *   packageType    string  optional  — 'fixed' | 'daypass' (default: 'fixed')
+   *   daysCount      number  optional  — required when packageType='daypass'
+   *   providerConfig object  optional  — vendor-specific extras (stored as JSON)
+   *   isActive       boolean optional  — defaults to true
+   */
+  app.post('/sku-mappings', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = request.body as Record<string, unknown>;
+    const { shopifySku, provider, providerSku } = body;
+
+    if (!shopifySku || typeof shopifySku !== 'string') {
+      return reply.code(400).send({ error: 'shopifySku is required' });
+    }
+    if (!provider || typeof provider !== 'string') {
+      return reply.code(400).send({ error: 'provider is required' });
+    }
+    if (!providerSku || typeof providerSku !== 'string') {
+      return reply.code(400).send({ error: 'providerSku is required' });
+    }
+
+    // Check for duplicate shopifySku
+    const existing = await prisma.providerSkuMapping.findUnique({ where: { shopifySku } });
+    if (existing) {
+      return reply.code(409).send({ error: `SKU mapping already exists for: ${shopifySku}` });
+    }
+
+    const mapping = await prisma.providerSkuMapping.create({
+      data: {
+        shopifySku,
+        provider,
+        providerSku,
+        name: typeof body.name === 'string' ? body.name : null,
+        region: typeof body.region === 'string' ? body.region : null,
+        dataAmount: typeof body.dataAmount === 'string' ? body.dataAmount : null,
+        validity: typeof body.validity === 'string' ? body.validity : null,
+        packageType: typeof body.packageType === 'string' ? body.packageType : 'fixed',
+        daysCount: typeof body.daysCount === 'number' ? body.daysCount : null,
+        providerConfig:
+          body.providerConfig && typeof body.providerConfig === 'object'
+            ? (body.providerConfig as Prisma.InputJsonValue)
+            : Prisma.JsonNull,
+        isActive: body.isActive !== false,
+      },
+    });
+
+    app.log.info(`[Admin] Created SKU mapping: ${shopifySku} → ${provider}`);
+    return reply.code(201).send(mapping);
+  });
+
+  /**
+   * PUT /admin/sku-mappings/:id
+   * Update an existing SKU mapping.
+   * All fields are optional — only provided fields are updated.
+   * Use isActive=false to deactivate without deleting.
+   */
+  app.put('/sku-mappings/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { id } = request.params as { id: string };
+    const body = request.body as Record<string, unknown>;
+
+    const existing = await prisma.providerSkuMapping.findUnique({ where: { id } });
+    if (!existing) {
+      return reply.code(404).send({ error: 'SKU mapping not found' });
+    }
+
+    // Build update payload from only the fields that were provided
+    const updateData: Record<string, unknown> = {};
+    if (typeof body.provider === 'string') updateData.provider = body.provider;
+    if (typeof body.providerSku === 'string') updateData.providerSku = body.providerSku;
+    if (typeof body.name === 'string') updateData.name = body.name;
+    if (typeof body.region === 'string') updateData.region = body.region;
+    if (typeof body.dataAmount === 'string') updateData.dataAmount = body.dataAmount;
+    if (typeof body.validity === 'string') updateData.validity = body.validity;
+    if (typeof body.packageType === 'string') updateData.packageType = body.packageType;
+    if (typeof body.daysCount === 'number') updateData.daysCount = body.daysCount;
+    if (typeof body.isActive === 'boolean') updateData.isActive = body.isActive;
+    if (body.providerConfig !== undefined) {
+      updateData.providerConfig =
+        body.providerConfig && typeof body.providerConfig === 'object'
+          ? (body.providerConfig as Prisma.InputJsonValue)
+          : Prisma.JsonNull;
+    }
+
+    const mapping = await prisma.providerSkuMapping.update({
+      where: { id },
+      data: updateData,
+    });
+
+    app.log.info(`[Admin] Updated SKU mapping: ${id} (${mapping.shopifySku})`);
+    return reply.send(mapping);
+  });
+
+  /**
+   * DELETE /admin/sku-mappings/:id
+   * Soft-delete a SKU mapping by setting isActive=false.
+   * Hard-delete is intentionally not exposed — use isActive=false to deactivate.
+   */
+  app.delete('/sku-mappings/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { id } = request.params as { id: string };
+
+    const existing = await prisma.providerSkuMapping.findUnique({ where: { id } });
+    if (!existing) {
+      return reply.code(404).send({ error: 'SKU mapping not found' });
+    }
+
+    await prisma.providerSkuMapping.update({
+      where: { id },
+      data: { isActive: false },
+    });
+
+    app.log.info(`[Admin] Deactivated SKU mapping: ${id} (${existing.shopifySku})`);
+    return reply.send({ ok: true, message: `SKU mapping ${existing.shopifySku} deactivated` });
   });
 
   done();
