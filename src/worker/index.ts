@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import { initializeJobQueue, stopJobQueue } from '../queue/jobQueue';
 import { handleProvision } from './jobs/provisionEsim';
+import { logger } from '../utils/logger';
 
 async function run() {
-  console.log('[Worker] Starting worker process...');
+  logger.info('Starting worker process');
 
   const boss = await initializeJobQueue();
 
@@ -13,13 +14,13 @@ async function run() {
     const jobId = j.id ? String(j.id) : 'unknown';
     const jobData = (j.data as Record<string, unknown>) || {};
 
-    console.log(`[Worker] Processing job ${jobId}`);
+    logger.info({ jobId }, 'Processing job');
 
     try {
       await handleProvision(jobData as unknown as Parameters<typeof handleProvision>[0]);
-      console.log(`[Worker] Job ${jobId} completed successfully`);
+      logger.info({ jobId }, 'Job completed successfully');
     } catch (err) {
-      console.error(`[Worker] Job ${jobId} failed:`, err);
+      logger.error({ jobId, err }, 'Job failed');
       // Re-throw to let pg-boss handle retries
       throw err;
     }
@@ -33,29 +34,27 @@ async function run() {
       const data = (j.data as Record<string, unknown>) || {};
       const request = (data.request as Record<string, unknown>) || {};
       const deliveryId = request.deliveryId ? String(request.deliveryId) : 'unknown';
-      console.error(
-        `[Worker] ⚠️  Job permanently failed after all retries. deliveryId=${deliveryId} jobId=${j.id}`,
-      );
+      logger.error({ deliveryId, jobId: j.id }, 'Job permanently failed after all retries');
     }
   });
 
-  console.log('[Worker] Worker registered and ready to process jobs');
+  logger.info('Worker registered and ready to process jobs');
 
   // Graceful shutdown
   process.on('SIGINT', async () => {
-    console.log('[Worker] Shutting down worker...');
+    logger.info('Shutting down worker (SIGINT)');
     await stopJobQueue();
     process.exit(0);
   });
 
   process.on('SIGTERM', async () => {
-    console.log('[Worker] Shutting down worker...');
+    logger.info('Shutting down worker (SIGTERM)');
     await stopJobQueue();
     process.exit(0);
   });
 }
 
 run().catch((err) => {
-  console.error('[Worker] Fatal error:', err);
+  logger.error({ err }, 'Fatal error');
   process.exit(1);
 });

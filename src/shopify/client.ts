@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import { logger } from '../utils/logger';
 
 interface ShopifyConfig {
   shopDomain: string;
@@ -81,14 +82,10 @@ export class ShopifyClient {
       this.accessToken = response.data.access_token;
       this.tokenExpiresAt = Date.now() + response.data.expires_in * 1000;
 
-      console.log(
-        '[Shopify] Access token refreshed, expires in',
-        response.data.expires_in,
-        'seconds',
-      );
+      logger.info({ expiresIn: response.data.expires_in }, 'Access token refreshed');
       return this.accessToken;
     } catch (error) {
-      console.error('[Shopify] Failed to refresh access token:', error);
+      logger.error({ err: error }, 'Failed to refresh access token');
       throw new Error('Failed to authenticate with Shopify');
     }
   }
@@ -191,23 +188,20 @@ export class ShopifyClient {
 
     // Check for GraphQL errors
     if (queryResponse.data?.errors) {
-      console.error('[Shopify] GraphQL errors:', JSON.stringify(queryResponse.data.errors));
+      logger.error({ errors: queryResponse.data.errors }, 'GraphQL errors');
       throw new Error(`GraphQL errors: ${JSON.stringify(queryResponse.data.errors)}`);
     }
 
     const order = queryResponse.data?.data?.order;
 
     if (!order) {
-      console.error('[Shopify] Order not found:', orderId);
-      console.error('[Shopify] Full response:', JSON.stringify(queryResponse.data));
+      logger.error({ orderId, response: queryResponse.data }, 'Order not found');
       throw new Error(`Order not found: ${orderId}. Check if order ID is correct.`);
     }
 
     const fulfillmentOrders = order.fulfillmentOrders?.edges || [];
 
-    console.log(
-      `[Shopify] Found ${fulfillmentOrders.length} fulfillment orders for order ${orderId}`,
-    );
+    logger.info({ orderId, count: fulfillmentOrders.length }, 'Found fulfillment orders');
 
     if (fulfillmentOrders.length === 0) {
       throw new Error(
@@ -230,9 +224,7 @@ export class ShopifyClient {
 
     const fulfillmentOrderId = fulfillableOrder.node.id;
 
-    console.log(
-      `[Shopify] Creating fulfillment for order ${orderId}, fulfillment order: ${fulfillmentOrderId}`,
-    );
+    logger.info({ orderId, fulfillmentOrderId }, 'Creating fulfillment');
 
     // Step 2: Create the fulfillment (fulfills all items in the fulfillment order)
     const mutation = `

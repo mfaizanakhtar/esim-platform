@@ -3,6 +3,7 @@ import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '../.
 import { getShopifyClient } from '../../shopify/client';
 import { getProvider } from '../../vendor/registry';
 import type { EsimProvisionResult } from '../../vendor/types';
+import { logger } from '../../utils/logger';
 
 interface ProvisionJobData {
   deliveryId: string;
@@ -30,7 +31,7 @@ export async function handleProvision(data: ProvisionJobData) {
 
   await prisma.esimDelivery.update({ where: { id: deliveryId }, data: { status: 'provisioning' } });
 
-  console.log(`[ProvisionJob] Processing delivery ${deliveryId} for order ${delivery.orderName}`);
+  logger.info({ deliveryId, orderName: delivery.orderName }, 'Processing delivery');
 
   try {
     let esimResult: EsimProvisionResult;
@@ -44,7 +45,7 @@ export async function handleProvision(data: ProvisionJobData) {
     if (data.orderPayload) {
       // Legacy path: raw vendor payload included directly in job data.
       // Deprecated — prefer SKU mappings with the provider registry.
-      console.log('[ProvisionJob] Using legacy direct orderPayload path');
+      logger.info('Using legacy direct orderPayload path');
       esimResult = await provisionViaDirectPayload(data.orderPayload);
     } else {
       // Primary path: resolve SKU mapping → dispatch to the correct vendor provider.
@@ -62,9 +63,7 @@ export async function handleProvision(data: ProvisionJobData) {
         validity: mapping.validity || undefined,
       };
 
-      console.log(
-        `[ProvisionJob] Using provider: ${mapping.provider}, SKU: ${mapping.providerSku}`,
-      );
+      logger.info({ provider: mapping.provider, sku: mapping.providerSku }, 'Using provider');
 
       const provider = getProvider(mapping.provider);
       esimResult = await provider.provision(
@@ -81,10 +80,15 @@ export async function handleProvision(data: ProvisionJobData) {
       );
     }
 
-    console.log(`[ProvisionJob] eSIM provisioned: ${esimResult.vendorOrderId}`);
-    console.log(`[ProvisionJob] LPA: ${esimResult.lpa || 'N/A'}`);
-    console.log(`[ProvisionJob] Activation Code: ${esimResult.activationCode || 'N/A'}`);
-    console.log(`[ProvisionJob] ICCID: ${esimResult.iccid || 'N/A'}`);
+    logger.info(
+      {
+        vendorOrderId: esimResult.vendorOrderId,
+        lpa: esimResult.lpa,
+        activationCode: esimResult.activationCode,
+        iccid: esimResult.iccid,
+      },
+      'eSIM provisioned',
+    );
 
     // Encrypt the canonical payload for at-rest storage
     const crypto = await import('../../utils/crypto');
@@ -106,11 +110,11 @@ export async function handleProvision(data: ProvisionJobData) {
       },
     });
 
-    console.log(`[ProvisionJob] eSIM provisioned successfully: ${esimResult.vendorOrderId}`);
+    logger.info({ vendorOrderId: esimResult.vendorOrderId }, 'eSIM provisioned successfully');
 
     // Send delivery email with QR code
     if (delivery.customerEmail) {
-      console.log(`[ProvisionJob] Sending delivery email to ${delivery.customerEmail}`);
+      logger.info({ to: delivery.customerEmail }, 'Sending delivery email');
 
       const esimPayload: EsimPayload = {
         lpa: esimResult.lpa,
@@ -137,38 +141,38 @@ export async function handleProvision(data: ProvisionJobData) {
       );
 
       if (emailResult.success) {
-        console.log(`[ProvisionJob] Delivery email sent: ${emailResult.messageId}`);
+        logger.info({ messageId: emailResult.messageId }, 'Delivery email sent');
       } else {
-        console.error(`[ProvisionJob] Email delivery failed: ${emailResult.error}`);
+        logger.error({ error: emailResult.error }, 'Email delivery failed');
         // Don't throw - eSIM is provisioned, email failure is recoverable
       }
     } else {
-      console.warn(`[ProvisionJob] No customer email - skipping delivery email`);
+      logger.warn('No customer email - skipping delivery email');
     }
 
     // Create Shopify fulfillment
     if (data.orderId) {
       try {
-        console.log(`[ProvisionJob] Creating Shopify fulfillment for order ${data.orderId}`);
+        logger.info({ orderId: data.orderId }, 'Creating Shopify fulfillment');
 
         const shopify = getShopifyClient();
         await shopify.createFulfillment(data.orderId);
 
-        console.log(`[ProvisionJob] Shopify fulfillment created successfully`);
+        logger.info('Shopify fulfillment created successfully');
       } catch (fulfillmentError) {
         const fulfillmentMsg =
           fulfillmentError instanceof Error ? fulfillmentError.message : String(fulfillmentError);
-        console.error(`[ProvisionJob] Failed to create Shopify fulfillment: ${fulfillmentMsg}`);
+        logger.error({ error: fulfillmentMsg }, 'Failed to create Shopify fulfillment');
         // Don't throw - eSIM is delivered, fulfillment failure is recoverable
       }
     } else {
-      console.warn(`[ProvisionJob] Missing orderId - skipping Shopify fulfillment`);
+      logger.warn('Missing orderId - skipping Shopify fulfillment');
     }
 
     return { ok: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[ProvisionJob] Failed:`, msg);
+    logger.error({ error: msg }, 'Provision failed');
     await prisma.esimDelivery.update({
       where: { id: deliveryId },
       data: { lastError: msg, status: 'failed' },

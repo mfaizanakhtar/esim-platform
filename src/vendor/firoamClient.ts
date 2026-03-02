@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { encrypt } from '../utils/crypto';
 import prisma from '../db/prisma';
 import type { Prisma } from '@prisma/client';
+import { logger } from '../utils/logger';
 import {
   validateCanonical,
   CanonicalEsimPayload,
@@ -86,7 +87,7 @@ export default class FiRoamClient {
     }
 
     // Token expired or doesn't exist - login again
-    console.log('[FiRoamClient] Token expired or missing, logging in...');
+    logger.info('Token expired or missing, logging in');
     if (!this.phone || !this.password) throw new Error('FIROAM_PHONE/FIROAM_PASSWORD not set');
     const payload = { phonenumber: this.phone, password: this.password } as Record<string, unknown>;
     payload['sign'] = createSign(payload, this.signKey);
@@ -98,10 +99,7 @@ export default class FiRoamClient {
     this.token = data.data.token;
     // Set expiry to 1 hour from now (adjust based on FiRoam's actual token lifetime)
     this.tokenExpiry = Date.now() + 60 * 60 * 1000;
-    console.log(
-      '[FiRoamClient] Successfully logged in, token valid until:',
-      new Date(this.tokenExpiry),
-    );
+    logger.info({ validUntil: new Date(this.tokenExpiry!) }, 'Successfully logged in');
     return this.token;
   }
 
@@ -122,7 +120,7 @@ export default class FiRoamClient {
 
     // If token expired, retry once with fresh token
     if (retryOnExpire && data?.code === '-1' && data?.message === 'token expire') {
-      console.log('[FiRoamClient] Token expired during request, refreshing and retrying...');
+      logger.info('Token expired during request, refreshing and retrying');
       this.token = undefined; // Force re-login
       this.tokenExpiry = undefined;
       return this.post(path, params, false); // Retry without further retries
@@ -145,7 +143,7 @@ export default class FiRoamClient {
     const payload: AddEsimOrderInput = validateAddEsimOrder(orderPayload);
 
     // Debug: Log the exact payload being sent to FiRoam
-    console.log('[FiRoamClient] Sending order payload:', JSON.stringify(payload, null, 2));
+    logger.info({ payload }, 'Sending order payload');
 
     const data = await this.post('/api_esim/addEsimOrder', payload as Record<string, unknown>);
 
@@ -220,7 +218,9 @@ export default class FiRoamClient {
       return validateCanonical(canonicalRaw);
     } catch (zerr) {
       // Persist failed validation for debugging
-      this.persistInvalidOrder(orderNum, canonicalRaw, zerr).catch(console.error);
+      this.persistInvalidOrder(orderNum, canonicalRaw, zerr).catch((err) =>
+        logger.error({ err }, 'Failed to persist invalid order'),
+      );
       return undefined;
     }
   }

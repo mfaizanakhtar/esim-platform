@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import FiRoamClient from '../firoamClient';
 import type { FiRoamOrderData } from '../firoamSchemas';
+import { logger } from '../../utils/logger';
 
 /**
  * FiRoam vendor implementation of VendorProvider.
@@ -74,14 +75,16 @@ export class FiRoamProvider implements VendorProvider {
 
       if (storedPriceId) {
         // New format — priceId already stored in the mapping row
-        console.log(
-          `[FiRoamProvider] Daypass: ${config.daysCount} days, using stored priceId: ${storedPriceId}`,
+        logger.info(
+          { days: config.daysCount, priceId: storedPriceId },
+          'Daypass: using stored priceId',
         );
         orderPayload.priceId = storedPriceId;
       } else {
         // Legacy format — look up the numeric priceId from FiRoam's packages API
-        console.log(
-          `[FiRoamProvider] Daypass: ${config.daysCount} days, looking up priceid for apiCode: ${apiCodeWithDays}`,
+        logger.info(
+          { days: config.daysCount, apiCode: apiCodeWithDays },
+          'Daypass: looking up priceid',
         );
 
         const packagesResult = await this.client.getPackages(skuId);
@@ -100,19 +103,21 @@ export class FiRoamProvider implements VendorProvider {
           );
 
         if (!matchingPkg) {
-          console.log(
-            `[FiRoamProvider] Available packages:`,
-            esimPackages.map((p) => ({
-              apiCode: p.apiCode,
-              priceid: p.priceid,
-              supportDaypass: p.supportDaypass,
-            })),
+          logger.info(
+            {
+              packages: esimPackages.map((p) => ({
+                apiCode: p.apiCode,
+                priceid: p.priceid,
+                supportDaypass: p.supportDaypass,
+              })),
+            },
+            'Available packages',
           );
           throw new Error(`No matching daypass package found for apiCode: ${apiCodeWithDays}`);
         }
 
         orderPayload.priceId = String(matchingPkg.priceid);
-        console.log(`[FiRoamProvider] Found daypass package, priceid: ${matchingPkg.priceid}`);
+        logger.info({ priceid: matchingPkg.priceid }, 'Found daypass package');
       }
 
       orderPayload.daypassDays = String(config.daysCount);
@@ -130,8 +135,7 @@ export class FiRoamProvider implements VendorProvider {
       const errorMsg = result.error
         ? `FiRoam error: ${String(result.error)}`
         : 'FiRoam returned unexpected response';
-      console.log(`[FiRoamProvider] Provision failed: ${errorMsg}`);
-      console.log('[FiRoamProvider] Raw response:', JSON.stringify(result.raw, null, 2));
+      logger.error({ errorMsg, raw: result.raw }, 'Provision failed');
       throw new Error(errorMsg);
     }
 
@@ -146,7 +150,7 @@ export class FiRoamProvider implements VendorProvider {
       throw new Error('No order number in FiRoam response');
     }
 
-    console.log(`[FiRoamProvider] Order created: ${vendorOrderId}`);
+    logger.info({ vendorOrderId }, 'Order created');
 
     return {
       vendorOrderId: String(vendorOrderId),

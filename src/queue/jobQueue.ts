@@ -1,4 +1,5 @@
 import PgBoss from 'pg-boss';
+import { logger } from '../utils/logger';
 
 let jobQueue: PgBoss | null = null;
 
@@ -15,7 +16,7 @@ export async function initializeJobQueue(): Promise<PgBoss> {
 
     jobQueue = new PgBoss(connectionString);
     await jobQueue.start();
-    console.log('[JobQueue] pg-boss started');
+    logger.info('pg-boss started');
   }
 
   return jobQueue;
@@ -38,6 +39,6 @@ export async function stopJobQueue(): Promise<void> {
   if (jobQueue) {
     await jobQueue.stop();
     jobQueue = null;
-    console.log('[JobQueue] pg-boss stopped');
+    logger.info('pg-boss stopped');
   }
 }

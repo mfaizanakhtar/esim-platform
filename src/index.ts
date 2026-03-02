@@ -1,26 +1,27 @@
 import 'dotenv/config';
 import buildServer from './server';
 import { initializeJobQueue, stopJobQueue } from './queue/jobQueue';
+import { logger } from './utils/logger';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 
 async function main() {
   // Initialize job queue for API process
   await initializeJobQueue();
-  console.log('[API] Job queue initialized');
+  logger.info('Job queue initialized');
 
   const server = await buildServer();
 
   // Graceful shutdown
   process.on('SIGINT', async () => {
-    console.log('[API] Shutting down...');
+    logger.info('Shutting down (SIGINT)');
     await server.close();
     await stopJobQueue();
     process.exit(0);
   });
 
   process.on('SIGTERM', async () => {
-    console.log('[API] Shutting down...');
+    logger.info('Shutting down (SIGTERM)');
     await server.close();
     await stopJobQueue();
     process.exit(0);
@@ -28,7 +29,7 @@ async function main() {
 
   try {
     await server.listen({ port: PORT, host: '0.0.0.0' });
-    console.log(`[API] Server listening on ${PORT}`);
+    logger.info({ port: PORT }, 'Server listening');
   } catch (err) {
     server.log.error(err);
     await stopJobQueue();
