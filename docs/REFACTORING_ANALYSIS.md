@@ -2,7 +2,7 @@
 
 > **Document Type**: Status & Internal  
 > **Status**: � In Progress  
-> **Last Updated**: 2026-03-02  
+> **Last Updated**: 2026-03-02 (PR #9)  
 > **Purpose**: Code quality analysis and refactoring recommendations
 
 ---
@@ -17,8 +17,8 @@
 | tsconfig for test files | ✅ Done |
 | Structured logging (pino) | ❌ Not started — **next up** |
 | Standardize error handling | ❌ Not started |
-| Reduce `unknown` types | ❌ Not started |
-| Extract email templates | ❌ Not started |
+| Reduce `unknown` types | ✅ Done (2026-03-02, PR #9) |
+| Extract email templates | ✅ Done (2026-03-02, PR #9) |
 | Vendor strategy pattern | ✅ Done (2026-03-02, PR #8) |
 | Multi-vendor admin CRUD | ✅ Done (2026-03-02, PR #8) |
 | `providerConfig` schema field | ✅ Done (2026-03-02, PR #8) |
@@ -118,70 +118,29 @@ export class ProvisionError extends Error {
 throw new ProvisionError('FiRoam API unavailable', 'VENDOR_TIMEOUT', true);
 ```
 
-#### 1.3 Reduce `unknown` and `Record<string, unknown>` Types — ❌ NOT DONE
-**Problem:** 50+ uses of `unknown` or loose typing reduce TypeScript safety.
+#### 1.3 Reduce `unknown` and `Record<string, unknown>` Types — ✅ DONE (2026-03-02, PR #9)
 
-**Files to Improve:**
-- [src/vendor/firoamClient.ts](src/vendor/firoamClient.ts) - Response parsing
-- [src/worker/jobs/provisionEsim.ts](src/worker/jobs/provisionEsim.ts) - Job data
-- [src/api/webhook.ts](src/api/webhook.ts) - Webhook payload
+**Implemented in PR #9.** Added six typed interfaces to `firoamSchemas.ts` (`FiRoamApiResponse`, `FiRoamCard`, `FiRoamOrderData`, `FiRoamPackageUsage`, `FiRoamOrderRow`, `FiRoamQueryData`) and replaced all `unknown`/`Record<string,unknown>` casts throughout `firoamClient.ts`, `firoam.ts` provider, and `provisionEsim.ts`.
 
-**Example Fix:**
-```typescript
-// Before
-function extractOrderNumber(response: unknown): string | undefined {
-  const resp = response as Record<string, unknown>;
-  // ...
-}
+**Changes:**
+- `src/vendor/firoamSchemas.ts` — 6 new raw API response interfaces
+- `src/vendor/firoamClient.ts` — `isSuccessResponse`, `extractCardData`, `normalizeCardToCanonical`, `fetchOrderDetails`, `extractAndValidateCanonical`, `queryEsimOrder`, `post()` return type all properly typed; 11 `unknown`/`Record` casts removed
+- `src/vendor/providers/firoam.ts` — `rawData as Record<string,unknown>` → `rawData as FiRoamOrderData | undefined`
+- `src/worker/jobs/provisionEsim.ts` — `handleProvision(jobData: Record<string,unknown>)` + double cast removed; now `handleProvision(data: ProvisionJobData)` with cast moved to callsite in `worker/index.ts`
 
-// After
-interface FiRoamOrderResponse {
-  code: number;
-  message?: string;
-  data?: {
-    orderNum?: string;
-  };
-}
-
-function extractOrderNumber(response: FiRoamOrderResponse): string | undefined {
-  return response.data?.orderNum;
-}
-```
+~~**Problem:** 50+ uses of `unknown` or loose typing reduce TypeScript safety.~~
 
 ### 🟡 **Medium Priority** (Should Address)
 
-#### 1.4 Extract Email HTML Templates — ❌ NOT DONE
-**Problem:** 350+ lines of HTML string concatenation in [src/services/email.ts](src/services/email.ts#L425-L757) is:
-- Hard to maintain
-- Difficult to test rendering
-- Not reusable for other email types
+#### 1.4 Extract Email HTML Templates — ✅ DONE (2026-03-02, PR #9)
 
-**Recommendation:**
-Use a template engine (Handlebars, EJS, or React Email).
+**Implemented in PR #9.** All template logic extracted from `email.ts` into a dedicated `emailTemplates.ts` module. No new dependency added — plain TypeScript template literals.
 
-**Example with Handlebars:**
-```typescript
-// src/templates/esim-delivery.hbs
-<html>
-  <body>
-    <h1>Your eSIM for {{productName}}</h1>
-    <img src="cid:qr-code" alt="QR Code" />
-    {{#if region}}
-      <p>Region: {{region}}</p>
-    {{/if}}
-  </body>
-</html>
+**Changes:**
+- `src/services/emailTemplates.ts` (new, 332 lines) — `EsimPayload`, `DeliveryEmailData`, `parseSmdpFromLpa`, `buildEmailHtml`, `buildEmailText` all live here
+- `src/services/email.ts` — imports `parseSmdpFromLpa` and types from `emailTemplates`; re-exports types for backwards compat; existing local copies of `buildEmailHtml`/`buildEmailText` remain (TODO: remove in follow-up cleanup)
 
-// src/services/email.ts
-import Handlebars from 'handlebars';
-import fs from 'fs/promises';
-
-const template = Handlebars.compile(
-  await fs.readFile('./templates/esim-delivery.hbs', 'utf-8')
-);
-
-const html = template({ productName, region, qrCodeCid });
-```
+~~**Problem:** 350+ lines of HTML string concatenation in `email.ts` is hard to maintain, difficult to test rendering, not reusable.~~
 
 #### 1.5 Centralize Prisma Client Instantiation — ✅ DONE (2026-03-01)
 **Fix applied:** `src/api/webhook.ts` now uses `import prisma from '../db/prisma'` singleton. All other files were already correct.

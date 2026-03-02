@@ -6,6 +6,7 @@ import { Resend } from 'resend';
 import QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
 import type { PrismaClient } from '@prisma/client';
+import { logger } from '../utils/logger';
 // Types and parseSmdpFromLpa live in emailTemplates.ts — import them from there
 // so that callers who import types directly from emailTemplates.ts stay in sync.
 // buildEmailHtml/buildEmailText local copies below are identical to emailTemplates.ts;
@@ -643,27 +644,25 @@ export async function sendDeliveryEmail(
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const { to, orderNumber, esimPayload } = data;
 
-  console.log(`[EmailService] Preparing delivery email for order ${orderNumber} to ${to}`);
+  logger.info({ orderNumber, to }, 'Preparing delivery email');
 
   try {
     // Generate QR code as base64 string for CID attachment
-    console.log(
-      `[EmailService] Generating QR code for LPA: ${esimPayload.lpa.substring(0, 20)}...`,
-    );
+    logger.debug({ lpa: esimPayload.lpa.substring(0, 20) }, 'Generating QR code');
     const qrCodeBase64 = await generateQRCodeBase64(esimPayload.lpa);
-    console.log(`[EmailService] QR code generated as base64 for CID attachment`);
+    logger.debug('QR code generated as base64');
 
     // Generate PDF with eSIM details
-    console.log(`[EmailService] Generating PDF document...`);
+    logger.debug('Generating PDF document');
     const pdfBase64 = await generateEsimPDF(data);
-    console.log(`[EmailService] PDF generated successfully`);
+    logger.debug('PDF generated successfully');
 
     // Build email content
-    console.log(`[EmailService] Building email HTML...`);
+    logger.debug('Building email HTML');
     const htmlBody = buildEmailHtml(data);
-    console.log(`[EmailService] Building email text...`);
+    logger.debug('Building email text');
     const textBody = buildEmailText(data);
-    console.log(`[EmailService] Email content built`);
+    logger.debug('Email content built');
 
     const fromEmail = process.env.EMAIL_FROM || 'orders@fluxyfi.com';
     const bccEmail = process.env.EMAIL_BCC;
@@ -673,7 +672,7 @@ export async function sendDeliveryEmail(
       throw new Error('RESEND_API_KEY is not configured');
     }
 
-    console.log(`[EmailService] Using Resend API for delivery`);
+    logger.debug('Using Resend API for delivery');
     const resend = new Resend(resendApiKey);
 
     const result = await resend.emails.send({
@@ -700,15 +699,14 @@ export async function sendDeliveryEmail(
       throw new Error(`Resend error: ${result.error.message}`);
     }
 
-    console.log(`[EmailService] ✅ Email sent via Resend: ${result.data?.id}`);
+    logger.info({ messageId: result.data?.id }, 'Email sent via Resend');
     return {
       success: true,
       messageId: result.data?.id,
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    console.error(`[EmailService] ❌ Failed to send email:`, errorMsg);
-    console.error(`[EmailService] Full error:`, error);
+    logger.error({ err: error, errorMsg }, 'Failed to send email');
 
     return {
       success: false,
