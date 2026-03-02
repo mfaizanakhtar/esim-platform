@@ -142,3 +142,16 @@ jobs:
             exit 1
           fi
           echo "✅ Build successful"
+
+      - name: Production smoke test (no devDependencies)
+        run: |
+          # Simulate the Railway/Docker production environment:
+          # reinstall with production deps only, then verify the app
+          # entrypoint can be required without crashing (catches issues
+          # like devDep transports being referenced at startup).
+          npm ci --omit=dev
+          NODE_ENV=production node -e "
+            const { logger } = require('./dist/src/utils/logger.js');
+            logger.info('production startup check ok');
+            console.log('\u2705 Production logger loaded successfully');
+          "

@@ -2,7 +2,7 @@
 
 > **Document Type**: Status & Internal  
 > **Status**: � In Progress  
-> **Last Updated**: 2026-03-02 (PR #9)  
+> **Last Updated**: 2026-03-02 (PR #10)  
 > **Purpose**: Code quality analysis and refactoring recommendations
 
 ---
@@ -15,13 +15,13 @@
 | Prisma singleton | ✅ Done |
 | ESLint rules | ✅ Done |
 | tsconfig for test files | ✅ Done |
-| Structured logging (pino) | ❌ Not started — **next up** |
-| Standardize error handling | ❌ Not started |
-| Reduce `unknown` types | ✅ Done (2026-03-02, PR #9) |
-| Extract email templates | ✅ Done (2026-03-02, PR #9) |
+| Structured logging (pino) | ✅ Done (2026-03-02, PR #10) |
 | Vendor strategy pattern | ✅ Done (2026-03-02, PR #8) |
 | Multi-vendor admin CRUD | ✅ Done (2026-03-02, PR #8) |
 | `providerConfig` schema field | ✅ Done (2026-03-02, PR #8) |
+| Reduce `unknown` types | ✅ Done (2026-03-02, PR #9) |
+| Extract email templates | ✅ Done (2026-03-02, PR #9) |
+| Standardize error handling | ❌ Not started — **next up** |
 | Request ID tracking | ❌ Not started |
 | Input validation (Zod) | ❌ Not started |
 | SonarCloud setup | ❌ Not started |
@@ -31,11 +31,11 @@
 ## Executive Summary
 
 Your eSIM backend is well-structured with a clean separation between API, worker, and vendor layers. However, there are opportunities to improve:
-- **Logging infrastructure** (structured logging) ← **TODO**
+- **Logging infrastructure** (structured logging) ← ✅ Done (PR #10)
 - **Error handling** (consistent patterns) ← **TODO**
 - **Test coverage** (webhook, worker, email flows) ← ✅ Done
-- **Type safety** (reduce `unknown` types) ← **TODO**
-- **Code duplication** (email templates, response handling) ← **TODO**
+- **Type safety** (reduce `unknown` types) ← ✅ Done (PR #9)
+- **Code duplication** (email templates, response handling) ← ✅ Done (PR #9)
 
 **Test Coverage as of 2026-03-01:** 99 tests, 11 test files — see breakdown in §2  
 **Recommended Target:** 70-80% coverage
@@ -46,38 +46,27 @@ Your eSIM backend is well-structured with a clean separation between API, worker
 
 ### 🔴 **High Priority** (Should Fix Soon)
 
-#### 1.1 Replace Console.log with Structured Logging — ❌ NOT DONE
-**Problem:** 157 `console.*` calls remain in production code (surfaced by `no-console: warn` ESLint rule added 2026-03-01). Hard to:
-- Filter logs by severity
-- Query logs in production
-- Add contextual metadata (requestId, userId, etc.)
+#### 1.1 Replace Console.log with Structured Logging — ✅ DONE (2026-03-02, PR #10)
 
-**Files Affected:**
-- [src/shopify/client.ts](src/shopify/client.ts)
-- [src/vendor/firoamClient.ts](src/vendor/firoamClient.ts)
-- [src/services/email.ts](src/services/email.ts)
-- [src/worker/jobs/provisionEsim.ts](src/worker/jobs/provisionEsim.ts)
-- [src/api/webhooks.ts](src/api/webhooks.ts)
+**Implemented in PR #10.** All `console.*` calls in production code replaced with pino structured logging.
 
-**Recommendation:**
-Use **pino** (fast, structured JSON logging) or **winston**.
+**Changes:**
+- `src/utils/logger.ts` (new) — shared pino singleton; `pino-pretty` for non-production, respects `LOG_LEVEL` env var
+- `src/index.ts`, `src/worker/index.ts`, `src/queue/jobQueue.ts` — process lifecycle logs
+- `src/shopify/client.ts` — 7 calls replaced; contextual fields like `{ orderId, count }` instead of interpolated strings
+- `src/vendor/firoamClient.ts` — 5 calls replaced; `.catch(console.error)` removed
+- `src/vendor/providers/firoam.ts` — 7 calls replaced with structured objects
+- `src/services/email.ts` — 11 calls replaced; noisy debug steps downgraded to `logger.debug`
+- `src/worker/jobs/provisionEsim.ts` — 15 calls replaced; 4 separate eSIM detail logs collapsed into one `logger.info({ vendorOrderId, lpa, activationCode, iccid }, ...)`
 
-**Example Implementation:**
-```typescript
-// src/utils/logger.ts
-import pino from 'pino';
+**Architecture:**
+- API layer (Fastify): uses `request.log` / `fastify.log` — pino is already built into Fastify, no extra code
+- Worker + services + vendor: import `logger` from `src/utils/logger`
 
-export const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
-  transport: process.env.NODE_ENV !== 'production' 
-    ? { target: 'pino-pretty' } 
-    : undefined
-});
-
-// Usage
-logger.info({ orderId, deliveryId }, 'Processing eSIM delivery');
-logger.error({ error: err.message }, 'Failed to provision eSIM');
-```
+~~**Problem:** 157 `console.*` calls remain in production code (surfaced by `no-console: warn` ESLint rule added 2026-03-01). Hard to:~~
+~~- Filter logs by severity~~
+~~- Query logs in production~~
+~~- Add contextual metadata (requestId, userId, etc.)~~
 
 #### 1.2 Standardize Error Handling — ❌ NOT DONE
 **Problem:** Inconsistent error handling patterns:

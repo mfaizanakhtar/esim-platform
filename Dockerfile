@@ -32,6 +32,9 @@ WORKDIR /app
 # Install OpenSSL 3 for Prisma (Alpine 3.17+ uses OpenSSL 3)
 RUN apk add --no-cache openssl openssl-dev
 
+# Set NODE_ENV before installing so npm lifecycle scripts also see it
+ENV NODE_ENV=production
+
 # Install production dependencies only
 COPY package*.json ./
 RUN npm ci --omit=dev
