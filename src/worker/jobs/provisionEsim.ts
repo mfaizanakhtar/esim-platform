@@ -1,9 +1,8 @@
 import prisma from '../../db/prisma';
-import FiRoamClient from '../../vendor/firoamClient';
 import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '../../services/email';
 import { getShopifyClient } from '../../shopify/client';
-
-const fiRoam = new FiRoamClient();
+import { getProvider } from '../../vendor/registry';
+import type { EsimProvisionResult } from '../../vendor/types';
 
 interface ProvisionJobData {
   deliveryId: string;
@@ -14,6 +13,7 @@ interface ProvisionJobData {
   customerEmail?: string;
   sku?: string | null;
   productName?: string;
+  /** @deprecated Use SKU mappings via the provider registry instead. */
   orderPayload?: Record<string, unknown>;
 }
 
@@ -34,7 +34,7 @@ export async function handleProvision(jobData: Record<string, unknown>) {
   console.log(`[ProvisionJob] Processing delivery ${deliveryId} for order ${delivery.orderName}`);
 
   try {
-    let orderPayload = data.orderPayload;
+    let esimResult: EsimProvisionResult;
     let mappingInfo: {
       name?: string;
       region?: string;
@@ -42,28 +42,20 @@ export async function handleProvision(jobData: Record<string, unknown>) {
       validity?: string;
     } | null = null;
 
-    // If no orderPayload provided, look up SKU mapping
-    if (!orderPayload) {
+    if (data.orderPayload) {
+      // Legacy path: raw vendor payload included directly in job data.
+      // Deprecated — prefer SKU mappings with the provider registry.
+      console.log('[ProvisionJob] Using legacy direct orderPayload path');
+      esimResult = await provisionViaDirectPayload(data.orderPayload);
+    } else {
+      // Primary path: resolve SKU mapping → dispatch to the correct vendor provider.
       const sku = data.sku;
+      if (!sku) throw new Error('Missing SKU in job data');
 
-      if (!sku) {
-        throw new Error('Missing SKU in job data');
-      }
+      const mapping = await prisma.providerSkuMapping.findUnique({ where: { shopifySku: sku } });
+      if (!mapping) throw new Error(`No provider mapping found for SKU: ${sku}`);
+      if (!mapping.isActive) throw new Error(`SKU mapping is inactive: ${sku}`);
 
-      // Look up provider mapping by SKU
-      const mapping = await prisma.providerSkuMapping.findUnique({
-        where: { shopifySku: sku },
-      });
-
-      if (!mapping) {
-        throw new Error(`No provider mapping found for SKU: ${sku}`);
-      }
-
-      if (!mapping.isActive) {
-        throw new Error(`SKU mapping is inactive: ${sku}`);
-      }
-
-      // Store mapping info for email
       mappingInfo = {
         name: mapping.name || undefined,
         region: mapping.region || undefined,
@@ -75,161 +67,56 @@ export async function handleProvision(jobData: Record<string, unknown>) {
         `[ProvisionJob] Using provider: ${mapping.provider}, SKU: ${mapping.providerSku}`,
       );
 
-      // For now, we only support FiRoam
-      if (mapping.provider !== 'firoam') {
-        throw new Error(`Unsupported provider: ${mapping.provider}`);
-      }
-
-      // Parse the providerSku to extract skuId, apiCode, and priceId
-      // Format: "skuId:apiCode:priceId" (e.g., "120:826-0-?-1-G-D:14094")
-      // Legacy format: "skuId:apiCode" without priceId (will require runtime lookup for daypass)
-      const parts = mapping.providerSku.split(':');
-      if (parts.length < 2) {
-        throw new Error(
-          `Invalid providerSku format: ${mapping.providerSku}. Expected format: "skuId:apiCode:priceId" (e.g., "120:826-0-?-1-G-D:14094")`,
-        );
-      }
-
-      // Handle both formats:
-      // New: "120:826-0-?-1-G-D:14094" (skuId:apiCode:priceId)
-      // Legacy: "120:826-0-?-1-G-D" (skuId:apiCode) - requires runtime lookup for daypass
-      const skuId = parts[0];
-      const apiCode = parts.length >= 2 ? parts[1] : '';
-      const storedPriceId = parts.length >= 3 ? parts[2] : null;
-
-      orderPayload = {
-        skuId,
-        count: '1',
-        backInfo: '1', // Get full details immediately (one-step flow)
-        customerEmail: delivery.customerEmail || undefined,
-      };
-
-      // Add daypassDays parameter for daypass packages
-      if (mapping.packageType === 'daypass') {
-        if (!mapping.daysCount) {
-          throw new Error(`Daypass package ${sku} requires daysCount field in mapping`);
-        }
-
-        // For daypass, the apiCode template has "?" which gets replaced with actual days
-        const apiCodeWithDays = apiCode.replace('?', String(mapping.daysCount));
-
-        // Use stored priceId if available (new format), otherwise do runtime lookup (legacy)
-        if (storedPriceId) {
-          console.log(
-            `[ProvisionJob] Daypass: ${mapping.daysCount} days, using stored priceId: ${storedPriceId}`,
-          );
-          orderPayload.priceId = storedPriceId;
-        } else {
-          // Legacy format: Need to fetch the numeric priceid from FiRoam API
-          console.log(
-            `[ProvisionJob] Daypass: ${mapping.daysCount} days, looking up priceid for apiCode: ${apiCodeWithDays}`,
-          );
-
-          // Fetch packages from FiRoam to get the numeric priceid
-          const packagesResult = await fiRoam.getPackages(skuId);
-          if (!packagesResult.packageData) {
-            throw new Error(
-              `Failed to fetch packages for skuId ${skuId}: ${packagesResult.error || 'Unknown error'}`,
-            );
-          }
-
-          // Find the package matching our apiCode
-          const esimPackages = packagesResult.packageData.esimPackageDtoList || [];
-          const matchingPkg = esimPackages.find((pkg) => pkg.apiCode === apiCodeWithDays);
-
-          if (!matchingPkg) {
-            // Try without the day replacement (some daypass packages might use different format)
-            const matchingPkgAlt = esimPackages.find(
-              (pkg) =>
-                pkg.supportDaypass === 1 &&
-                pkg.flows === parseInt(apiCode.split('-')[3] || '0', 10),
-            );
-            if (!matchingPkgAlt) {
-              console.log(
-                `[ProvisionJob] Available packages:`,
-                esimPackages.map((p) => ({
-                  apiCode: p.apiCode,
-                  priceid: p.priceid,
-                  supportDaypass: p.supportDaypass,
-                })),
-              );
-              throw new Error(`No matching daypass package found for apiCode: ${apiCodeWithDays}`);
-            }
-            orderPayload.priceId = String(matchingPkgAlt.priceid);
-            console.log(
-              `[ProvisionJob] Found daypass package by data amount, priceid: ${matchingPkgAlt.priceid}`,
-            );
-          } else {
-            orderPayload.priceId = String(matchingPkg.priceid);
-            console.log(`[ProvisionJob] Found daypass package, priceid: ${matchingPkg.priceid}`);
-          }
-        }
-
-        (orderPayload as Record<string, unknown>).daypassDays = String(mapping.daysCount);
-      } else {
-        // Fixed package: Use stored priceId if available, otherwise use apiCode as priceId (legacy behavior)
-        if (storedPriceId) {
-          orderPayload.priceId = storedPriceId;
-        } else {
-          // Legacy: apiCode might be numeric priceId
-          orderPayload.priceId = apiCode;
-        }
-      }
+      const provider = getProvider(mapping.provider);
+      esimResult = await provider.provision(
+        {
+          providerSku: mapping.providerSku,
+          providerConfig: mapping.providerConfig as Record<string, unknown> | null,
+          packageType: mapping.packageType,
+          daysCount: mapping.daysCount,
+        },
+        {
+          customerEmail: delivery.customerEmail ?? '',
+          quantity: 1,
+        },
+      );
     }
 
-    if (!orderPayload) {
-      throw new Error('No order payload available');
-    }
+    console.log(`[ProvisionJob] eSIM provisioned: ${esimResult.vendorOrderId}`);
+    console.log(`[ProvisionJob] LPA: ${esimResult.lpa || 'N/A'}`);
+    console.log(`[ProvisionJob] Activation Code: ${esimResult.activationCode || 'N/A'}`);
+    console.log(`[ProvisionJob] ICCID: ${esimResult.iccid || 'N/A'}`);
 
-    const result = await fiRoam.addEsimOrder(orderPayload);
-
-    // Check if the order was successful
-    if (!result.canonical || !result.db) {
-      const errorMsg = result.error
-        ? `FiRoam error: ${String(result.error)}`
-        : 'FiRoam returned unexpected response';
-      console.log(`[ProvisionJob] Failed: ${errorMsg}`);
-      console.log('[ProvisionJob] Raw response:', JSON.stringify(result.raw, null, 2));
-      throw new Error(errorMsg);
-    }
-
-    // Extract vendor order number from raw response
-    const rawData = result.raw.data;
-    const vendorOrderNum =
-      typeof rawData === 'string' ? rawData : (rawData as Record<string, unknown>)?.orderNum;
-
-    if (!vendorOrderNum) {
-      throw new Error('No order number in FiRoam response');
-    }
-
-    console.log(`[ProvisionJob] FiRoam order created: ${vendorOrderNum}`);
-    console.log(`[ProvisionJob] LPA: ${result.canonical.lpa || 'N/A'}`);
-    console.log(`[ProvisionJob] Activation Code: ${result.canonical.activationCode || 'N/A'}`);
-    console.log(`[ProvisionJob] ICCID: ${result.canonical.iccid || 'N/A'}`);
-
-    // Encrypt the canonical payload for storage
+    // Encrypt the canonical payload for at-rest storage
     const crypto = await import('../../utils/crypto');
-    const payloadEncrypted = await crypto.encrypt(JSON.stringify(result.canonical));
+    const payloadEncrypted = await crypto.encrypt(
+      JSON.stringify({
+        vendorId: esimResult.vendorOrderId,
+        lpa: esimResult.lpa,
+        activationCode: esimResult.activationCode,
+        iccid: esimResult.iccid,
+      }),
+    );
 
     await prisma.esimDelivery.update({
       where: { id: deliveryId },
       data: {
-        vendorReferenceId: String(vendorOrderNum),
+        vendorReferenceId: esimResult.vendorOrderId,
         payloadEncrypted,
         status: 'delivered',
       },
     });
 
-    console.log(`[ProvisionJob] eSIM provisioned successfully: ${vendorOrderNum}`);
+    console.log(`[ProvisionJob] eSIM provisioned successfully: ${esimResult.vendorOrderId}`);
 
     // Send delivery email with QR code
     if (delivery.customerEmail) {
       console.log(`[ProvisionJob] Sending delivery email to ${delivery.customerEmail}`);
 
       const esimPayload: EsimPayload = {
-        lpa: result.canonical.lpa || '',
-        activationCode: result.canonical.activationCode || '',
-        iccid: result.canonical.iccid || '',
+        lpa: esimResult.lpa,
+        activationCode: esimResult.activationCode,
+        iccid: esimResult.iccid,
       };
 
       const emailResult = await sendDeliveryEmail({
@@ -289,4 +176,40 @@ export async function handleProvision(jobData: Record<string, unknown>) {
     });
     throw err;
   }
+}
+
+/**
+ * Legacy path: provision via a raw FiRoam order payload included directly in the job data.
+ * @deprecated Use SKU mappings with the provider registry instead.
+ */
+async function provisionViaDirectPayload(
+  orderPayload: Record<string, unknown>,
+): Promise<EsimProvisionResult> {
+  const { default: FiRoamClient } = await import('../../vendor/firoamClient');
+  const fiRoam = new FiRoamClient();
+  const result = await fiRoam.addEsimOrder(orderPayload);
+
+  if (!result.canonical || !result.db) {
+    const errorMsg = result.error
+      ? `FiRoam error: ${String(result.error)}`
+      : 'FiRoam returned unexpected response';
+    throw new Error(errorMsg);
+  }
+
+  const rawData = result.raw.data;
+  const vendorOrderId =
+    typeof rawData === 'string'
+      ? rawData
+      : ((rawData as Record<string, unknown>)?.orderNum as string | undefined);
+
+  if (!vendorOrderId) {
+    throw new Error('No order number in FiRoam response');
+  }
+
+  return {
+    vendorOrderId: String(vendorOrderId),
+    lpa: result.canonical.lpa ?? '',
+    activationCode: result.canonical.activationCode ?? '',
+    iccid: result.canonical.iccid ?? '',
+  };
 }
