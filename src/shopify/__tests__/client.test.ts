@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import nock from 'nock';
-import { ShopifyClient } from '../client';
+import { ShopifyClient, getShopifyClient } from '../client';
 
 // ---------------------------------------------------------------------------
 // Shared test constants
@@ -246,5 +246,129 @@ describe('getShopifyClient', () => {
         throw new Error('Missing Shopify credentials in environment variables');
       }
     }).toThrow('Missing Shopify credentials');
+  });
+
+  it('returns a ShopifyClient instance when all env vars are set', () => {
+    process.env.SHOPIFY_SHOP_DOMAIN = SHOP_DOMAIN;
+    process.env.SHOPIFY_CLIENT_ID = CLIENT_ID;
+    process.env.SHOPIFY_CLIENT_SECRET = CLIENT_SECRET;
+
+    const client = getShopifyClient();
+    expect(client).toBeInstanceOf(ShopifyClient);
+  });
+
+  it('returns the same cached instance on repeated calls', () => {
+    process.env.SHOPIFY_SHOP_DOMAIN = SHOP_DOMAIN;
+    process.env.SHOPIFY_CLIENT_ID = CLIENT_ID;
+    process.env.SHOPIFY_CLIENT_SECRET = CLIENT_SECRET;
+
+    const first = getShopifyClient();
+    const second = getShopifyClient();
+    expect(first).toBe(second);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getVariantMetafields
+// ---------------------------------------------------------------------------
+describe('getVariantMetafields', () => {
+  it('returns metafield nodes for a valid variant', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariant: {
+            metafields: {
+              edges: [
+                {
+                  node: {
+                    namespace: 'custom',
+                    key: 'sku_code',
+                    value: 'ESIM-USA-10GB',
+                    type: 'single_line_text_field',
+                  },
+                },
+                {
+                  node: {
+                    namespace: 'custom',
+                    key: 'data_amount',
+                    value: '10GB',
+                    type: 'single_line_text_field',
+                  },
+                },
+              ],
+            },
+          },
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.getVariantMetafields('12345');
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      namespace: 'custom',
+      key: 'sku_code',
+      value: 'ESIM-USA-10GB',
+    });
+  });
+
+  it('returns an empty array when variant has no metafields', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariant: {
+            metafields: {
+              edges: [],
+            },
+          },
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.getVariantMetafields('12345');
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns an empty array when productVariant is null', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: { productVariant: null },
+      });
+
+    const client = makeClient();
+    const result = await client.getVariantMetafields('99999');
+
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// initialize
+// ---------------------------------------------------------------------------
+describe('initialize', () => {
+  it('fetches a token on startup', async () => {
+    const tokenScope = mockTokenRefresh();
+    const client = makeClient();
+    await client.initialize();
+    expect(tokenScope.isDone()).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// refreshAccessToken error path
+// ---------------------------------------------------------------------------
+describe('refreshAccessToken error', () => {
+  it('throws when the token endpoint returns an error', async () => {
+    nock(BASE_URL).post('/admin/oauth/access_token').replyWithError('Connection refused');
+
+    const client = makeClient();
+    await expect(client.getOrder('12345')).rejects.toThrow('Failed to authenticate with Shopify');
   });
 });

@@ -83,6 +83,7 @@ vi.mock('../../../shopify/client', () => ({
 // NOW import after mocks are set up
 import prisma from '../../../db/prisma';
 import { sendDeliveryEmail } from '../../../services/email';
+import { getShopifyClient } from '../../../shopify/client';
 import { handleProvision } from '../provisionEsim';
 
 describe('provisionEsim Worker Job', () => {
@@ -373,6 +374,234 @@ describe('provisionEsim Worker Job', () => {
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
 
       expect(sendDeliveryEmail).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call sendDeliveryEmail when customerEmail is null (confirmed path)', async () => {
+      const mockDelivery = createMockDelivery({ customerEmail: null });
+      const mockMapping = createMockMapping({ providerSku: '120:826-0-?-1-G-D:14094' });
+
+      const mockFiRoamResult = {
+        raw: { code: 0, data: { orderNum: 'EP-123456' } },
+        canonical: {
+          vendorId: 'EP-123456',
+          lpa: 'LPA:1$smdp.io$activation-code',
+          activationCode: 'activation-code',
+          iccid: '8901000000000000001',
+        },
+        db: { id: 'esim-order-1' },
+      };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
+
+      await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
+
+      expect(sendDeliveryEmail).not.toHaveBeenCalled();
+    });
+
+    it('continues without throwing when email delivery fails', async () => {
+      const mockDelivery = createMockDelivery({ customerEmail: 'fail@example.com' });
+      const mockMapping = createMockMapping({ providerSku: '120:826-0-?-1-G-D:14094' });
+
+      const mockFiRoamResult = {
+        raw: { code: 0, data: { orderNum: 'EP-123456' } },
+        canonical: {
+          vendorId: 'EP-123456',
+          lpa: 'LPA:1$smdp.io$activation-code',
+          activationCode: 'activation-code',
+          iccid: '8901000000000000001',
+        },
+        db: { id: 'esim-order-1' },
+      };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
+      // Simulate email provider returning a failure
+      vi.mocked(sendDeliveryEmail).mockResolvedValue({
+        success: false,
+        error: 'Rate limit exceeded',
+      });
+
+      // Should NOT throw — eSIM is provisioned, email failure is recoverable
+      const result = await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
+
+      expect(result).toEqual({ ok: true });
+      expect(sendDeliveryEmail).toHaveBeenCalled();
+    });
+  });
+
+  describe('Already Delivered Guard', () => {
+    it('returns early with already-delivered reason when status is delivered', async () => {
+      const deliveredDelivery = createMockDelivery({ status: 'delivered' });
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(deliveredDelivery);
+
+      const result = await handleProvision({ deliveryId: 'delivery-123' });
+
+      expect(result).toEqual({ ok: true, reason: 'already delivered' });
+      expect(prisma.esimDelivery.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Legacy orderPayload Path', () => {
+    it('provisions via direct payload when orderPayload is provided (string orderNum)', async () => {
+      const mockDelivery = createMockDelivery({ customerEmail: null });
+      const orderPayload = { skuId: '120', count: '1', priceId: '14094' };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      mockAddEsimOrder.mockResolvedValue({
+        raw: { code: 0, data: 'EP-LEGACY-001' },
+        canonical: {
+          lpa: 'LPA:1$smdp.io$code',
+          activationCode: 'code',
+          iccid: '8901000000000000001',
+        },
+        db: { id: 'db-legacy-1' },
+      });
+
+      const result = await handleProvision({ deliveryId: 'delivery-123', orderPayload });
+
+      expect(result).toEqual({ ok: true });
+      expect(mockAddEsimOrder).toHaveBeenCalledWith(orderPayload);
+    });
+
+    it('provisions via direct payload with object orderNum in raw.data', async () => {
+      const mockDelivery = createMockDelivery({ customerEmail: null });
+      const orderPayload = { skuId: '120', count: '1', priceId: '14094' };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      mockAddEsimOrder.mockResolvedValue({
+        raw: { code: 0, data: { orderNum: 'EP-LEGACY-002' } },
+        canonical: {
+          lpa: 'LPA:1$smdp.io$code2',
+          activationCode: 'code2',
+          iccid: '8901000000000000002',
+        },
+        db: { id: 'db-legacy-2' },
+      });
+
+      const result = await handleProvision({ deliveryId: 'delivery-123', orderPayload });
+
+      expect(result).toEqual({ ok: true });
+    });
+
+    it('throws VendorError when FiRoam returns no canonical (with error field)', async () => {
+      const mockDelivery = createMockDelivery();
+      const orderPayload = { skuId: '120', count: '1', priceId: '14094' };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      mockAddEsimOrder.mockResolvedValue({
+        raw: { code: 1, data: null },
+        error: 'API error from vendor',
+      });
+
+      await expect(handleProvision({ deliveryId: 'delivery-123', orderPayload })).rejects.toThrow(
+        'FiRoam error: API error from vendor',
+      );
+    });
+
+    it('throws VendorError when FiRoam returns no canonical (no error field)', async () => {
+      const mockDelivery = createMockDelivery();
+      const orderPayload = { skuId: '120', count: '1', priceId: '14094' };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      mockAddEsimOrder.mockResolvedValue({ raw: { code: 0, data: 'EP-123' } });
+
+      await expect(handleProvision({ deliveryId: 'delivery-123', orderPayload })).rejects.toThrow(
+        'FiRoam returned unexpected response',
+      );
+    });
+
+    it('throws VendorError when FiRoam returns no order number in raw.data', async () => {
+      const mockDelivery = createMockDelivery();
+      const orderPayload = { skuId: '120', count: '1', priceId: '14094' };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      mockAddEsimOrder.mockResolvedValue({
+        raw: { code: 0, data: {} },
+        canonical: { lpa: 'LPA:1$smdp.io$code', activationCode: 'code', iccid: '8901' },
+        db: { id: 'db-1' },
+      });
+
+      await expect(handleProvision({ deliveryId: 'delivery-123', orderPayload })).rejects.toThrow(
+        'No order number in FiRoam response',
+      );
+    });
+  });
+
+  describe('Shopify Fulfillment', () => {
+    const setupMocks = () => {
+      const mockDelivery = createMockDelivery({ customerEmail: null });
+      const mockMapping = createMockMapping({ providerSku: '120:826-0-?-1-G-D:14094' });
+      const mockFiRoamResult = {
+        raw: { code: 0, data: { orderNum: 'EP-123456' } },
+        canonical: {
+          vendorId: 'EP-123456',
+          lpa: 'LPA:1$smdp.io$activation-code',
+          activationCode: 'activation-code',
+          iccid: '8901000000000000001',
+        },
+        db: { id: 'esim-order-1' },
+      };
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
+      return { mockDelivery, mockMapping, mockFiRoamResult };
+    };
+
+    it('creates Shopify fulfillment when orderId is provided', async () => {
+      setupMocks();
+      const mockCreateFulfillment = vi
+        .fn()
+        .mockResolvedValue({ id: 'gid://shopify/Fulfillment/1' });
+      vi.mocked(getShopifyClient).mockReturnValue({
+        createFulfillment: mockCreateFulfillment,
+      } as unknown as ReturnType<typeof getShopifyClient>);
+
+      const result = await handleProvision({
+        deliveryId: 'delivery-123',
+        sku: 'ESIM-USA-10GB',
+        orderId: '12345',
+      });
+
+      expect(result).toEqual({ ok: true });
+      expect(mockCreateFulfillment).toHaveBeenCalledWith('12345');
+    });
+
+    it('does not throw when Shopify fulfillment fails', async () => {
+      setupMocks();
+      vi.mocked(getShopifyClient).mockReturnValue({
+        createFulfillment: vi.fn().mockRejectedValue(new Error('Shopify is down')),
+      } as unknown as ReturnType<typeof getShopifyClient>);
+
+      const result = await handleProvision({
+        deliveryId: 'delivery-123',
+        sku: 'ESIM-USA-10GB',
+        orderId: '12345',
+      });
+
+      expect(result).toEqual({ ok: true });
+    });
+
+    it('skips Shopify fulfillment when orderId is not provided', async () => {
+      setupMocks();
+
+      const result = await handleProvision({
+        deliveryId: 'delivery-123',
+        sku: 'ESIM-USA-10GB',
+      });
+
+      expect(result).toEqual({ ok: true });
+      expect(getShopifyClient).not.toHaveBeenCalled();
     });
   });
 });
