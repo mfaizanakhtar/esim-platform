@@ -20,7 +20,7 @@ const adminMocks = vi.hoisted(() => {
 // Module mocks (hoisted before static imports)
 // ---------------------------------------------------------------------------
 
-vi.mock('../../db/prisma', () => ({
+vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findMany: vi.fn(),
@@ -39,15 +39,15 @@ vi.mock('../../db/prisma', () => ({
   },
 }));
 
-vi.mock('../../queue/jobQueue', () => ({
+vi.mock('~/queue/jobQueue', () => ({
   getJobQueue: vi.fn(() => ({ send: adminMocks.mockJobSend })),
 }));
 
-vi.mock('../../services/email', () => ({
+vi.mock('~/services/email', () => ({
   sendDeliveryEmail: adminMocks.mockSendDeliveryEmail,
 }));
 
-vi.mock('../../utils/crypto', () => ({
+vi.mock('~/utils/crypto', () => ({
   decrypt: adminMocks.mockDecrypt,
   encrypt: vi.fn(),
 }));
@@ -56,8 +56,8 @@ vi.mock('../../utils/crypto', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import adminRoutes from '../admin';
-import prisma from '../../db/prisma';
+import adminRoutes from '~/api/admin';
+import prisma from '~/db/prisma';
 
 // ---------------------------------------------------------------------------
 // Test helpers

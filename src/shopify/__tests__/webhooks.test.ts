@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import crypto from 'crypto';
-import { verifyShopifyWebhook, generateIdempotencyKey } from '../webhooks';
+import { verifyShopifyWebhook, generateIdempotencyKey } from '~/shopify/webhooks';
 
 describe('verifyShopifyWebhook', () => {
   it('returns true for a valid HMAC signature', () => {

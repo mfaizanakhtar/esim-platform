@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { FiRoamProvider } from '../firoam';
-import { MappingError, VendorError } from '../../../utils/errors';
-import type { ProviderMappingConfig, ProvisionContext } from '../../types';
+import { FiRoamProvider } from '~/vendor/providers/firoam';
+import { MappingError, VendorError } from '~/utils/errors';
+import type { ProviderMappingConfig, ProvisionContext } from '~/vendor/types';
 
 // ---------------------------------------------------------------------------
 // Silence logger output during tests
 // ---------------------------------------------------------------------------
-vi.mock('../../../utils/logger', () => ({
+vi.mock('~/utils/logger', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),

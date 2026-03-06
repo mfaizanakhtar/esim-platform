@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeIdempotencyKey } from '../idempotency';
+import { makeIdempotencyKey } from '~/utils/idempotency';
 
 describe('makeIdempotencyKey', () => {
   it('joins orderId and lineItemId with a double colon', () => {

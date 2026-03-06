@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { AppError, JobDataError, MappingError, VendorError, isRetryable } from '../errors';
+import { AppError, JobDataError, MappingError, VendorError, isRetryable } from '~/utils/errors';
 
 // ---------------------------------------------------------------------------
 // AppError — base class

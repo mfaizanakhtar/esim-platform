@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import nock from 'nock';
-import { ShopifyClient, getShopifyClient } from '../client';
+import { ShopifyClient, getShopifyClient } from '~/shopify/client';
 
 // ---------------------------------------------------------------------------
 // Shared test constants

@@ -19,7 +19,7 @@ import type { EsimDelivery } from '@prisma/client';
 // Module mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('../../db/prisma', () => ({
+vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findFirst: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock('../../db/prisma', () => ({
 }));
 
 const mockJobSend = vi.fn().mockResolvedValue('job-id-wh');
-vi.mock('../../queue/jobQueue', () => ({
+vi.mock('~/queue/jobQueue', () => ({
   getJobQueue: vi.fn(() => ({ send: mockJobSend })),
 }));
 
@@ -37,8 +37,8 @@ vi.mock('../../queue/jobQueue', () => ({
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
-import webhookRoutes from '../webhook';
-import prisma from '../../db/prisma';
+import webhookRoutes from '~/api/webhook';
+import prisma from '~/db/prisma';
 
 // ---------------------------------------------------------------------------
 // Helpers

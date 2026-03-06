@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { EsimDelivery } from '@prisma/client';
-import usageRoutes from '../usage';
+import usageRoutes from '~/api/usage';
 
 // ── Module-level mock fn — reset per test in beforeEach ───────────────────────
 type QueryEsimOrderParams = {
@@ -13,7 +13,7 @@ type QueryEsimOrderParams = {
 const mockQueryEsimOrder = vi.fn<(params: QueryEsimOrderParams) => unknown>();
 
 // ── Mocks hoisted before imports ─────────────────────────────────────────────
-vi.mock('../../db/prisma', () => ({
+vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findMany: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('../../db/prisma', () => ({
   },
 }));
 
-vi.mock('../../vendor/firoamClient', () => ({
+vi.mock('~/vendor/firoamClient', () => ({
   default: class MockFiRoamClient {
     queryEsimOrder(params: QueryEsimOrderParams) {
       return mockQueryEsimOrder(params);
@@ -29,13 +29,13 @@ vi.mock('../../vendor/firoamClient', () => ({
   },
 }));
 
-vi.mock('../../utils/crypto', () => ({
+vi.mock('~/utils/crypto', () => ({
   decrypt: vi.fn(),
   encrypt: vi.fn(),
 }));
 
-import prisma from '../../db/prisma';
-import { decrypt } from '../../utils/crypto';
+import prisma from '~/db/prisma';
+import { decrypt } from '~/utils/crypto';
 
 // ── Test helpers ─────────────────────────────────────────────────────────────
 /** Build a full EsimDelivery row with sensible defaults for fields not under test */
