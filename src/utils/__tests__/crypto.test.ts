@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { encrypt, decrypt } from '../crypto';
+import { encrypt, decrypt } from '~/utils/crypto';
 
 describe('Crypto Utils - Encryption/Decryption', () => {
   beforeEach(() => {

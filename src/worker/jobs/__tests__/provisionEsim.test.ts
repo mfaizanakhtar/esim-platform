@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { esimDeliveryFactory, providerSkuMappingFactory } from '../../../test-helpers/factories';
+import { esimDeliveryFactory, providerSkuMappingFactory } from '~/test-helpers/factories';
 
 // Create a shared mock function storage
 let mockAddEsimOrder: ReturnType<typeof vi.fn>;
@@ -14,7 +14,7 @@ const createMockMapping = (overrides: Parameters<typeof providerSkuMappingFactor
   });
 
 // Mock all dependencies BEFORE importing the module under test
-vi.mock('../../../db/prisma', () => ({
+vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findUnique: vi.fn(),
@@ -26,7 +26,7 @@ vi.mock('../../../db/prisma', () => ({
   },
 }));
 
-vi.mock('../../../vendor/firoamClient', () => {
+vi.mock('~/vendor/firoamClient', () => {
   // Return a constructor that creates an instance with addEsimOrder
   return {
     default: class MockFiRoamClient {
@@ -42,22 +42,22 @@ vi.mock('../../../vendor/firoamClient', () => {
   };
 });
 
-vi.mock('../../../services/email', () => ({
+vi.mock('~/services/email', () => ({
   sendDeliveryEmail: vi.fn(),
   recordDeliveryAttempt: vi.fn(),
 }));
 
-vi.mock('../../../shopify/client', () => ({
+vi.mock('~/shopify/client', () => ({
   getShopifyClient: vi.fn(() => ({
     createFulfillment: vi.fn(),
   })),
 }));
 
 // NOW import after mocks are set up
-import prisma from '../../../db/prisma';
-import { sendDeliveryEmail } from '../../../services/email';
-import { getShopifyClient } from '../../../shopify/client';
-import { handleProvision } from '../provisionEsim';
+import prisma from '~/db/prisma';
+import { sendDeliveryEmail } from '~/services/email';
+import { getShopifyClient } from '~/shopify/client';
+import { handleProvision } from '~/worker/jobs/provisionEsim';
 
 describe('provisionEsim Worker Job', () => {
   beforeEach(() => {

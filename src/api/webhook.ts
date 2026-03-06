@@ -1,8 +1,8 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import prisma from '../db/prisma';
-import { verifyShopifyWebhook } from '../shopify/webhooks';
-import { getJobQueue } from '../queue/jobQueue';
+import prisma from '~/db/prisma';
+import { verifyShopifyWebhook } from '~/shopify/webhooks';
+import { getJobQueue } from '~/queue/jobQueue';
 
 const ShopifyLineItemSchema = z.object({
   id: z.number(),

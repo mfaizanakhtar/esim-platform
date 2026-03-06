@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import nock from 'nock';
-import FiRoamClient from '../vendor/firoamClient';
+import FiRoamClient from '~/vendor/firoamClient';
 
 const BASE_URL = 'https://bpm.roamwifi.hk';
 

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import nock from 'nock';
-import { esimOrderFactory } from '../../test-helpers/factories';
+import { esimOrderFactory } from '~/test-helpers/factories';
 
 // ---------------------------------------------------------------------------
 // Mock dependencies before importing the module under test
 // ---------------------------------------------------------------------------
-vi.mock('../../db/prisma', () => ({
+vi.mock('~/db/prisma', () => ({
   default: {
     esimOrder: {
       create: vi.fn(),
@@ -13,8 +13,8 @@ vi.mock('../../db/prisma', () => ({
   },
 }));
 
-import FiRoamClient from '../firoamClient';
-import prisma from '../../db/prisma';
+import FiRoamClient from '~/vendor/firoamClient';
+import prisma from '~/db/prisma';
 
 // ---------------------------------------------------------------------------
 // Constants

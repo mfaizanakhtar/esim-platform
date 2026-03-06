@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
-import prisma from '../db/prisma';
-import FiRoamClient from '../vendor/firoamClient';
-import { decrypt } from '../utils/crypto';
+import prisma from '~/db/prisma';
+import FiRoamClient from '~/vendor/firoamClient';
+import { decrypt } from '~/utils/crypto';
 
 /**
  * Usage tracking API routes

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import nock from 'nock';
-import FiRoamClient from '../vendor/firoamClient';
+import FiRoamClient from '~/vendor/firoamClient';
 
 // Mock Prisma to avoid database operations in component tests
 vi.mock('../db/prisma', () => ({

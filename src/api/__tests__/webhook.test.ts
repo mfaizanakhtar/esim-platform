@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import crypto from 'crypto';
 
 // Mock dependencies before imports
-vi.mock('../../db/prisma', () => ({
+vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findFirst: vi.fn(),
@@ -11,14 +11,14 @@ vi.mock('../../db/prisma', () => ({
   },
 }));
 
-vi.mock('../../queue/jobQueue', () => ({
+vi.mock('~/queue/jobQueue', () => ({
   getJobQueue: vi.fn(() => ({
     send: vi.fn().mockResolvedValue('job-id-123'),
   })),
 }));
 
-import prisma from '../../db/prisma';
-import { getJobQueue } from '../../queue/jobQueue';
+import prisma from '~/db/prisma';
+import { getJobQueue } from '~/queue/jobQueue';
 
 describe('Webhook Handler - POST /webhook/orders/paid', () => {
   const mockOrderPayload = {

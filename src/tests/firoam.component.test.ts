@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import nock from 'nock';
 import type { EsimOrder } from '@prisma/client';
-import FiRoamClient from '../vendor/firoamClient';
-import prisma from '../db/prisma';
+import FiRoamClient from '~/vendor/firoamClient';
+import prisma from '~/db/prisma';
 
 // Mock Prisma - must match the import path in firoamClient.ts
 vi.mock('../db/prisma', () => {

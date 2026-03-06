@@ -1,5 +1,5 @@
 import PgBoss from 'pg-boss';
-import { logger } from '../utils/logger';
+import { logger } from '~/utils/logger';
 
 let jobQueue: PgBoss | null = null;
 

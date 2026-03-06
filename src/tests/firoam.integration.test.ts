@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import FiRoamClient from '../vendor/firoamClient';
+import FiRoamClient from '~/vendor/firoamClient';
 import QRCode from 'qrcode';
 import * as fs from 'fs';
 import * as path from 'path';

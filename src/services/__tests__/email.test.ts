@@ -79,7 +79,7 @@ vi.mock('pdfkit', () => ({
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
-import { sendDeliveryEmail, recordDeliveryAttempt, type DeliveryEmailData } from '../email';
+import { sendDeliveryEmail, recordDeliveryAttempt, type DeliveryEmailData } from '~/services/email';
 
 // ---------------------------------------------------------------------------
 // Helpers

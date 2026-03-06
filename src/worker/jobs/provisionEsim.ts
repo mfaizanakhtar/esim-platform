@@ -1,10 +1,10 @@
-import prisma from '../../db/prisma';
-import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '../../services/email';
-import { getShopifyClient } from '../../shopify/client';
-import { getProvider } from '../../vendor/registry';
-import type { EsimProvisionResult } from '../../vendor/types';
-import { logger } from '../../utils/logger';
-import { JobDataError, MappingError, VendorError } from '../../utils/errors';
+import prisma from '~/db/prisma';
+import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '~/services/email';
+import { getShopifyClient } from '~/shopify/client';
+import { getProvider } from '~/vendor/registry';
+import type { EsimProvisionResult } from '~/vendor/types';
+import { logger } from '~/utils/logger';
+import { JobDataError, MappingError, VendorError } from '~/utils/errors';
 
 interface ProvisionJobData {
   deliveryId: string;

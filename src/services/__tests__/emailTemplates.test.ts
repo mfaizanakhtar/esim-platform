@@ -4,7 +4,7 @@ import {
   buildEmailHtml,
   buildEmailText,
   type DeliveryEmailData,
-} from '../emailTemplates';
+} from '~/services/emailTemplates';
 
 // ---------------------------------------------------------------------------
 // Shared test fixture

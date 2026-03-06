@@ -1,9 +1,9 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
-import prisma from '../db/prisma';
+import prisma from '~/db/prisma';
 import { Prisma } from '@prisma/client';
-import { getJobQueue } from '../queue/jobQueue';
-import { sendDeliveryEmail, type EsimPayload } from '../services/email';
-import { decrypt } from '../utils/crypto';
+import { getJobQueue } from '~/queue/jobQueue';
+import { sendDeliveryEmail, type EsimPayload } from '~/services/email';
+import { decrypt } from '~/utils/crypto';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
