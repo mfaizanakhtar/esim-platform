@@ -1,44 +1,17 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { EsimDelivery, ProviderSkuMapping } from '@prisma/client';
+import { esimDeliveryFactory, providerSkuMappingFactory } from '../../../test-helpers/factories';
 
 // Create a shared mock function storage
 let mockAddEsimOrder: ReturnType<typeof vi.fn>;
 
-// Helper functions to create properly typed mocks
-const createMockDelivery = (overrides: Partial<EsimDelivery> = {}): EsimDelivery => ({
-  id: 'delivery-123',
-  shop: 'test-shop.myshopify.com',
-  orderId: '1001',
-  orderName: '#1001',
-  lineItemId: '111',
-  variantId: '222',
-  customerEmail: 'test@example.com',
-  vendorReferenceId: null,
-  payloadEncrypted: null,
-  status: 'pending',
-  lastError: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
-
-const createMockMapping = (overrides: Partial<ProviderSkuMapping> = {}): ProviderSkuMapping => ({
-  id: 'mapping-1',
-  shopifySku: 'ESIM-USA-10GB',
-  provider: 'firoam',
-  providerSku: '120:826-0-?-1-G-D:14094',
-  providerConfig: null,
-  isActive: true,
-  name: 'USA 10GB',
-  region: null,
-  dataAmount: null,
-  validity: null,
-  packageType: null,
-  daysCount: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
-  ...overrides,
-});
+// Convenience aliases using faker-backed factories
+const createMockDelivery = esimDeliveryFactory;
+const createMockMapping = (overrides: Parameters<typeof providerSkuMappingFactory>[0] = {}) =>
+  providerSkuMappingFactory({
+    shopifySku: 'ESIM-USA-10GB',
+    providerSku: '120:826-0-?-1-G-D:14094',
+    ...overrides,
+  });
 
 // Mock all dependencies BEFORE importing the module under test
 vi.mock('../../../db/prisma', () => ({
@@ -100,7 +73,10 @@ describe('provisionEsim Worker Job', () => {
 
   describe('Basic Job Processing', () => {
     it('should throw error if deliveryId is missing', async () => {
-      await expect(handleProvision({})).rejects.toThrow('missing deliveryId');
+      // Cast through unknown to intentionally test the runtime guard with invalid input
+      await expect(
+        handleProvision({} as unknown as Parameters<typeof handleProvision>[0]),
+      ).rejects.toThrow('missing deliveryId');
     });
 
     it('should throw error if delivery record not found', async () => {
@@ -346,7 +322,7 @@ describe('provisionEsim Worker Job', () => {
       expect(sendDeliveryEmail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: 'customer@example.com',
-          orderNumber: '#1001',
+          orderNumber: mockDelivery.orderName,
         }),
       );
     });

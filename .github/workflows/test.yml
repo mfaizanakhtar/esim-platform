@@ -63,8 +63,11 @@ jobs:
       - name: Lint code
         run: npm run lint
 
-      - name: Type check
+      - name: Type check (source)
         run: npx tsc --noEmit
+
+      - name: Type check (tests)
+        run: npm run type-check:all
 
       - name: Run tests with coverage
         run: npm run test:coverage

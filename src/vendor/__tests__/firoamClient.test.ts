@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import nock from 'nock';
-import type { EsimOrder } from '@prisma/client';
+import { esimOrderFactory } from '../../test-helpers/factories';
 
 // ---------------------------------------------------------------------------
 // Mock dependencies before importing the module under test
@@ -43,19 +43,8 @@ function mockApiPost(path: string, response: object) {
   return nock(BASE_URL).post(path).reply(200, response);
 }
 
-function makeMockDbOrder(overrides: Partial<EsimOrder> = {}): EsimOrder {
-  return {
-    id: 'db-order-1',
-    vendorReferenceId: 'EP-001',
-    payloadJson: {},
-    payloadEncrypted: 'encrypted-payload',
-    status: 'created',
-    lastError: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  };
-}
+// Alias to the central faker factory for local convenience
+const makeMockDbOrder = esimOrderFactory;
 
 // ---------------------------------------------------------------------------
 // Setup / teardown
@@ -110,7 +99,7 @@ describe('loginIfNeeded', () => {
   });
 
   it('throws VendorError when login returns empty data', async () => {
-    nock(BASE_URL).get('/api_order/login').query(true).reply(200, null);
+    nock(BASE_URL).get('/api_order/login').query(true).reply(200);
 
     const client = new FiRoamClient();
     await expect(client.getOrderInfo('EP-001')).rejects.toThrow('FiRoam login failed');
@@ -209,7 +198,8 @@ describe('addEsimOrder', () => {
 
   it('succeeds with one-step flow (backInfo=1, cardApiDtoList present)', async () => {
     mockLogin();
-    vi.mocked(prisma.esimOrder.create).mockResolvedValue(makeMockDbOrder());
+    const mockOrder = makeMockDbOrder();
+    vi.mocked(prisma.esimOrder.create).mockResolvedValue(mockOrder);
 
     mockApiPost('/api_esim/addEsimOrder', {
       code: 0,
@@ -228,7 +218,7 @@ describe('addEsimOrder', () => {
         activationCode: 'activation-code',
         iccid: '8901000000000000001',
       }),
-      db: { id: 'db-order-1' },
+      db: { id: mockOrder.id },
     });
     expect(prisma.esimOrder.create).toHaveBeenCalledTimes(1);
   });
