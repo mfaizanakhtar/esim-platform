@@ -3,11 +3,11 @@ import type {
   ProviderMappingConfig,
   ProvisionContext,
   EsimProvisionResult,
-} from '../types';
-import FiRoamClient from '../firoamClient';
-import type { FiRoamOrderData } from '../firoamSchemas';
-import { logger } from '../../utils/logger';
-import { MappingError, VendorError } from '../../utils/errors';
+} from '~/vendor/types';
+import FiRoamClient from '~/vendor/firoamClient';
+import type { FiRoamOrderData } from '~/vendor/firoamSchemas';
+import { logger } from '~/utils/logger';
+import { MappingError, VendorError } from '~/utils/errors';
 
 /**
  * FiRoam vendor implementation of VendorProvider.

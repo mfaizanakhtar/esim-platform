@@ -6,14 +6,14 @@ import { Resend } from 'resend';
 import QRCode from 'qrcode';
 import PDFDocument from 'pdfkit';
 import type { PrismaClient } from '@prisma/client';
-import { logger } from '../utils/logger';
+import { logger } from '~/utils/logger';
 import {
   parseSmdpFromLpa,
   buildEmailHtml,
   buildEmailText,
   type EsimPayload,
   type DeliveryEmailData,
-} from './emailTemplates';
+} from '~/services/emailTemplates';
 
 // Re-export shared types so existing callers (`import ... from './email'`) keep working.
 export type { EsimPayload, DeliveryEmailData };

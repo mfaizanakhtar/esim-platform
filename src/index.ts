@@ -1,7 +1,7 @@
 import 'dotenv/config';
-import buildServer from './server';
-import { initializeJobQueue, stopJobQueue } from './queue/jobQueue';
-import { logger } from './utils/logger';
+import buildServer from '~/server';
+import { initializeJobQueue, stopJobQueue } from '~/queue/jobQueue';
+import { logger } from '~/utils/logger';
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
 

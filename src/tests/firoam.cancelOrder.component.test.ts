@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import nock from 'nock';
-import FiRoamClient from '../vendor/firoamClient';
+import FiRoamClient from '~/vendor/firoamClient';
 
 /**
  * Component Tests for FiRoamClient.cancelOrder()

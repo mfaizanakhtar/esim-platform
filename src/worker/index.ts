@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import { initializeJobQueue, stopJobQueue } from '../queue/jobQueue';
-import { handleProvision } from './jobs/provisionEsim';
-import { logger } from '../utils/logger';
-import { isRetryable } from '../utils/errors';
+import { initializeJobQueue, stopJobQueue } from '~/queue/jobQueue';
+import { handleProvision } from '~/worker/jobs/provisionEsim';
+import { logger } from '~/utils/logger';
+import { isRetryable } from '~/utils/errors';
 
 async function run() {
   logger.info('Starting worker process');

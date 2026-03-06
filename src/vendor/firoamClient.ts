@@ -1,10 +1,10 @@
 import axios, { AxiosInstance } from 'axios';
 import crypto from 'crypto';
-import { encrypt } from '../utils/crypto';
-import prisma from '../db/prisma';
+import { encrypt } from '~/utils/crypto';
+import prisma from '~/db/prisma';
 import type { Prisma } from '@prisma/client';
-import { logger } from '../utils/logger';
-import { MappingError, VendorError } from '../utils/errors';
+import { logger } from '~/utils/logger';
+import { MappingError, VendorError } from '~/utils/errors';
 import {
   validateCanonical,
   CanonicalEsimPayload,
@@ -20,7 +20,7 @@ import {
   FiRoamCard,
   FiRoamOrderData,
   FiRoamQueryData,
-} from './firoamSchemas';
+} from '~/vendor/firoamSchemas';
 
 function createSign(params: Record<string, unknown>, signKey: string) {
   const copy: Record<string, unknown> = { ...params };
