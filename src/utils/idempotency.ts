@@ -1,3 +1,3 @@
-export function makeIdempotencyKey(orderId: string, lineItemId: string) {
+export function makeIdempotencyKey(orderId: string, lineItemId: string): string {
   return `${orderId}::${lineItemId}`;
 }
