@@ -43,13 +43,12 @@ export default {
         'src/server.ts', // Server setup
       ],
 
-      // Coverage thresholds - these apply to unit + component tests only
-      // TODO: Increase these as more tests are added
+      // Coverage thresholds - CI will fail if coverage drops below these
       thresholds: {
-        lines: 20,
-        functions: 20,
-        branches: 30,
-        statements: 20,
+        lines: 90,
+        functions: 90,
+        branches: 80,
+        statements: 90,
       },
 
       // Show all files, even those with 0% coverage
