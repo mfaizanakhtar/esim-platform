@@ -43,8 +43,8 @@
     "format": "prettier --write .",
     "type-check": "tsc --noEmit",
     "type-check:all": "tsc -p tsconfig.test.json --noEmit",
-    "pr:create": "./.claude/skills/create-pr/agent-pr.sh",
-    "pr:create-reviewed": "./.claude/skills/create-pr/agent-pr-reviewed.sh",
+    "pr:create": "./.claude/skills/create-pr/agent-pr-reviewed.sh",
+    "pr:create-simple": "./.claude/skills/create-pr/agent-pr.sh",
     "pr:merge": "./.claude/skills/create-pr/agent-pr-merge.sh",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

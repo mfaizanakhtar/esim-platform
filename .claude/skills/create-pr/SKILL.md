@@ -4,9 +4,9 @@
 
 | Script | npm script | Purpose |
 |--------|------------|---------|
-| `agent-pr.sh` | `npm run pr:create` | Standard flow: branch → commit → push → PR → CI → merge |
-| `agent-pr-reviewed.sh` | `npm run pr:create-reviewed` | Extended flow: same as above + wait for CodeRabbit review → agent fixes issues → merge |
+| `agent-pr-reviewed.sh` | `npm run pr:create` ⭐ **default** | Full flow: branch → commit → push → PR → CI → CodeRabbit review → agent fixes → merge |
 | `agent-pr-merge.sh` | `npm run pr:merge` | Re-poll CI for an existing PR and squash-merge (used by agent after fixing CodeRabbit issues) |
+| `agent-pr.sh` | `npm run pr:create-simple` | Backup: same flow without CodeRabbit wait (use only if CodeRabbit is removed) |
 
 ---
 
@@ -34,25 +34,24 @@ Use this skill at the end of any coding task when:
 
 ## Usage
 
-### Standard PR (no code review wait)
+### Default (with CodeRabbit review)
 
 ```bash
-# From the repo root — run via npm script
+# Always use this
 npm run pr:create "feat: add email retry logic"
 
 # With an explicit branch name
 npm run pr:create "fix: handle null email" "fix/null-email-handling"
 
 # Or call the script directly
-./.claude/skills/create-pr/agent-pr.sh "feat: my feature"
-./.claude/skills/create-pr/agent-pr.sh "fix: my fix" "fix/my-branch-name"
+./.claude/skills/create-pr/agent-pr-reviewed.sh "feat: my feature"
+./.claude/skills/create-pr/agent-pr-reviewed.sh "fix: my fix" "fix/my-branch-name"
 ```
 
-### PR with CodeRabbit review loop
+### Backup (no CodeRabbit — only if CodeRabbit is removed)
 
 ```bash
-# Agent runs this, reads printed comments, fixes files, then calls pr:merge
-npm run pr:create-reviewed "feat: add retry logic"
+npm run pr:create-simple "feat: add retry logic"
 ```
 
 **What happens when CodeRabbit finds issues (exit code 2):**

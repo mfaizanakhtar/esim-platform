@@ -172,7 +172,7 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 
 | Skill | Directory | Purpose | npm script |
 |-------|-----------|---------|------------|
-| Create PR | [`.claude/skills/create-pr/`](.claude/skills/create-pr/SKILL.md) | Branch → commit → push → PR → wait for CI green → squash merge | `npm run pr:create "<message>"` |
+| Create PR | [`.claude/skills/create-pr/`](.claude/skills/create-pr/SKILL.md) | Branch → commit → push → PR → CI → CodeRabbit review → agent fixes → merge | `npm run pr:create "<message>"` |
 
 ---
 
@@ -344,21 +344,35 @@ npx eslint . --ext .ts --quiet
 **Use this instead of pushing directly to main.**
 
 ```bash
-# Full automated flow — runs CI, waits for green, then merges
+# Standard flow — CI + CodeRabbit review + agent fixes + merge
 npm run pr:create "feat: add email retry logic"
 
 # With explicit branch name
 npm run pr:create "fix: handle null email" "fix/null-email-handling"
+
+# Fallback: skip CodeRabbit (use only if CodeRabbit is removed)
+npm run pr:create-simple "feat: add email retry logic"
 ```
 
-**What `.claude/skills/create-pr/agent-pr.sh` does automatically:**
+**What `npm run pr:create` (`agent-pr-reviewed.sh`) does automatically:**
 1. Creates a branch from `main` (name derived from commit message, e.g. `feat/add-email-retry-logic`)
 2. Stages all uncommitted changes (`git add -A`)
 3. Commits with your message
 4. Pushes the branch
 5. Opens a PR against `main` via `gh pr create`
-6. Polls GitHub GraphQL (`statusCheckRollup`) every 20s until all CI checks pass
-7. Squash-merges and deletes the branch on success — or exits with error details on failure
+6. Polls CI checks every 15s until all pass
+7. Waits up to 3 min for CodeRabbit to post its review
+8. **If CodeRabbit finds issues**: prints all comments (file:line + body) and exits 2 — the agent reads the output, edits the files, then runs the fix-loop commands printed at the bottom
+9. **If no issues**: squash-merges and deletes the branch automatically
+
+**After CodeRabbit exit 2 — fix loop:**
+```bash
+# Agent fixes the files, then:
+git add -A
+git commit -m "review: address CodeRabbit feedback"
+git push origin <branch>
+npm run pr:merge <PR_NUMBER> "<original commit message>"
+```
 
 **When CI fails:** the script prints which checks failed and exits — you fix the code and re-run.
 
