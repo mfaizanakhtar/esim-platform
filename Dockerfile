@@ -9,6 +9,7 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 COPY tsconfig.json ./
+COPY tsconfig.build.json ./
 COPY prisma ./prisma/
 
 # Install dependencies
