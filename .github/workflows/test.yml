@@ -10,6 +10,7 @@ on:
       - 'package-lock.json'
       - 'vitest.config.ts'
       - 'tsconfig.json'
+      - '.github/**'
   push:
     branches: [main]
 
