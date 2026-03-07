@@ -9,10 +9,17 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'vitest.config.ts'
+      - 'vitest.integration.config.ts'
       - 'tsconfig.json'
       - '.github/**'
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_e2e_orders:
+        description: 'Set FIROAM_E2E_ORDERS=true to place real eSIM orders during integration tests'
+        required: false
+        default: 'false'
 
 jobs:
   test:
@@ -129,8 +136,8 @@ jobs:
       FIROAM_PHONE: ${{ secrets.FIROAM_PHONE }}
       FIROAM_PASSWORD: ${{ secrets.FIROAM_PASSWORD }}
       FIROAM_SIGN_KEY: ${{ secrets.FIROAM_SIGN_KEY }}
-      # FIROAM_E2E_ORDERS is intentionally NOT set here — avoids placing real orders on every PR.
-      # Set it manually in the GitHub Actions UI via workflow_dispatch if needed.
+      # Set via workflow_dispatch input to place real orders — not run on every PR
+      FIROAM_E2E_ORDERS: ${{ github.event.inputs.run_e2e_orders || 'false' }}
 
     steps:
       - name: Checkout code
