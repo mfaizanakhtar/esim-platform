@@ -616,7 +616,9 @@ describe('provisionEsim Worker Job', () => {
   });
 
   describe('TGT Pending Provisioning', () => {
-    const createTgtMockMapping = (overrides: Parameters<typeof providerSkuMappingFactory>[0] = {}) =>
+    const createTgtMockMapping = (
+      overrides: Parameters<typeof providerSkuMappingFactory>[0] = {},
+    ) =>
       providerSkuMappingFactory({
         shopifySku: 'ESIM-AU-3GB-TGT',
         provider: 'tgt',
