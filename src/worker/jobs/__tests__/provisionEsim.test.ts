@@ -3,6 +3,8 @@ import { esimDeliveryFactory, providerSkuMappingFactory } from '~/test-helpers/f
 
 // Create a shared mock function storage
 let mockAddEsimOrder: ReturnType<typeof vi.fn>;
+let mockTgtProvision: ReturnType<typeof vi.fn>;
+let mockJobSend: ReturnType<typeof vi.fn>;
 
 // Convenience aliases using faker-backed factories
 const createMockDelivery = esimDeliveryFactory;
@@ -42,6 +44,37 @@ vi.mock('~/vendor/firoamClient', () => {
   };
 });
 
+vi.mock('~/vendor/registry', async () => {
+  const orig = await vi.importActual<typeof import('~/vendor/registry')>('~/vendor/registry');
+  return {
+    getProvider: (name: string) => {
+      if (name === 'tgt') {
+        return {
+          name: 'tgt',
+          provision: (...args: unknown[]) => {
+            if (!mockTgtProvision) mockTgtProvision = vi.fn();
+            // @ts-expect-error - apply signature mismatch is acceptable in tests
+            return mockTgtProvision(...args);
+          },
+        };
+      }
+      return orig.getProvider(name);
+    },
+  };
+});
+
+vi.mock('~/queue/jobQueue', () => ({
+  getJobQueue: () => ({
+    send: (...args: unknown[]) => {
+      if (!mockJobSend) {
+        mockJobSend = vi.fn();
+      }
+      // @ts-expect-error - apply signature mismatch is acceptable in tests
+      return mockJobSend(...args);
+    },
+  }),
+}));
+
 vi.mock('~/services/email', () => ({
   sendDeliveryEmail: vi.fn(),
   recordDeliveryAttempt: vi.fn(),
@@ -63,12 +96,15 @@ describe('provisionEsim Worker Job', () => {
   beforeEach(() => {
     // Initialize/reset the mock function before each test
     mockAddEsimOrder = vi.fn();
+    mockTgtProvision = vi.fn();
+    mockJobSend = vi.fn();
     vi.clearAllMocks();
     process.env.ENCRYPTION_KEY = 'test-encryption-key-32-bytes-long!';
   });
 
   afterEach(() => {
     vi.resetAllMocks();
+    vi.unstubAllEnvs();
   });
 
   describe('Basic Job Processing', () => {
@@ -578,6 +614,134 @@ describe('provisionEsim Worker Job', () => {
 
       expect(result).toEqual({ ok: true });
       expect(getShopifyClient).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('TGT Pending Provisioning', () => {
+    const createTgtMockMapping = (
+      overrides: Parameters<typeof providerSkuMappingFactory>[0] = {},
+    ) =>
+      providerSkuMappingFactory({
+        shopifySku: 'ESIM-AU-3GB-TGT',
+        provider: 'tgt',
+        providerSku: 'A-002-ES-AU-T-30D/180D-3GB(A)',
+        ...overrides,
+      });
+
+    it('sets awaiting_callback status when TGT callback mode returns pending', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
+
+      const mockDelivery = createMockDelivery();
+      const mockMapping = createTgtMockMapping();
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockTgtProvision.mockResolvedValue({
+        pending: true,
+        vendorOrderId: 'SE-CALLBACK-123',
+        lpa: '',
+        activationCode: '',
+        iccid: '',
+      });
+
+      const result = await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-AU-3GB-TGT' });
+
+      expect(result).toEqual({ ok: true, pending: true });
+      expect(prisma.esimDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'awaiting_callback',
+            vendorReferenceId: 'SE-CALLBACK-123',
+          }),
+        }),
+      );
+    });
+
+    it('sets vendor_ordered status and enqueues poll job for TGT hybrid mode', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'hybrid');
+
+      const mockDelivery = createMockDelivery();
+      const mockMapping = createTgtMockMapping();
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockTgtProvision.mockResolvedValue({
+        pending: true,
+        vendorOrderId: 'SE-HYBRID-456',
+        lpa: '',
+        activationCode: '',
+        iccid: '',
+      });
+
+      const result = await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-AU-3GB-TGT' });
+
+      expect(result).toEqual({ ok: true, pending: true });
+      expect(prisma.esimDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'vendor_ordered' }),
+        }),
+      );
+      expect(mockJobSend).toHaveBeenCalledWith(
+        'tgt-poll-order',
+        expect.objectContaining({ deliveryId: 'delivery-123', orderNo: 'SE-HYBRID-456' }),
+        expect.any(Object),
+      );
+    });
+
+    it('sets polling status when TGT polling mode returns pending', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'polling');
+
+      const mockDelivery = createMockDelivery();
+      const mockMapping = createTgtMockMapping();
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockTgtProvision.mockResolvedValue({
+        pending: true,
+        vendorOrderId: 'SE-POLL-789',
+        lpa: '',
+        activationCode: '',
+        iccid: '',
+      });
+
+      const result = await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-AU-3GB-TGT' });
+
+      expect(result).toEqual({ ok: true, pending: true });
+      expect(prisma.esimDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'polling',
+            vendorReferenceId: 'SE-POLL-789',
+          }),
+        }),
+      );
+      // Polling mode does NOT enqueue a poll job — hybrid does
+      expect(mockJobSend).not.toHaveBeenCalled();
+    });
+
+    it('records failure status when TGT provisioning throws', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
+
+      const mockDelivery = createMockDelivery();
+      const mockMapping = createTgtMockMapping();
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockTgtProvision.mockRejectedValue(new Error('TGT API unavailable'));
+
+      await expect(
+        handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-AU-3GB-TGT' }),
+      ).rejects.toThrow('TGT API unavailable');
+
+      expect(prisma.esimDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'failed' }),
+        }),
+      );
     });
   });
 });

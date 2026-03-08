@@ -13,6 +13,7 @@ const adminMocks = vi.hoisted(() => {
     mockJobSend: vi.fn().mockResolvedValue('job-id-admin'),
     mockSendDeliveryEmail: vi.fn(),
     mockDecrypt: vi.fn(),
+    mockTgtListProducts: vi.fn(),
   };
 });
 
@@ -36,6 +37,19 @@ vi.mock('~/db/prisma', () => ({
       update: vi.fn(),
       count: vi.fn(),
     },
+    providerSkuCatalog: {
+      findMany: vi.fn(),
+      count: vi.fn(),
+      upsert: vi.fn(),
+    },
+  },
+}));
+
+vi.mock('~/vendor/tgtClient', () => ({
+  default: class MockTgtClient {
+    async listProducts(...args: unknown[]) {
+      return adminMocks.mockTgtListProducts(...args);
+    }
   },
 }));
 
@@ -58,6 +72,44 @@ vi.mock('~/utils/crypto', () => ({
 
 import adminRoutes from '~/api/admin';
 import prisma from '~/db/prisma';
+
+type ProviderCatalogItem = {
+  id: string;
+  provider: string;
+  productCode: string;
+  productName: string;
+  productType: string | null;
+  region: string | null;
+  countryCodes: unknown;
+  dataAmount: string | null;
+  validity: string | null;
+  netPrice: unknown;
+  currency: string | null;
+  cardType: string | null;
+  activeType: string | null;
+  rawPayload: unknown;
+  isActive: boolean;
+  lastSyncedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+// Keep this cast local to tests to avoid depending on Prisma's generated
+// `ProviderSkuCatalog` type shape when editor diagnostics are stale.
+// Runtime behavior still uses the mocked delegate methods below.
+const prismaCatalog = (
+  prisma as unknown as {
+    providerSkuCatalog: {
+      findMany: ReturnType<typeof vi.fn>;
+      count: ReturnType<typeof vi.fn>;
+      upsert: ReturnType<typeof vi.fn>;
+    };
+  }
+).providerSkuCatalog as {
+  findMany: ReturnType<typeof vi.fn>;
+  count: ReturnType<typeof vi.fn>;
+  upsert: ReturnType<typeof vi.fn>;
+};
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -103,6 +155,30 @@ function makeMapping(overrides: Partial<ProviderSkuMapping> = {}): ProviderSkuMa
     isActive: true,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
+    ...overrides,
+  };
+}
+
+function makeCatalogItem(overrides: Partial<ProviderCatalogItem> = {}): ProviderCatalogItem {
+  return {
+    id: 'cat-001',
+    provider: 'tgt',
+    productCode: 'A-002-ES-AU-T-30D/180D-3GB(A)',
+    productName: 'Israel 3GB',
+    productType: 'DATA_PACK',
+    region: 'Middle East',
+    countryCodes: ['IL'],
+    dataAmount: '3GB',
+    validity: '180 days',
+    netPrice: '1.10' as unknown as ProviderCatalogItem['netPrice'],
+    currency: 'USD',
+    cardType: 'M1',
+    activeType: 'AUTO_ACTIVATE',
+    rawPayload: { productCode: 'A-002-ES-AU-T-30D/180D-3GB(A)' },
+    isActive: true,
+    lastSyncedAt: new Date('2026-03-08T00:00:00Z'),
+    createdAt: new Date('2026-03-08T00:00:00Z'),
+    updatedAt: new Date('2026-03-08T00:00:00Z'),
     ...overrides,
   };
 }
@@ -883,6 +959,121 @@ describe('Admin Routes', () => {
       });
 
       expect(res.json().message).toContain('ESIM-USA-10GB');
+    });
+  });
+
+  // ── Provider catalog endpoints ──────────────────────────────────────────
+
+  describe('GET /provider-catalog', () => {
+    it('lists provider catalog items with pagination', async () => {
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([makeCatalogItem()]);
+      vi.mocked(prismaCatalog.count).mockResolvedValue(1);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/provider-catalog?provider=tgt&limit=10&offset=0',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ total: 1, limit: 10, offset: 0 });
+      expect(vi.mocked(prismaCatalog.findMany)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ provider: 'tgt' }),
+        }),
+      );
+    });
+
+    it('filters by isActive=true when provided', async () => {
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.count).mockResolvedValue(0);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/provider-catalog?isActive=true',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(prismaCatalog.findMany)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ isActive: true }),
+        }),
+      );
+    });
+  });
+
+  describe('POST /provider-catalog/sync', () => {
+    it('rejects unsupported provider', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam' },
+      });
+
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('syncs TGT catalog items via upsert', async () => {
+      adminMocks.mockTgtListProducts.mockResolvedValue({
+        total: 1,
+        products: [
+          {
+            productCode: 'A-002-ES-AU-T-30D/180D-3GB(A)',
+            productName: 'Israel 3GB',
+            productType: 'DATA_PACK',
+            countryCodeList: ['IL'],
+            netPrice: 1.1,
+            validityPeriod: 180,
+            dataTotal: 3,
+            dataUnit: 'GB',
+            cardType: 'M1',
+            activeType: 'AUTO_ACTIVATE',
+          },
+        ],
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'tgt', pageSize: 100, maxPages: 1, lang: 'en' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledTimes(1);
+      expect(res.json()).toMatchObject({ ok: true, provider: 'tgt', processed: 1 });
+    });
+
+    it('breaks when processed equals total even if page is full', async () => {
+      adminMocks.mockTgtListProducts.mockResolvedValue({
+        total: 1,
+        products: [
+          {
+            productCode: 'BREAK-001',
+            productName: 'Break Test',
+            productType: 'DATA_PACK',
+            netPrice: 1.0,
+          },
+        ],
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        // pageSize=1 means products.length (1) >= pageSize (1), so left branch is false
+        // but processed (1) >= total (1) triggers the break via right branch
+        payload: { provider: 'tgt', pageSize: 1, maxPages: 5, lang: 'en' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, processed: 1 });
+      // Only one page fetched despite maxPages=5
+      expect(adminMocks.mockTgtListProducts).toHaveBeenCalledTimes(1);
     });
   });
 });

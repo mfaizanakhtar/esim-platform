@@ -1,5 +1,7 @@
 import type { VendorProvider } from '~/vendor/types';
 import { FiRoamProvider } from '~/vendor/providers/firoam';
+import { TgtProvider } from '~/vendor/providers/tgt';
+import { isTgtEnabled } from '~/vendor/tgtConfig';
 import { MappingError } from '~/utils/errors';
 
 /**
@@ -14,6 +16,7 @@ import { MappingError } from '~/utils/errors';
  */
 const registry = new Map<string, VendorProvider>([
   ['firoam', new FiRoamProvider()],
+  ...(isTgtEnabled() ? ([['tgt', new TgtProvider()]] as const) : []),
   // ['airalo', new AiraloProvider()],   ← example: add new vendor here
 ]);
 

@@ -5,6 +5,12 @@ import { getProvider } from '~/vendor/registry';
 import type { EsimProvisionResult } from '~/vendor/types';
 import { logger } from '~/utils/logger';
 import { JobDataError, MappingError, VendorError } from '~/utils/errors';
+import {
+  getTgtFulfillmentMode,
+  getTgtPollIntervalSeconds,
+  getTgtPollMaxAttempts,
+} from '~/vendor/tgtConfig';
+import { getJobQueue } from '~/queue/jobQueue';
 
 interface ProvisionJobData {
   deliveryId: string;
@@ -81,8 +87,51 @@ export async function handleProvision(data: ProvisionJobData) {
         {
           customerEmail: delivery.customerEmail ?? '',
           quantity: 1,
+          deliveryId,
         },
       );
+    }
+
+    if (esimResult.pending) {
+      const mode = getTgtFulfillmentMode();
+      const status =
+        mode === 'callback'
+          ? 'awaiting_callback'
+          : mode === 'polling'
+            ? 'polling'
+            : 'vendor_ordered';
+
+      await prisma.esimDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          vendorReferenceId: esimResult.vendorOrderId,
+          status,
+          lastError: null,
+        },
+      });
+
+      if (mode === 'hybrid') {
+        const queue = getJobQueue();
+        await queue.send(
+          'tgt-poll-order',
+          {
+            deliveryId,
+            orderNo: esimResult.vendorOrderId,
+            attempt: 1,
+            maxAttempts: getTgtPollMaxAttempts(),
+            mode,
+          },
+          {
+            startAfter: getTgtPollIntervalSeconds(),
+          },
+        );
+      }
+
+      logger.info(
+        { deliveryId, vendorOrderId: esimResult.vendorOrderId, mode },
+        'TGT order accepted and waiting for credentials',
+      );
+      return { ok: true, pending: true };
     }
 
     logger.info(
@@ -115,8 +164,6 @@ export async function handleProvision(data: ProvisionJobData) {
       },
     });
 
-    logger.info({ vendorOrderId: esimResult.vendorOrderId }, 'eSIM provisioned successfully');
-
     // Send delivery email with QR code
     if (delivery.customerEmail) {
       logger.info({ to: delivery.customerEmail }, 'Sending delivery email');
@@ -137,42 +184,27 @@ export async function handleProvision(data: ProvisionJobData) {
         validity: mappingInfo?.validity,
       });
 
-      // Record the delivery attempt
       await recordDeliveryAttempt(
         prisma,
         deliveryId,
         'email',
         emailResult.success ? `sent:${emailResult.messageId}` : `failed:${emailResult.error}`,
       );
-
-      if (emailResult.success) {
-        logger.info({ messageId: emailResult.messageId }, 'Delivery email sent');
-      } else {
-        logger.error({ error: emailResult.error }, 'Email delivery failed');
-        // Don't throw - eSIM is provisioned, email failure is recoverable
-      }
-    } else {
-      logger.warn('No customer email - skipping delivery email');
     }
 
     // Create Shopify fulfillment
     if (data.orderId) {
       try {
-        logger.info({ orderId: data.orderId }, 'Creating Shopify fulfillment');
-
         const shopify = getShopifyClient();
         await shopify.createFulfillment(data.orderId);
-
-        logger.info('Shopify fulfillment created successfully');
       } catch (fulfillmentError) {
         const fulfillmentMsg =
           fulfillmentError instanceof Error ? fulfillmentError.message : String(fulfillmentError);
         logger.error({ error: fulfillmentMsg }, 'Failed to create Shopify fulfillment');
-        // Don't throw - eSIM is delivered, fulfillment failure is recoverable
       }
-    } else {
-      logger.warn('Missing orderId - skipping Shopify fulfillment');
     }
+
+    logger.info({ vendorOrderId: esimResult.vendorOrderId }, 'eSIM provisioned successfully');
 
     return { ok: true };
   } catch (err: unknown) {
