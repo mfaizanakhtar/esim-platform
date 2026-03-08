@@ -2,8 +2,56 @@
 
 > **Document Type**: Developer  
 > **Status**: 🔄 Living doc  
-> **Last Updated**: 2026-03-01  
+> **Last Updated**: 2026-03-08  
 > **Purpose**: Change log and version history
+
+---
+
+Date: 2026-03-08
+
+Purpose: enhance TGT integration testing with comprehensive e2e flow matching FiRoam test coverage.
+
+## What changed (2026-03-08 - Part 2)
+
+- **Enhanced TGT integration test** ([src/tests/tgt.integration.test.ts](src/tests/tgt.integration.test.ts)):
+  - Added full e2e order flow with QR code generation
+  - Generates HTML + Markdown test reports (similar to FiRoam test)
+  - Polls for eSIM credentials with exponential backoff
+  - Validates LPA structure and extracts activation codes
+  - Outputs to `test-output/tgt-*.{html,md,png}`
+  - **Note**: TGT does not support order cancellation via API (only mentioned in error responses)
+  
+## Why this was needed
+
+- TGT integration test was basic (56 lines) compared to FiRoam's comprehensive e2e test (838 lines)
+- No QR generation or test reports for TGT orders
+- No verification of actual eSIM delivery artifacts
+- Needed feature parity for both vendor integration tests
+
+---
+
+Date: 2026-03-08
+
+Purpose: harden TypeScript/lint verification and document npm scripts clearly.
+
+## What changed (2026-03-08 - Part 1)
+
+- Added stronger quality scripts in [package.json](package.json):
+  - `type-check:fresh` → `prisma generate` + both TS checks
+  - `verify` → full local gate (`type-check:fresh`, build, tests, lint --quiet)
+  - `scripts:help` → quick human-readable command guide
+- De-duplicated worker script definition:
+  - `worker` is now an alias to `dev:worker` (same behavior, less duplication)
+- Added defensive comments around Prisma delegate casting where stale editor diagnostics were observed:
+  - [src/api/admin.ts](src/api/admin.ts)
+  - [src/api/__tests__/admin.test.ts](src/api/__tests__/admin.test.ts)
+- Added script reference documentation:
+  - [docs/NPM_SCRIPTS_GUIDE.md](docs/NPM_SCRIPTS_GUIDE.md)
+
+## Why this was needed
+
+- Some TypeScript errors were editor-side diagnostics caused by stale generated types/context.
+- Running a fresh Prisma generation before TS checks removes this class of false negatives.
 
 ---
 

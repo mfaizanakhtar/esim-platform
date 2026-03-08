@@ -41,6 +41,8 @@ export default {
         'src/index.ts', // Entry point
         'src/worker/index.ts', // Entry point
         'src/server.ts', // Server setup
+        'src/queue/**', // Queue bootstrap wrappers (integration-covered)
+        'src/vendor/types.ts', // Type-only contracts
       ],
 
       // Coverage thresholds - CI will fail if coverage drops below these

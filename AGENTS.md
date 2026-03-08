@@ -12,21 +12,27 @@
 ## System Overview
 
 ### What This System Does
-Backend system that automatically provisions and delivers eSIMs after successful Shopify payments using the FiRoam vendor API.
+Backend system that automatically provisions and delivers eSIMs after successful Shopify payments. Supports two vendor APIs — **FiRoam** (primary) and **TGT Technology** (secondary) — both behind a common `VendorProvider` interface.
 
 **Key Characteristics:**
 - Reliable, idempotent eSIM provisioning
 - Low volume (≤1000 eSIMs total)
 - Two-process architecture: API + Worker
 - Shopify Custom App (webhooks only, no embedded UI)
+- Multi-vendor: FiRoam (sync) + TGT (async callback/polling/hybrid)
 
 ### Architecture Pattern
 ```
-Shopify Store (payment) 
+Shopify Store (payment)
   → Webhook → API Process (idempotency check)
   → Job Queue → Worker Process
-  → FiRoam API (provision eSIM)
+  → Vendor API (FiRoam or TGT, selected by SKU mapping)
   → Email Delivery + Shopify Fulfillment
+
+TGT-specific async path:
+  createOrder() → tgt-poll-order job (polling)
+               ↘ POST /tgt/callback (webhook from TGT)
+               → finalizeDelivery()
 ```
 
 **Technology Stack:**
@@ -45,18 +51,35 @@ Shopify Store (payment)
 - **Strict mode enabled** - No implicit any, proper null checks
 - **No compiled .js files in src/** - Added to .gitignore
 - **Explicit types** - Avoid `any`, use proper interfaces
-- **Zod schemas** - For external API validation (FiRoam responses)
+- **Zod schemas** - For external API validation (FiRoam and TGT responses)
 
 ### File Organization
 ```
 src/
-├── api/           # HTTP route handlers
-├── services/      # Business logic (email, jobs)
-├── vendor/        # External API clients (FiRoam)
-├── db/            # Database client + helpers
-├── utils/         # Shared utilities (crypto, etc.)
-└── server.ts      # Main entry point
+├── api/                    # HTTP route handlers
+│   ├── tgtCallback.ts      # TGT webhook receiver (POST /tgt/callback)
+│   └── ...                 # Shopify webhook, admin routes
+├── services/               # Business logic (email, jobs)
+├── vendor/                 # External vendor API clients
+│   ├── firoamClient.ts     # FiRoam HTTP client
+│   ├── firoamSchemas.ts    # FiRoam Zod schemas
+│   ├── tgtClient.ts        # TGT HTTP client (OAuth2 + signature)
+│   ├── tgtConfig.ts        # TGT config helpers (mode, intervals)
+│   ├── tgtSchemas.ts       # TGT Zod schemas (all responses + callbacks)
+│   ├── types.ts            # VendorProvider interface
+│   └── providers/
+│       ├── firoam.ts       # FiRoam VendorProvider implementation
+│       └── tgt.ts          # TGT VendorProvider implementation
+├── worker/
+│   └── jobs/
+│       ├── tgtPoll.ts      # TGT polling job (tgt-poll-order)
+│       └── finalizeDelivery.ts  # Shared: email + Shopify fulfillment
+├── db/                     # Database client + helpers
+├── utils/                  # Shared utilities (crypto, logger, errors)
+└── server.ts               # Main entry point
 ```
+
+**Vendor naming convention**: files are prefixed `firoam*` or `tgt*` — no sub-folders needed.
 
 ### Code Style
 - **Functional approach** - Pure functions where possible
@@ -198,6 +221,8 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 | [docs/WEBHOOK_IMPLEMENTATION.md](docs/WEBHOOK_IMPLEMENTATION.md) | Webhook handler implementation details | Understanding/modifying webhook logic | ✅ Current |
 | [docs/FIROAM_INTEGRATION.md](docs/FIROAM_INTEGRATION.md) | FiRoam API client implementation | Working with FiRoam vendor API | ✅ Current |
 | [FiRoam_documentation.txt](FiRoam_documentation.txt) | Official FiRoam API reference | Source of truth for FiRoam endpoints | ✅ Vendor doc |
+| [docs/TGT_INTEGRATION.md](docs/TGT_INTEGRATION.md) | TGT Technology API client implementation | Working with TGT vendor API | ✅ Current |
+| [thirdparty-documentation/TGT.txt](thirdparty-documentation/TGT.txt) | Official TGT API reference (v2.0) | Source of truth for TGT endpoints | ✅ Vendor doc |
 
 ### 🎨 Feature Documentation
 
@@ -222,6 +247,7 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 | Document | Purpose | When to Use | Status |
 |----------|---------|-------------|--------|
 | [docs/UPDATE.md](docs/UPDATE.md) | Change log, version history | Checking what changed between versions | 🔄 Living doc |
+| [docs/NPM_SCRIPTS_GUIDE.md](docs/NPM_SCRIPTS_GUIDE.md) | NPM command reference, quality gates, script de-duplication notes | Understanding/maintaining package scripts | ✅ Current |
 | [docs/SHOPIFY_SDK_MIGRATION.md](docs/SHOPIFY_SDK_MIGRATION.md) | Migration from old to new Shopify SDK | Upgrading Shopify dependencies | ✅ Current |
 | [docs/GRAPHQL_VARIABLES_EXPLAINED.md](docs/GRAPHQL_VARIABLES_EXPLAINED.md) | Shopify GraphQL variable handling | Working with Shopify GraphQL API | ✅ Current |
 
@@ -247,7 +273,7 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 - **🗂️ Historical** - Reference/archive, may contain outdated information
 
 > 💡 **Tip**: Always check `docs/UPDATE.md` for recent changes that might affect your task.
-> 📅 **Last index update**: 2026-03-01
+> 📅 **Last index update**: 2026-03-08
 
 ---
 
@@ -270,6 +296,12 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 **Work with FiRoam API**
 → [docs/FIROAM_INTEGRATION.md](docs/FIROAM_INTEGRATION.md) + [FiRoam_documentation.txt](FiRoam_documentation.txt)
 
+**Work with TGT API**
+→ [docs/TGT_INTEGRATION.md](docs/TGT_INTEGRATION.md) + [thirdparty-documentation/TGT.txt](thirdparty-documentation/TGT.txt)
+
+**Understand TGT fulfillment modes (callback/polling/hybrid)**
+→ [docs/TGT_INTEGRATION.md#fulfillment-modes](docs/TGT_INTEGRATION.md#fulfillment-modes)
+
 **Add usage tracking to emails**
 → [docs/EMAIL_USAGE_TRACKING.md](docs/EMAIL_USAGE_TRACKING.md)
 
@@ -284,6 +316,9 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 
 **Check what changed recently**
 → [docs/UPDATE.md](docs/UPDATE.md)
+
+**Understand npm scripts / quality gates**
+→ [docs/NPM_SCRIPTS_GUIDE.md](docs/NPM_SCRIPTS_GUIDE.md)
 
 **Debug Shopify GraphQL**
 → [docs/GRAPHQL_VARIABLES_EXPLAINED.md](docs/GRAPHQL_VARIABLES_EXPLAINED.md)
@@ -317,16 +352,22 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 **After making ANY code changes, you MUST run these verification steps:**
 
 ```bash
-# 1. TypeScript compilation
+# 1. Fresh type checks (includes prisma generate)
+npm run type-check:fresh
+
+# 2. Build
 npm run build
 
-# 2. Run tests
+# 3. Run tests
 npm test -- --run
 
-# 3. Check linting
+# 4. Check linting
 npx eslint . --ext .ts --quiet
 
-# 4. If all pass, commit is safe
+# 5. Optional single-command guard (equivalent)
+npm run verify
+
+# 6. If all pass, commit is safe
 ```
 
 **Why this matters:**
@@ -445,11 +486,13 @@ npm run pr:merge <PR_NUMBER> "<original commit message>"
 For questions about:
 - **System design**: Read [docs/architecture.md](docs/architecture.md)
 - **Deployment issues**: Check [docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md)
-- **FiRoam API**: See [FiRoam_documentation.txt](FiRoam_documentation.txt)
+- **FiRoam API**: See [docs/FIROAM_INTEGRATION.md](docs/FIROAM_INTEGRATION.md) + [FiRoam_documentation.txt](FiRoam_documentation.txt)
+- **TGT API**: See [docs/TGT_INTEGRATION.md](docs/TGT_INTEGRATION.md) + [thirdparty-documentation/TGT.txt](thirdparty-documentation/TGT.txt)
 - **Recent changes**: Review [docs/UPDATE.md](docs/UPDATE.md)
 
 ---
 
-**Last Updated**: January 31, 2026
-**System Version**: 0.1.0
+**Last Updated**: March 8, 2026
+**System Version**: 0.2.0
 **Deployment**: Railway (Production)
+**Vendors**: FiRoam (primary, sync) + TGT Technology (secondary, async callback/polling)

@@ -21,6 +21,11 @@ export interface EsimProvisionResult {
   activationCode: string;
   /** SIM identifier. */
   iccid: string;
+  /**
+   * When true, provisioning has been accepted by the vendor but credentials are
+   * not ready yet (async completion via callback/polling).
+   */
+  pending?: boolean;
 }
 
 /**
@@ -50,6 +55,8 @@ export interface ProvisionContext {
   customerEmail: string;
   /** Number of eSIMs to provision (usually 1). */
   quantity: number;
+  /** Internal delivery id for cross-system correlation (e.g., channelOrderNo). */
+  deliveryId?: string;
 }
 
 /**

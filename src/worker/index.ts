@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { initializeJobQueue, stopJobQueue } from '~/queue/jobQueue';
 import { handleProvision } from '~/worker/jobs/provisionEsim';
+import { handleTgtPoll } from '~/worker/jobs/tgtPoll';
 import { logger } from '~/utils/logger';
 import { isRetryable } from '~/utils/errors';
 
@@ -29,6 +30,21 @@ async function run() {
       }
       // JobDataError / MappingError — config won't self-heal, skip retries
       logger.warn({ jobId, requestId }, 'Non-retryable error — skipping pg-boss retries');
+    }
+  });
+
+  await boss.work('tgt-poll-order', { teamSize: 2, teamConcurrency: 1 }, async (job: unknown) => {
+    const j = job as Record<string, unknown>;
+    const jobId = j.id ? String(j.id) : 'unknown';
+
+    try {
+      await handleTgtPoll(j.data as Parameters<typeof handleTgtPoll>[0]);
+      logger.info({ jobId }, 'TGT polling job completed');
+    } catch (err) {
+      logger.error({ jobId, err }, 'TGT polling job failed');
+      if (isRetryable(err)) {
+        throw err;
+      }
     }
   });
 

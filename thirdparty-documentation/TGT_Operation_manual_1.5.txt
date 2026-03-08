@@ -1,0 +1,334 @@
+
+
+Operation manual
+
+Revision record
+Version number
+date
+remarks
+V1.0
+2022.03.10
+First edition
+V1.1
+2022.03.16
+<w:tab w:val="left" w:pos="312"/></w:tabs><w:jc w:val="left"/><w:rPr><w:rFonts w:hint="default"/><w:szCs w:val="21"/></w:rPr></w:pPr><w:r><w:rPr><w:rFonts w:hint="eastAsia"/><w:szCs w:val="21"/></w:rPr><w:t>Optimize page
+V1.2
+2022.06.06
+The multi-level channel function is added. The self channel only supports the operation of its own channels and subordinate channels, that is, the subordinate channels of its own subordinate channels cannot be operated across levels
+V1.3
+2022.08.04
+ESIM supports multiple orders
+1.4
+2022.10.17
+Add mailbox customization function to support SIM card ordering
+1.5
+2022.11.7
+Equipment details support viewing equipment model and other information, price supports import, export and copy functions, and new order task list
+
+一、Summary
+
+1.1 Platform introduction
+This document is only used for the operation instruction manual provided to the contracted channel distribution
+1.2 System login
+The platform supports switching between Chinese, English or Japanese.
+
+【Step 1】：Enter the web address in the browser to open：http://enterpriseportal.tugetechnologies.com
+【Step 2】：Click login to enter the global cloud communication platform。
+Account Control
+2.1Change Password
+
+2.2 Create roles / assign permissions
+Function entrance：System management / role management / employee role management, click Add.
+
+Fill in the corresponding information and click OK.
+Key points：
+（1）According to the actual needs, you can create multiple roles for your company and assign different permissions for business operations
+
+Assign role permission: check the role to which permission needs to be assigned and click Assign.
+
+Click the drop-down button to view more detailed permissions. Click tick to confirm that the role can obtain corresponding permissions.
+Key points：
+（1）If permission is not checked, the module entry will not be displayed.
+
+Usiness process
+3.1Create distribution channels / configure channel roles
+Function entrance：System management / user management / channel management, click the Add button.
+
+Enter the add page，Enter the corresponding information and click OK. The  account is created successfully
+Key points：
+（1）Code: system login account.(limit length only)
+（2）Name：channel Name。
+（3）business pattern/settlement method / settlement currency cannot be modified
+（4）Country: channel country capital time zone
+（5）Distribution level: Level 1 does not support selecting superior channels. Level 2 can select the superior channel of level 1, level 3 can select the superior channel of level 2, and so on.
+
+Configure channel role: check the channel to which you want to add a role, and click the role list to enter the add role page.
+
+Click Add to enter the role assignment page。
+
+After the check box is selected, click OK to add the role successfully.
+6.on the role list page, select any role to delete.
+Key points：
+(1)When selected, the delete button is displayed.
+
+3.2Recharge of distribution channel account
+Function entrance ：System management / user management / account management, select the channel to recharge and click the recharge button.。
+Key points：
+(1)The button will not be displayed until it is checked。
+
+2.recharging amount: you can enter positive and negative values, enter comments and click to confirm successful recharging.
+Key points：
+(1) The basic account balance is the current channel balance, and the remarks are required.
+(2) It does not involve the settlement with the distribution of transit pigeon, but is only used for the settlement between the self channel and subordinate channels.
+(3) Level 1 only supports recharging Level 2 channels, level 2 channels, level 3 channels and level 4 channels. Cross level operations are not allowed.
+
+3.3 Create distribution price
+Function entrance：Business configuration / price management / distribution product price, click Add to enter the new price page.。
+
+After entering the corresponding information, click confirm to add the price successfully。
+Key points：
+(1) The effective start time and end time represent the effective time range of the price.
+(2) Action channel: after selecting the corresponding channel, the parent channel and currency are automatically associated.
+
+Select the price of distribution products and click the &quot;price details&quot; button。
+
+Enter the price details page。
+Key points：
+(1) The product information is within the range set by the superior channel
+(2) Click batch modify to change the settlement price, or select whether to go online. (the product cannot be found when placing an order on the shelf is not checked)
+(3) Click batch modify again to modify successfully.
+
+Price effective：Select the price of the distribution product, click execute now, and then confirm. The price information will become &quot;In execution&quot;
+Key points：
+（1）Click &quot;end now&quot; to display a warning prompt. The meaning of the warning terms: after the current price is executed, the price already being executed in the same channel will end. (only one price can exist in a channel under implementation)
+
+Copy function: select the distribution product price, click Copy to enter the copy page
+
+The key information can be modified by copying the price page. After copying successfully, the price defaults to &quot;To be executed&quot;
+
+Key points:
+(1) The code and title cannot be duplicate with the original data. You need to enter a new one
+(2) Currency cannot be modified
+(3) After successful copying, the product in the price details is consistent with the original copied product (unless the price of the superior channel product is modified)
+3.4Create my order
+Function entrance：Main business management / sales order management / my order, click the Add button。
+
+Enter the add page, enter the corresponding information and click OK，Generate order。
+Key points：
+OTA order：Manual input（You can choose to fill in or not fill in according to your needs）
+channel：If the channel product price is not configured, the channel product price is not on the shelf, and the channel product price is not implemented, the corresponding product type and product cannot be selected。
+
+3.5 Create distribution order
+Function entrance：Main business management / sales order management / distribution order, click the Add button.
+
+Enter the add page, enter the corresponding information and click OK to generate an order。
+Key points：
+Channel: the corresponding product type and product cannot be selected when the product price of the parent channel, the product price of the parent channel are not on the shelves, or the product price of the parent channel is not implemented.
+(2) After a subordinate channel successfully places an order, it will be mapped and displayed in your own channel's my order.
+
+3.6 Create my ESIM order
+Function entrance: main business configuration / selling ESIM orders / my orders
+
+Key points：
+(1) Only the device automatically activates the device and supports card opening and order placing
+
+(2) Channel: the corresponding product type and product cannot be selected for the channel to be selected if the channel product price is not configured, the channel product price is not on the shelves, or the channel product price is not implemented.
+
+(3) Only products with ESIM grouping are supported (products without ESIM grouping are not displayed when selecting products on the card opening order page)
+
+The mailbox is &quot;yes&quot; by default. If you do not enter the mailbox information, you will not be able to receive the activation code for code scanning activation
+At present, it supports placing orders with one or more cards, and changing the number of QR codes is regarded as multiple cards（Note that the maximum quantity cannot exceed 100）
+3.7Create distribution ESIM order
+Function entrance：Main business configuration / sales ESIM order / distribution order
+
+Key points：
+(1) Only the device automatically activates the device and supports card opening and order placing
+
+(2) Channel: the corresponding product type and product cannot be selected when the product price of the parent channel, the product price of the parent channel are not on the shelves, or the product price of the parent channel is not implemented.
+
+After a subordinate channel successfully places an order, it will be mapped and displayed in your own channel's my order.
+At present, it supports placing orders with one or more cards, and changing the number of QR codes is regarded as multiple cards（Note that the maximum quantity cannot exceed 100）
+3.8 Close traffic orders in advance
+1.Function entry: main business management/sales order management, click &quot;end flow order in advance&quot;
+
+2.Select the flow sheet and click to enter the early end flow sheet page
+
+Key points:
+(1) The order number must correspond to the flow sheet. You can enter multiple flow sheets manually to end the Chargeback
+(2) Only when the status of the flow sheet is Inactive/Activated/In Use/Paused, the data will be displayed on this page, so that the flow sheet function can be terminated in advance
+3.9 End distribution flow document in advance
+1. Function entry: main business management/sales order management/early termination of distribution flow document
+
+2.Select the traffic and click the early end function
+
+Key points：
+(1) The order number must correspond to the flow sheet. You can enter multiple flow sheets manually to end the Chargeback
+(2) Only when the status of the flow sheet is Inactive/Activated/In Use/Paused, the data will be displayed on this page, so that the flow sheet function can be terminated in advance
+(3) The flow document of the subordinate channel can be terminated in advance, and the order number must correspond to the flow document
+3.10 My SIM Order
+Function entry: main business management/SIM card sales order
+
+Click Add to enter the next SIM card order page
+
+Key points:
+(1) Channel: if the channel product price is not configured, the channel product price is not available, and the channel product price is not implemented for the channel to be selected, the corresponding product type and product cannot be selected.
+(2) ICCID is not required and can be filled in on the subsequent delivery page
+(3) One card can support up to 4 packages
+3.11 Distribution of SIM card orders
+1. Function entry: main business management/SIM card sales order
+
+Click Add to enter the next SIM card order page
+
+Key points：
+(1) Channels: Channels to be selected can not select corresponding product types and products if channel product price is not configured and channel product price is not on the shelf, channel product price is not implemented.
+(2) Channels: You can choose to place orders for your own subordinate channels
+(3) ICCID is not required and can be filled in on subsequent shipment pages
+(4) Up to 4 meals per card
+Equipment management
+4.1 Equipment allocation
+Function entrance：Equipment and flow management/ Equipment management, click &quot;equipment allocation&quot;.
+
+Equipment allocation page: enter the corresponding information and click OK to complete equipment allocation.
+Key points：
+(1) After the channel to which the equipment belongs is selected, only the associated channel can be selected for the equipment allocation channel.
+(2) After the equipment is allocated successfully, the effective orders of the equipment will be copied to the distribution channel at the same time.
+(3) If no equipment is allocated, you can only allocate equipment after selecting it (the equipment recycling button is not displayed).
+(4) If the device allocation fails, you can re operate the device allocation.
+(5) Only equipment belonging to its own channel can be assigned to its associated subordinate channel.
+
+4.2 Equipment recycling
+Function entrance：Equipment and rate of flow management / equipment management, click the &quot;equipment recycling&quot; button, enter the equipment to be recycled in the equipment number box, and then click the &quot;confirm&quot; button.
+Key points ：
+(1) After the equipment is recycled, all orders of the distribution channel where the equipment is located will be voided.
+(2) Orders from the parent channel where the equipment is located continue to be valid and continue to be allocated.
+(3) Equipment has been allocated, and can only be selected for equipment recycling (the equipment allocation button is not displayed)
+
+4.3 Device pause
+Function entrance ：Equipment and rate of flow management / equipment management，Select the equipment to be paused and click the &quot;pause&quot; button.
+Key points：
+The pause function here is limited to the pause of equipment. After the pause, the equipment is unavailable, which will not affect other products in the order and has nothing to do with settlement.
+When the device is selected, the &quot;pause&quot; button is displayed only when the device status is &quot;activated&quot;.
+
+4.4 Resume after device pause
+Function entrance ：Equipment and rate of flow management / equipment management, select the equipment to be &quot;recovered&quot; and click the &quot;recovery&quot; button.
+Key points：
+（1）When the device is selected, the &quot;resume&quot; button is only displayed when the device status is &quot;suspended&quot;
+
+4.5 Device search / view export function
+Function entrance：Equipment and rate of flow management / equipment management.
+Search: enter or select the relevant information you want, and click search to display the corresponding information.
+export：Export excel table.
+Key points：
+（1）You can select a piece of equipment information and click the &quot;view&quot; button to view the equipment details
+
+Sure Select multiple conduct Batch operation，For example: equipment allocation, suspension and recovery.
+
+4.6 SIM card management
+1.Function entrance: device and traffic management/SIM card management
+
+2.SIM card allocation
+
+重点：
+可将SIM卡分配给下级渠道
+
+SIM card recycling
+
+Key points:
+The channel to which the equipment belongs must be consistent with the channel to which the equipment number to be entered belongs
+4.7 Equipment management
+Function entry: device and traffic management/device management. Select a device and click &quot;View&quot;
+
+Enter the viewing page to view the &quot;device kernel version number&quot;, &quot;device App version number&quot;, and &quot;M1App version number&quot; information of the current device
+
+Key points:
+If there is no information about the current device, such as &quot;device kernel version number&quot;, &quot;device App version number&quot; and &quot;M1App version number&quot;, then the current device model does not support it
+4.8 Equipment operation management
+1. Function entry: device and traffic management/device and operation management. Select a device and click &quot;View&quot;
+
+2. Enter the viewing page to view the &quot;device kernel version number&quot;, &quot;device App version number&quot;, and &quot;M1App version number&quot; information of the current device
+
+Key points:
+(2) If there is no information about the current device, such as &quot;device kernel version number&quot;, &quot;device App version number&quot; and &quot;M1App version number&quot;, then the current device model does not support it
+五、Alarm management reminder configuration
+5.1alarm management
+Function entrance ：Alarm management / alarm information configuration / flow alarm line configuration, click the Add button
+
+n the add alarm information page, select the corresponding information and click submit to successfully add the alarm information.Key points：
+You can select whether to enable it. After enabling, the newly added alarm information will be &quot;on&quot;.
+3. click the add processing method button to enter the add processing method page.
+Key points：
+Under the same warning type and alarm level, only one alarm can be configured. (either percentage or absolute limit)
+t is recommended to configure alarm reminders according to actual requirements to avoid multiple departure alarm reminders。
+When adding/modifying, you can select your own subordinate channel or your own channel to create alarms
+
+select the alarm processing method and processing configuration information and click OK.
+Key points：
+Alarm processing method: only select one of two options 1 For [send e-mail], you need to enter the correct e-mail address. 2. for [auto order flow], you need to select a product.
+（2）If you select Auto Order traffic, all devices will enable this feature.
+
+5.click the &quot;submit&quot; button after the configuration is completed according to the actual demand.Key points：
+Enable function: enable and disable in the list or configuration page.
+（2）Delete: you can delete the added processing method or re add the processing method as required.
+
+modify the alarm configuration. Click Modify to reconfigure the alarm information as required.
+Key points：
+（1）Only the alarm configuration in off status can be modified
+5.2 Alarm record query
+1.Function entry: alarm management / alarm information management / alarm record, support search / view / confirm / export.。
+Key points：
+（1）Confirm: only the unprocessed alarm information can be selected for confirmation（2）View: select to view details.
+（3）Export: export the corresponding excel table information.
+
+5.3 System alarm
+Function entry: home page / system alarm, and the pull-down page displays the system alarm.
+Key points：
+（1） The system alarm on the home page only displays ten &quot;not processed&quot; alarm messages.。
+
+5.4 Log management
+Function entry: log management / mail sending record, support search / view / export
+Key points：
+You can use filter items to select information with a status of failed.
+（2）When the mail sending record status is &quot;failed&quot;, you can select the record and click to view the specific failure reason.
+1.automatic subscription traffic log
+Function entry: log management / automatic subscription of traffic logs. Only search / view / export is supported.
+Key points：
+（1）You can query according to the information record of &quot;failed&quot; status.
+（2）No order number indicates that the order has failed and the status is &quot;failed&quot;. It is necessary to find a person to check and handle it in time and then find the corresponding alarm for confirmation.
+
+Auto order configuration
+6.1 New page
+Function entry：Function entry: main business management / automatic subscription configuration
+Key points：
+(1) Channel: automatic ordering only supports configuring self channels and subordinate channels, and cannot be configured across levels.
+(2) &quot;Product type&quot; and &quot;product name&quot;: only &quot;monthly package&quot; and &quot;monthly package&quot; products are supported, and the price details have been configured and are in effective status
+(3) Order type: select &quot;limited&quot; or &quot;unlimited&quot;. If unlimited is selected, the number of copies ordered will not be limited, and the end of use time hiding will be activated. Select &quot;limited&quot; to select the number of copies to order.
+(4) Number of subscription copies: increasing the number of subscription copies will synchronously extend the activation end time.
+(5) Set backup quantity: increasing the equipment quantity will synchronously increase the single period settlement amount (the price configured for the product in the source price details of the single period settlement amount)
+(6) Start time of the first month: select the start time of the first month to synchronously display the activation end time of one month (if the subscription type is &quot;unlimited&quot;, the activation end time will be hidden)
+
+6.2 Modify page
+Key points：
+1) Only records with disabled status configuration can be modified
+(2) Start time: supports modification (the page also supports modification), but only supports modification to a date later than the start time of the next cycle. (the date of the current modification time is less than the automatic ordering date of the channel configuration), and the start time of the next cycle is the first day of the next month. Date of current modification time &gt; = automatic ordering date of channel configuration), start time of next cycle (1st of next month)
+
+6.3 Ordering details page
+Key points：
+（1） &quot;Cancel&quot; is only supported for the order details in the &quot;pending order&quot; status
+（2）&quot;Reset&quot; ordering is only supported for ordering details in &quot;order failed&quot; or &quot;cancelled&quot; status
+
+Email customization
+7.1 Email customization
+Function entry: business configuration/channel customization configuration/mailbox customization
+
+Click Add/Modify to enter the editing mailbox customization page
+
+Key points:
+(1) The channel can choose its own channel or subordinate channel
+(2) If the address/port number/email authorization code information during the service period is correct, the test recipient is for testing (required)
+(3) When clicking &quot;Confirm&quot;, a test email will be sent to the test recipient. If the email is sent successfully, it means the configuration is successful. Otherwise, it means the service period address/port number/email authorization code information is incorrect
+(4) Service period address: use the search engine to query your relevant email server address
+(5) Port number: use the search engine to query your relevant mailbox port number
+(6) Email account: sender
+(7) Email authorization code
+Incoming mail (IMAP) server imap.gmail Com requires SSL: Yes Port: 993
+Outgoing mail (SMTP) server smtp.gmail Com requires SSL: Yes requires TLS: Yes (if applicable) uses authentication: Yes SSL port: 465TLS/STARTTLS port: 587

@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import webhookRoutes from '~/api/webhook';
+import tgtCallbackRoutes from '~/api/tgtCallback';
 import usageRoutes from '~/api/usage';
 import adminRoutes from '~/api/admin';
 import { getShopifyClient } from '~/shopify/client';
@@ -84,6 +85,7 @@ export default async function buildServer() {
   app.get('/health', async () => ({ status: 'ok' }));
 
   app.register(webhookRoutes, { prefix: '/webhook' });
+  app.register(tgtCallbackRoutes, { prefix: '/webhook/tgt' });
   app.register(usageRoutes);
   app.register(adminRoutes, { prefix: '/admin' });
 

@@ -1,0 +1,3349 @@
+
+--- PAGE 1 ---
+TGTTechnologyGlobal-eSIM
+API_2.0_EN
+1
+OVERVIEW
+1.1
+Introduction
+Welcome to TGT Global Cloud Communications Platform! We provide powerful, stable, and easy-to-
+integrate global eSIM card business APIs, dedicated to helping your business seamlessly integrate and 
+manage global communication resources, enabling your enterprise to deliver instant, reliable, and cost-
+eﬀective connectivity solutions.
+TGT Technology partners can seamlessly integrate our eSIM technology into your platform, empowering you 
+to sell quickly and easily. Features include:Obtain Product Package, Create Order, product top-up/renewal, 
+Order status and eSIM card installation status retrieval, etc.
+1.2
+Quick
+start
+1.2.1
+API
+Request
+Overview
+Diagram
+TGT Global Cloud Communications Platform OpenAPI is based on HTTP protocol for invocation ， Channels 
+may initiate integration by encapsulating HTTP requests according to the platform's interface invocation 
+speciﬁcations ， The following primarily outlines instructions for conducting API integration testing through 
+self-encapsulated HTTP requests.
+The  API request process is as follows: Fill in parameters > Assemble HTTP request > Initiate HTTP request> 
+Receive HTTP response > Parse JSON results. The main API request process is illustrated below:
+1.2.2 REST API overview
+This endpoint allows you to obtain an access token, which is required to make requests to the TGT Partner 
+API.Using your client account ID (accountId) and API secret (secret), you will receive a token valid for 24
+hours.
+Important
+Notes:
+ It is best to store the token in your API client and only request a new token when the 
+current one expires or becomes invalid.
+1 / 88
+--- PAGE 2 ---
+1.2.3
+Primary
+API
+Interface
+Integration
+Process
+Customer
+CustomerReseller
+ResellerTGT Service
+TGT Service3.1.1 Paged Query of All ESIM Plan Information
+TGT returns all available package information.
+Purchase eSIM Product Plans
+3.1.4 Create Order (using “productCode”)
+Webhook Callback(TGT asynchronous method automatically returns eSIM card order information such as QR code and ICCID.)
+Resellers generate eSIM QR codes for customers.
+If an email address is provided when creating an order, TGT will send the eSIM QR code to the customer's email address.
+Renewal Order
+3.1.5 eSim Renewal
+3.1.8 Query Order Information by Conditions(Check purchased order information)
+3.1.10 Query Real-time Traffic by Order Number(Check real-time data usage for your eSIM card)
+3.1.11 Query Profile Information by ICCID(Check eSIM card installation status)
+3.1.9 Query Channel Account
+2 / 88
+--- PAGE 3 ---
+1.3
+Attribute
+descriptions
+Attribute Description
+DAILY_PACK Daily Data Plan, allows daily data allocation and resets on a speciﬁed cycle type.
+DATA_PACK Data Plan ， One-Time Data Plan Usage within a speciﬁed period
+AUTO_ACTIVATEThe package activates automatically. Within the order's validity period, you may activate 
+and use it on any day. Once activated, the timer starts. The system will automatically 
+update the actual activation period based on the usage start date, eliminating the need to 
+specify a start time.
+ACTIVATE_ON_ORDERSpecify an activation package and set a future start date during order placement to 
+activate it. This is commonly used when users purchase in advance, with the plan 
+becoming active on the designated date and the validity period commencing then.
+usagePeriodActive usage period: The actual period during which a package product remains valid and 
+usable after activation.
+validityPeriodThe validity period of the product package  when not activated for use. Within this period, 
+you may scan the eSIM QR code on any day to activate and install it.
+periodTypeCycle Type
+24H： The activation period lasts for 24 hours from start to ﬁnish.
+Calendar day ： Activation start time to carrier card type speciﬁed time zone end time
+top upTop up， Add data allowance: When your original daily plan reaches its speed limit for the 
+day, you can purchase a top-up package to resume usage. This does not extend the 
+plan's validity period.A master order can correspond to multiple refueling package orders.
+(Note: Currently only supports C4 card type and daily package products)
+RenewalRenewal ， Refers to purchasing a new Package on the same eSIM card to extend usage. 
+This supports purchasing any product Package oﬀered by this carrier, ensuring customers 
+can continue using the eSIM card without needing to replace it.
+accountId Channel account ID required for API requests or logging into the TGT portal
+secret API key, the encryption information required for API requests
+3 / 88
+--- PAGE 4 ---
+qrCodeThe QR code information for the eSIM card proﬁle is used by channel customers to 
+generate their own eSIM card QR codes, and also serves to manually input the activation 
+code for installation on mobile devices.
+orderNo TGT System eSIM Card Order Number
+channelOrderNoThe channel system allows customization of order numbers based on speciﬁc usage 
+scenarios.
+Standard eSIM cardeSIM cards installed on mobile phones and other terminal devices by scanning the eSIM 
+card's QR code or manually entering the activation code.
+SMS Push eSIM CardThe local US eSIM card (US-T-Mobile) is activated via SMS push. The mobile device 
+receives an activation message to install the eSIM card,  If this type of eSIM card is not 
+required, you may disregard it.
+DAYPASSOrder Type: Daily Data Plan Place an order for designated activation
+（Daily Pack+Activate on Order ）
+DAILY Order Type: Daily Data Plan Auto-Activate（Daily Pack+Auto-Activate ）
+MULTIPLEMONTHSOrder Type: Data Plan Place an order for designated activation（Data Pack+Activate on 
+Order）
+MULTIPLEMONTHS_A
+UTOOrder Type: Data Plan Auto-Activate（Data Pack+Auto-Activate ）
+productCodeThe essential parameters for purchasing a product Package, and also the only non-
+modiﬁable parameters of the Product Package.
+iccidICCID stands for Integrated Circuit Card Identiﬁer, which is the unique identiﬁcation code 
+for each SIM card. It is a numeric code consisting of 19 or 20 digits.
+imsi IMSI is the number used by the network to uniquely identify a mobile subscriber's identity.
+msisdn msisdn is a mobile phone number.
+QPS Query Per Second ， API interface query frequency per second
+cardTypecardType ， The TGT system creates operators card identiﬁers based on diﬀerent 
+operators cards to distinguish between diﬀerent operators cards.
+4 / 88
+--- PAGE 5 ---
+2
+User
+Notice
+2.1
+Establish
+business
+cooperation
+Channel clients must establish a business partnership through TGT sales managers. API integration must be 
+initiated by the business sales manager to proceed with API testing.
+2.2
+Obtain
+the
+test
+account
+ID
+and
+secret
+TGT FAE engineers provide API documentation for Tuoge eSIM services, along with sandbox environment 
+channel test accounts, passwords, and secret keys.
+2.3
+The
+channel
+provides
+a
+callback
+address.
+Callback mechanisms are used for asynchronous processing. Callbacks are also known as webhook and 
+notiﬁcation。The channel must provide a callback address in advance, which will be conﬁgured by TGT's FAE 
+within the TGT system. The channel must implement idempotent design for this interface.
+"eventType"Fields are used to distinguish the categories of callback notiﬁcation events. When the channel system 
+receives a request notiﬁcation from TGT, the response format must be:{"code":"0000","msg":"success"} 
+2.4
+API
+test
+The TGT Cloud Platform supports user interface portal login (OSS Portal) and external API integration. 
+During API testing, users can log in to the portal to review API test results.
+Users can integrate with API interfaces as needed based on usage scenarios, with no restrictions on 
+client-side code formats (supporting Java/PHP/C/Python/JavaScript, etc.).
+2.5
+Production
+EnvironmentResponse Time Average time for interface response
+Sandbox environmentProducts conﬁgured for sandbox environments in channel system API testing are 
+intended solely for API interface testing and cannot be used for actual operations. They 
+do not involve order fees. Once API testing is successful, transition to the production 
+environment.
+Production 
+EnvironmentTGT Commercial Sales Oﬃcial Platform: Channel customers must ﬁrst create an account 
+in the production environment through business channels to use the platform. All products 
+in the production environment are genuine and available for purchase, and creating orders 
+will incur order fees.
+●
+●
+●
+●
+5 / 88
+--- PAGE 6 ---
+After the channel integration is completed in the test environment, the FAE engineer will verify it and request 
+the provision of production environment account IDs and secret encryption parameters.
+ Note: Creating orders in the production environment will incur order fees.
+2.6
+API
+QPS
+All API interfaces in this document have recommended QPS (Queries
+Per
+Second)request values. 
+Strictly adhere to the speciﬁed limits outlined in the API documentation.
+The QPS per endpoint is the constraint value for all channel API requests. Ensure your implementation 
+adheres to this limit to avoid rate limiting errors.
+2.7
+Important
+Notes
+All request and response data is encoded in UTF-8 format.
+Request Method: Uses the HTTP standard POST protocol.
+Set the Content-Type header in the request to application/json; charset=UTF-8.
+The request header must include a token.
+All times referenced in the interface are in UTC+0
+time zone.
+The time format in the interface is yyyy-mm-dd'T'HH:mm:ss'Z', for example: 2025-01-01T13:00:00Z
+2.8
+API
+List●
+●
+●
+●
+●
+●
+●
+●
+●
+API Request path Description
+4.1 Pagination query for all eSIM 
+product packages/eSIMApi/v2/products/listRetrieve information on all oﬃcially 
+available package products under the 
+channel account.
+4.2 Single eSIM Product Package 
+Inquiry/eSIMApi/v2/products/detailYou can use the productCode to look 
+up speciﬁc product package 
+information.
+4.3 Card Feature Inquiry /eSIMApi/v2/cardQuery card-related attribute information 
+based on card type
+4.4 Place Order （ Standard eSIM ） /eSIMApi/v2/order/create Create eSIM card order
+4.5 eSim Renewal （ Standard eSIM ） /eSIMApi/v2/order/renew Renew your eSIM Package
+4.6 Place Order （ SMS Push eSIM ） /eSIMApi/v2/order/create/push Create  eSIM card order for push mode
+6 / 88
+--- PAGE 7 ---
+3
+REST
+API
+TGT Global Cloud Communications Platform enables you to integrate core connectivity features directly into 
+your applications or systems.Use this API to empower your users to eﬀortlessly view, purchase, and manage 
+travel eSIMs, thereby enhancing your product oﬀerings.
+3.1
+API
+Modes
+To facilitate debugging and API integration, TGT partners can conduct testing within the TGT API sandbox 
+environment. Upon successful API testing, TGT will provide production environment credentials, including 4.7 Pagination Query for Order 
+Information/eSIMApi/v2/order/listRetrieve information about orders that 
+have been created
+4.8Filter and query order information /eSIMApi/v2/order/ordersRetrieve corresponding order 
+information based on speciﬁc query 
+conditions.
+4.9 Check Account balance /eSIMApi/v2/account/balanceCheck the balance of the channel 
+account
+4.10 Real-time Traﬃc Data Query /eSIMApi/v2/order/usageCheck real-time usage data for your 
+eSIM card
+4.11 eSIM Proﬁle Inquiry/eSIMApi/v2/iccid/proﬁleQuery eSIM card proﬁle installation and 
+activation information
+4.12 Termination Order Plan (Applies 
+to C4 Cards Only)/eSIMApi/v2/order/terminateDiscontinuation of Products Using 
+Speciﬁc Card Types (C4)
+4.13 Place top up order/eSIMApi/v2/order/topup/creat
+ePurchase a reﬁll pack for a speciﬁc 
+card type (C4)
+4.14 Paginated Query of Top-up Orders/eSIMApi/v2/order/topup/listCheck order details for purchased 
+Refueling packages
+4.15 Query Top-up Orders Associated 
+with the orderNo/eSIMApi/v2/order/topupsRetrieve Refueling package order 
+information associated with the main 
+order number
+7 / 88
+--- PAGE 8 ---
+username, password, and secret key.
+3.2
+Public
+Attribute
+Description
+Calling any API returns response parameters. Currently supported common parameters include:
+Note:
+For
+speciﬁc
+details
+regarding
+subcode
+and
+subMsg,
+refer
+to
+the
+code
+result
+set
+deﬁned
+in
+each
+API.
+For
+speciﬁc
+details
+regarding
+data,
+refer
+to
+the
+data
+result
+set
+deﬁned
+in
+each
+API.
+3.3
+Business
+Parameters
+In addition to mandatory public parameters, API calls must also include any business-level parameters 
+speciﬁc to the API. Refer to the API documentation for details on the business-level parameters for each API.
+3.3.1
+User
+Authentication
+Information
+To prevent malicious tampering by hackers during API calls, a token must be included with every API 
+request. The token is valid for 24 hours by default. Once expired, it must be refreshed; otherwise, the API 
+interface will return a 2003 error indicating the token has expired.Mode BaseUrl(HTTPS) Description
+Sandbox 
+environme
+nthttps://enterpriseapisandbox.tugegroup.com:8070/
+openapiProvided to customers for testing the 
+development API interface environment
+Production
+ 
+Environme
+nthttps://enterpriseapi.tugegroup.com:8070/openapiProduction environment, used for API integration 
+with the client's actual sales platform. Transition 
+to production is permitted only after successful 
+API testing in the sandbox environment.
+Parameter Name Type Description
+code String Error code returned when the request fails
+msg String Error message returned when the request fails
+subCode String Sub-error code returned upon request failure
+subMsg String Sub-error message returned upon request failure
+data Object Business Response Information
+8 / 88
+--- PAGE 9 ---
+3.3.2
+Authorize
+to
+obtain
+a
+new
+token
+Interface Description ：The interface completes identity veriﬁcation by passing in the accountId and secret, 
+returning a new access token for subsequent authorized access to the interface.
+BaseUrl：https://***/oauth/token
+Request
+Parameters
+Response
+Parameters
+3.3.3
+Refresh
+Token
+Interface Description ： Before the token expires, this interface allows you to directly extend the token's 
+validity period while keeping the token value unchanged. Users can continue accessing services with the 
+original token without needing to log in again, ensuring uninterrupted access.
+BaseUrl：https://***/oauth/refreshToken
+Request
+ParametersParameter NameType Required Example value Description
+accountId String true TGT_Channel Authorized Account
+secret String truejzXUuQVIlFwf3pe
+MAuthorization Key, provided by TGT 
+Administrator
+Parameter Name Type Example value Description
+code String 0000 0000=sucess
+msg String sucess Information about error codes
+data Object  Token information, returns TokenInfo object
+TokenInfo
+Object
+Field
+Description
+accessToken String756e816e8de648a9826e94
+5f7e872bcfAuthorized Account
+expires long 86400 Expiration time, in seconds
+9 / 88
+--- PAGE 10 ---
+Response
+Parameters
+3.3.4
+API
+Request
+Header
+Conﬁguration
+复制代码
+3.3.5
+API
+Request
+Example
+Taking the retrieval of eSIM plan information as an example, the speciﬁc steps are as follows:
+(1)
+Set parameter values
+Business Parameters:
+pageSize = 100
+page = 1Parameter NameType Required Example Value Description
+accountId String true TGT_Channel Authorized Account
+accessToken String true756e816e8de648a9826e9
+45f7e872bcfAuthorization token
+Parameter Name Type Example value Description
+code String 0000 0000=sucess
+msg String sucess Information about error codes
+data Object  Token information, returns TokenInfo 
+object
+TokenInfo
+Object
+Field
+Description
+accessToken String756e816e8de648a9826e945f7e8
+72bcfAuthorization token
+expires long 86400 Expiration time, in seconds
+//Settings header
+HttpHeaders headers = new HttpHeaders();
+headers.set(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8");
+headers.set("Authorization", "Bearer " + accessToken);
+●
+●
+10 / 88
+--- PAGE 11 ---
+lang = "en"
+(2)Assembling HTTP Requests
+Note:
+URL-encode
+all
+parameter
+names
+and
+values
+using
+UTF-8
+(parameter
+order
+is
+ﬂexible,
+but
+the
+signature
+parameter
+must
+be
+included), then initiate the request via POST.
+POST request:
+复制代码
+4
+eSIM
+API
+4.1
+Pagination
+query
+for
+all
+eSIM
+product
+packages
+Business
+Description
+Paginate queries for all product packages and pricing information under channel accounts. Queries can also 
+be ﬁltered by product package type. The interface returns only product packages available for oﬃcial sale. 
+This endpoint helps you synchronize eSIM product packages with your systems.
+Interface
+Description●
+  Timestamp t = new Timestamp(System.currentTimeMillis());
+  JSONObject params = new JSONObject();
+  params.put("pageSize", 10);
+  params.put("page ", 1);
+  params.put("lang ", "en");
+  
+  URI uri;
+  HttpEntity<JSONObject> request;
+  uri = new URIBuilder(BaseUrl+"/eSIMApi/v2/products/list").build();
+  
+  //Settings header & Parameters
+  HttpHeaders headers = new HttpHeaders();
+  headers.set(HttpHeaders.CONTENT_TYPE, "application/json;charset=UTF-8");
+  headers.set("Authorization", "Bearer " + token);
+  request = new HttpEntity<JSONObject>(params, headers);
+  
+  // Executed by the client (sending) a POST request
+  ResponseEntity<JSONObject> response = restTemplate.postForEntity(uri, 
+request, JSONObject.class);
+  if (null != response && null != response.getBody()) {
+      System.out.println(response.getBody());
+  } else {
+      System.out.println(response.getStatusCode());
+  }
+11 / 88
+--- PAGE 12 ---
+Request URL ： BaseUrl+/eSIMApi/v2/products/list
+QPS Limit ： 30
+Response Time ： 800ms
+4.1.1
+Request
+Parameters
+4.1.2
+Response
+ParametersParameter 
+NameType RequiredExample 
+ValueDescription
+pageNum int true 1 Page number
+pageSize int true 100 Page size (max 100)
+productType String false DAILY_PACKProduct type:
+DAILY_PACK (//Daily Data Plan)
+DATA_PACK （ //data plan ）
+cardType String false C4 Types of eSIM Cards from Diﬀerent Operators
+usagePeriod Integer false 4 Actual usable time after eSIM activation
+periodType Integer false 0Data reset time or end time
+0：24hours  
+1：Calendar day
+lang String false enLanguage (English: en, Japanese: ja-JP, Chinese: 
+zh-CN), default English
+Parameter NameType Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+12 / 88
+--- PAGE 13 ---
+data Object  Data encapsulation entity, returns an 
+EsimProductRes object
+EsimProductRes
+Object
+Field
+Description
+total Integer 100 Total data count
+list JSONArray Data encapsulation entity, returns  array of 
+ProductInfo objects
+ProductInfo
+Object
+Field
+Description
+productCode StringE-111-SC-AU-eO1-T-
+15D/60D-5GProduct ID: This ID is required when placing orders 
+via the API to purchase subscription packages.
+productName String【eSIM】 Europe 32 
+Countries 5G/15 Days (60-
+Day Validity) (eO1)Package Product Name
+Supports internationalized display. Based on the 
+value of the input parameter “lang” (language 
+parameter, e.g., zh-CN = Chinese, en = English), it 
+automatically matches and returns the product 
+name in the corresponding language.
+productType String DAILY_PACKProduct Type:
+DAILY_PACK ： Daily Data Plan （Daypass）
+DATA_PACK ： Data Plan （ Data package ）
+countryCodeListList<String
+>["US","CA"] National Code Set, ISO 3166 Country Codes
+mccListList<String
+>["310","311"] National MCC Collection
+netPriceDecimal(28
+,2)10.0 Settlement Price/Wholesale Net Price
+periodType Integer 0Cycle Type
+0：24hours   
+1：Calendar day
+usagePeriod Integer 0 Activation Period (the actual period during which 
+the product can be used)
+Based on the type of periodType,
+13 / 88
+--- PAGE 14 ---
+0：24hours 
+1：Calendar day
+validityPeriod Integer 60Order validity period: The period during which the 
+product package  but unused. Within this period, 
+you may scan the eSIM QR code on any day to 
+activate and install the plan.
+dataLimited String NTraﬃc Limit Indicator (Y, N): Y indicates limited 
+traﬃc, N indicates unlimited traﬃc. When set to Y, 
+the total traﬃc volume must be retrieved via the 
+dataTotal ﬁeld.
+dataTotal Integer 1 Total Data Volume
+dataUnit String GB Data Units (GB, MB, KB)
+lastModiﬁedTimeString 2025-08-27T09:00:00Z Last Modiﬁed Date
+activeType String AUTO_ACTIVATEActivation Method:
+AUTO_ACTIVATE ： Auto-Activate
+ACTIVATE_ON_ORDER ： Speciﬁed Activation
+ruleDesc String1GB high-speed data, valid 
+until used upPackage Rules Description
+The value of the input parameter “lang” (language 
+parameter, e.g., zh-CN = Chinese, en = English) will 
+be used.
+operatorDesc String ATT Esim Carrier  Description
+apnDesc String CMHKAPN description. If this ﬁeld is not empty, it must be 
+returned.
+highSpeed String 500M High-speed value
+limitSpeed String 128Kbps Speed limit value
+showGradeCont
+entString N(K)10240(M)2000(K) Speed rating
+cardType String C2 Card Type
+14 / 88
+--- PAGE 15 ---
+Request Example 复制代码
+Response Example 复制代码topupInfoList JsonArray  Top-up Package Information List, an array of 
+TopupInfo objects
+TopupInfo
+Object
+Field
+Description
+topupId String 1925504013246783489 Refueling Package ID
+topupName String 500MB add-on Refueling Package Name
+topupSize String 500 Data value
+topupUnit String MB Data Units (GB, MB)
+topupPriceDecimal(28
+,2)1.00 Top-up Package Price
+{
+  "pageSize":100,
+  "lang":"en",
+  "pageNum":1
+    }
+{
+ "code":"0000",
+ "msg":"success",
+ "data":
+     {"total":2,
+    "list":[{
+        "productCode":"A-002-ES-AU-T-30D/180D-3GB(A)",
+        "productName":"【ESIM】 Israel 3GB/30 Days (180-Day Validity) (M1) (A)",
+        "productType":"DATA_PACK",
+        "countryCodeList":["IL"],
+        "mccList":["425"],
+        "netPrice":1.10,
+        "periodType":0,
+        "usagePeriod":30,
+        "validityPeriod":180,
+        "dataLimited":"Y","dataTotal":3,
+        "dataUnit":"GB",
+15 / 88
+--- PAGE 16 ---
+4.2
+Single
+eSIM
+Product
+package
+Inquiry
+Business
+Description
+Query eSIM package and pricing information under the channel account based on “productCode”. The API 
+only returns currently available data package. Currently, eSIM services only include daily packages, data 
+packages, and their corresponding top-up packages.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/products/detail
+QPS Limit ： 50
+Response Time ： 500ms        "lastModifiedTime":"2025-11-06T10:54:10Z",
+        "activeType":"AUTO_ACTIVATE",
+        "operatorDesc":"Annatel",
+        "apnDesc":"M1-annatel",
+        "cardType":"M1"}，
+        {"productCode":"A-136-ES-AU-C4-1D/60D-1GB",
+         "productName":"【Esim】 Asia 5 Countries 1 Day (1GB High-Speed/Day)(C4)
+(AU)",
+        "productType":"DAILY_PACK",
+        "countryCodeList":["JP","CN","SG","KR","MY"],
+        "mccList":["440","441","460","525","450","502"],
+        "netPrice":2.00,
+        "periodType":0,
+        "usagePeriod":1,
+        "validityPeriod":60,
+        "dataLimited":"N",
+        "lastModifiedTime":"2025-11-06T11:20:57Z",
+        "activeType":"AUTO_ACTIVATE",
+        "ruleDesc":"1GB high-speed data per day, down to 384kbps",
+        "operatorDesc":"NTT Docomo/China Mobile/Singtel/StarHub/M1",
+        "apnDesc":"C4",
+        "highSpeed":"1GB",
+        "showGradeContent":"1GB/384kbps",
+        "cardType":"C4",
+        "topupInfoList":[{
+                "topupId":"22",
+                "topupName":"1GB add-on",
+                "topupSize":"1",
+                "topupUnit":"GB",
+                "topupPrice":1.00}]
+}}
+16 / 88
+--- PAGE 17 ---
+4.2.1
+Request
+Parameters
+4.2.2
+Response
+ParametersParameter 
+NameTypeRequir
+edExample Value Description
+productCode String trueA-002-ES-AU-C4-D-
+2D/4D-UnlimitedProduct Code
+lang String false enLanguage (English: en, Japanese: ja-JP, 
+Chinese: zh-CN), default English
+Parameter 
+NameType Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns  ProductInfo 
+object
+ProductInfo
+Object
+Field
+Description
+productCode StringE-111-SC-AU-eO1-T-
+15D/60D-5GProduct ID: This ID is required when placing 
+orders via the API to purchase subscription 
+packages.
+productName String【eSIM】 Europe 32 
+Countries 5G/15 Days (60-
+Day Validity) (eO1)Package Product Name
+Supports internationalized display. Based on the 
+value of the input parameter “lang” (language 
+parameter, e.g., zh-CN = Chinese, en = English), it 
+automatically matches and returns the product 
+name in the corresponding language.
+17 / 88
+--- PAGE 18 ---
+productType String DAILY_PACK Product Type:
+DAILY_PACK ： Daily Data Plan
+DATA_PACK ： Data Plan
+countryCodeLi
+stList<String> ["US","CA"] National Code Set, ISO 3166 Country Codes
+mccList List<String> ["310","311"] National MCC Collection
+netPriceDecimal(28,2
+)10.0 Settlement Price/Wholesale Net Price
+periodType Integer 0Cycle Type
+0：24hours 
+1：Calendar day
+usagePeriod Integer 4Activation Period (the actual period during which 
+the product can be used)
+Based on the type of periodType,
+0：24hours 
+1：Calendar day
+validityPeriod Integer 60Order validity period: The period during which the 
+product package  but unused. Within this period, 
+you may scan the eSIM QR code on any day to 
+activate and install the plan.
+dataLimited String NTraﬃc Limit Indicator (Y, N): Y indicates limited 
+traﬃc, N indicates unlimited traﬃc. When set to Y, 
+the total traﬃc volume must be retrieved via the 
+dataTotal ﬁeld.
+dataTotal Integer 1 Total Data Volume
+dataUnit String GB Data Units (GB, MB, KB)
+lastModiﬁedTi
+meString 2025-08-27T09:00:00Z Last Modiﬁed Date
+18 / 88
+--- PAGE 19 ---
+Error
+Code
+ExplanationactiveType String AUTO_ACTIVATE Activation Method:
+AUTO_ACTIVATE ： Auto-Activate
+ACTIVATE_ON_ORDER ： Speciﬁed Activation
+ruleDesc String1GB high-speed data, valid 
+until used up Package Rules Description
+The value of the input parameter “lang” (language 
+parameter, e.g., zh-CN = Chinese, en = English) 
+will be used.
+operatorDesc String ATT Esim Carrier  Description
+apnDesc String CMHKAPN description. If this ﬁeld is not empty, it must 
+be returned.
+highSpeed String 500M High-speed value
+limitSpeed String 128Kbps Speed limit value
+showGradeCo
+ntentString N(K)10240(M)2000(K) Speed rating
+cardType String C2 Card Type
+topupInfoList JsonArray  Top-up Package Information List, an array of 
+TopupInfo objects
+TopupInfo
+Object
+Field
+Description
+topupId String 1925504013246783489 Refueling Package ID
+topupName String 500MB add-on Refueling Package Name
+topupSize String 500 Data value
+topupUnit String MB Data Units (GB, MB)
+topupPriceDecimal(28,2
+)1.00 Top-up Package Price
+19 / 88
+--- PAGE 20 ---
+请求示例 复制代码
+Response Example 复制代码
+4.3
+Card
+Feature
+Inquiry
+Business
+DescriptionsubCode （Detailed 
+Return Code）subMsg （Return Code 
+Description）Solution
+4001 The product does not exist. The product does not exist
+4002 The product is not on sale. The product has been discontinued
+4000 Other Anomalies Contact the TGT administrator
+{
+  "productCode":"A-002-ES-AU-T-30D/180D-3GB(A)",
+  "lang":"en"
+}
+{
+  "code":"0000",
+  "msg":"success",
+    "data":{
+         "productCode":"A-002-ES-AU-T-30D/180D-3GB(A)",
+          "productName":"【ESIM】 Israel 3GB/30 Days (180-Day Validity) (M1) 
+(A)",
+          "productType":"DATA_PACK","countryCodeList":["IL"],
+          "mccList":["425"],
+          "netPrice":1.10,
+          "periodType":0,
+          "usagePeriod":30,
+          "validityPeriod":180,
+          "dataLimited":"Y",
+          "dataTotal":3,
+          "dataUnit":"GB",
+          "lastModifiedTime":"2025-11-06T10:54:10Z",
+          "activeType":"AUTO_ACTIVATE",
+          "operatorDesc":"Annatel",
+          "apnDesc":"M1-annatel",
+          "cardType":"M1"}}
+20 / 88
+--- PAGE 21 ---
+Query the card's speciﬁc feature  based on its type to determine whether it supports renewal, real-time data 
+queries, and the maximum number of active orders simultaneously.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/card
+QPS Limit ： 50
+Response Time ： 200ms
+4.3.1
+Request
+Parameters
+4.3.2
+Response
+ParametersParameter 
+NameType Required Example Value Description
+cardType String true C4 Card Type
+Parameter 
+NameTypeExample 
+ValueDescription
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns  ProductInfo object
+CardTypeInfo
+Object
+Field
+Description
+cardType String C2 Card Type
+timeZone String UTC+8 Time Zone (Natural Day Time Zone)
+renewFlag Boolean true Renewal Indicator: 
+true:Support ，
+false:Not supported
+21 / 88
+--- PAGE 22 ---
+Error
+Code
+Explanation
+Request Example 复制代码
+响应示例 复制代码
+4.4
+Place
+Order （ Standard
+eSIM ）
+Business
+Description
+This interface enables channels to create individual orders for standard eSIMs. Special attention is 
+required:TGT System employs an asynchronous callback model for order result notiﬁcations via this 
+interface, rather than synchronous returns. The speciﬁc notiﬁcation logic is detailed in the following 
+description.
+Core Interaction Logic （ Asynchronous Notiﬁcation Mechanism ）supportGetU
+sageBoolean true Does support real-time data queries
+true:Support ，
+false:Not supported
+renewCount Integer 1 Maximum number of active orders at any given time
+subCode （Detailed 
+Return Code）subMsg （Return Code Description） Solution
+6003 The card type does not exist.The card type does not exist. Please verify the 
+correct card type.
+{"cardType":"C4"}
+{
+  "code":"0000",
+  "msg":"success",
+    "data":{
+      "cardType":"C4",
+      "renewFlag":true,
+      "supportGetUsage":false,
+      "renewCount":99}}
+22 / 88
+--- PAGE 23 ---
+Callback
+Address
+Conﬁguration:The channel must provide the callback address for receiving actual 
+order results in advance. This address is pre-conﬁgured into the system by a TGT specialist. After an 
+order is placed, the TGT system will send the actual order details to the channel via the callback 
+address. The channel then processes the business logic based on the received notiﬁcation.
+Key
+Recommendations
+(Preventing
+Repeated
+Callbacks):To prevent duplicate receipt of the same 
+card activation result notiﬁcation within the channel system, it is recommended that the callback 
+interfacecallbackunder development ， Add idempotent processing logic based on order numbers 
+(e.g., determine whether the notiﬁcation has been processed by checking the order number; if already 
+processed, return success directly without re-executing the business process).
+Exception Handling Recommendations (Retry Mechanism)
+To enhance the stability of API calls, it is recommended that the channel system implement a request retry 
+mechanism with the following rules:
+Unique
+Identiﬁer
+Conﬁguration:Each time an order request is initiated, the following must be included 
+in the request parameters: idempotencyKey ﬁeld(Customized by the channel (must be a globally 
+unique string (UUID v4 is the preferred choice));
+Retry
+Trigger
+Scenarios:When exceptions occur such as request interruptions, response timeouts, or 
+unknown system errors, and the channel has not conﬁrmed receipt of a valid response from the TGT 
+system, a retry may be triggered.
+Key
+Rules
+for
+Retries:When initiating a retry request again, you must pass in the exact same
+idempote
+ncyKeyas the previous request to prevent multiple invalid orders from being created due to duplicate 
+requests.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/create
+Response Time ： 500ms
+4.4.1
+Request
+Parameters●
+Basic
+Response
+and
+Asynchronous
+Notiﬁcation
+Triggering: ●
+After the channel initiates an order request, it will ﬁrst receive an order number returned by the 
+TGT system (serving as the unique identiﬁer for the order);
+Once the eSIM card order process is completed, the TGT system will automatically invoke the pre-
+conﬁgured callback address. It will push the complete eSIM card information via asynchronous 
+notiﬁcations (refer to the “eSIM Activation Callback Interface Documentation” for speciﬁc 
+notiﬁcation parameters).○
+○
+●
+●
+●
+●
+Parameter 
+NameType Required Example Value Description
+23 / 88
+--- PAGE 24 ---
+4.4.2
+Response
+ParametersproductCode String trueE-111-SC-AU-eO1-T-
+15D/60D-5GProduct Code
+startDate String false 2025-10-06Order Start Date
+(1) If the product is automatically activated
+（activeType=AUTO_ACTIVATE）Package ，
+the start time ﬁeld does not require a value to 
+be passed; it defaults to the current order 
+time. Passing a value will not take eﬀect.
+(2) If the product is activated on a speciﬁed 
+date（activeType=ACTIVATE-ON-
+ORDER），If the current ﬁeld is not passed, 
+it represents the current order time. If a time 
+is passed, it must be in GMT+0 format. This 
+time ﬁeld must not be earlier than the current 
+GMT+0 time.
+email String false 123@email.comEmail， If you need to send a QR code to the 
+cardholder, please enter their email 
+address(es). Multiple email addresses should 
+be separated by commas, with a maximum 
+length of 200 characters.
+channelOrder
+NoString ture 12345Channel Order Number (Customizable order 
+number for channel customers) (Maximum 
+length: 100 characters)
+idempotency
+KeyString ture550e8400-e29b-41d4-
+a716-446655440000)The maximum length of the request ID must 
+not exceed 64 characters. In exceptional 
+cases, such as request interruptions or 
+timeouts, if the channel does not receive a 
+response from the TGT system, please pass 
+the previous idempotencyKey when retrying.
+It must be a globally unique string (UUID v4 is 
+the preferred choice).
+24 / 88
+--- PAGE 25 ---
+Error
+Code
+Explanation
+请求示例 复制代码Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns an 
+OrderInfo object
+OrderInfo
+Object
+Field
+Description
+orderNo StringSE2025051317092
+9410001Order Number
+subCode （Detailed 
+Return Code）subMsg （Return Code 
+Description）Solution
+5013 Channel currency does not exist!  Channel currency does not exist. Contact TGT 
+business personnel to conﬁgure channel 
+currency.
+4001 The product does not exist. Product does not exist. Create new product and 
+list it.
+5000 The order is still being processed. Order is being processed. Reuse idempotent 
+value for placing orders during the order number 
+generation phase.
+{
+   "productCode":"A-002-ES-AU-T-30D/180D-3GB(A)",
+    "idempotencyKey":"12356",
+    "channelOrderNo":"1234578"
+}
+25 / 88
+--- PAGE 26 ---
+Response Example 复制代码
+4.5
+eSim
+Renewal（Standard
+eSIM ）
+Business
+Description
+Renew data plans for eSIM cards to repurchase new data packages when the eSIM card runs low on 
+data.Not all cards support renewal; this must be conﬁrmed with the business department beforehand.The 
+interface for “Query card properties by card type” can be used to determine renewal eligibility via the 
+renewFlag ﬁeld. (Commercially provided quotation sheets will also indicate whether renewals are supported.)
+Core Interaction Logic （ Asynchronous Notiﬁcation Mechanism ）
+Callback
+Address
+Conﬁguration:The channel must provide the callback address for receiving actual 
+order results in advance. This address is pre-conﬁgured into the system by a TGT specialist. After an 
+order is placed, the TGT system will send the actual order details to the channel via the callback 
+address. The channel then processes the business logic based on the received notiﬁcation.
+Key
+Recommendations
+(Preventing
+Repeated
+Callbacks):To prevent duplicate receipt of the same 
+card activation result notiﬁcation within the channel system, it is recommended that the callback 
+interfacecallbackunder development ， Add idempotent processing logic based on order numbers 
+(e.g., determine whether the notiﬁcation has been processed by checking the order number; if already 
+processed, return success directly without re-executing the business process).
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/renew
+Response Time ： 500ms
+4.5.1
+Request
+Parameters{"code":"0000",
+  "msg":"success",
+  "data":{
+  "orderNo":"SE20251121190119280001"}
+}
+●
+Basic
+Response
+and
+Asynchronous
+Notiﬁcation
+Triggering: ●
+After the channel initiates an order request, it will ﬁrst receive an order number returned by the 
+TGT system (serving as the unique identiﬁer for the order);
+Once the eSIM card order process is completed, the TGT system will automatically invoke the pre-
+conﬁgured callback address. It will push the complete eSIM card information via asynchronous 
+notiﬁcations (refer to the “eSIM Activation Callback Interface Documentation” for speciﬁc 
+notiﬁcation parameters).○
+○
+●
+26 / 88
+--- PAGE 27 ---
+Parameter 
+NameType Required Example Value Description
+productCode String trueA-002-ES-AU-
+C4-D-2D/4D-
+UnlimitedProduct Code
+startDate String false 2025-10-06Order Start Date
+(1) If the product is automatically activated
+（activeType=AUTO_ACTIVATE）Package ， the 
+start time ﬁeld does not require a value to be 
+passed; it defaults to the current order time. Passing 
+a value will not take eﬀect.
+(2) If the product is activated on a speciﬁed date
+（activeType=ACTIVATE-ON-ORDER），If the 
+current ﬁeld is not passed, it represents the current 
+order time. If a time is passed, it must be in GMT+0 
+format. This time ﬁeld must not be earlier than the 
+current GMT+0 time.
+email String false 123@email.comEmail， If you need to send a QR code to the 
+cardholder, please enter their email address(es). 
+Multiple email addresses should be separated by 
+commas, with a maximum length of 200 characters.
+channelOrderN
+oString true 12345Channel Order Number (Customizable order number 
+for channel customers) (Maximum length: 100 
+characters)
+iccid String true 12345 ICCID
+27 / 88
+--- PAGE 28 ---
+4.5.2
+Response
+Parameters
+Error
+Code
+ExplanationidempotencyKe
+yString true550e8400-e29b-
+41d4-a716-
+446655440000The maximum length of the request ID must not 
+exceed 64 characters. In exceptional cases, such as 
+request interruptions or timeouts, if the channel 
+does not receive a response from the TGT system, 
+please pass the previous idempotencyKey when 
+retrying.
+It must be a globally unique string (UUID v4 is the 
+preferred choice).
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns  
+ProductInfo object
+OrderInfo
+Object
+Field
+Description
+orderNo StringSE2025051317092941
+0001orderNo
+subCode （Detailed 
+Return Code）subMsg （Return Code Description） Solution
+5013Channel currency does not exist ！
+ Channel currency does not exist
+The channel must be conﬁgured 
+with a currency that meets system 
+requirements.
+28 / 88
+--- PAGE 29 ---
+4001 The product does not exist.No product information found. 
+Please try a diﬀerent product code.
+4003ESIM only supports monthly user package (month), 
+daily package (day), and multiplemonths products. Supports only Daily Packages, 
+Monthly Packages, and Data 
+Packages.
+4004ESIM products only support ESIM device model 
+group productsProduct model grouping is not 
+supported.
+4005ESIM product conﬁguration information is illegal 
+(supplier is empty)!The supplier value for the eSIM 
+product is empty.（suppliers ）
+4006ESIM product conﬁguration information is illegal 
+(carrier is empty)!The card type value for the eSIM 
+product is empty.（carrier ）
+4007The product belongs to the incorrect platform
+ Default:CLOUDSIMA
+(The product's platform is incorrect)
+4008The channels of this business model do not support 
+calling this interfaceThe channels for this business 
+model do not support calling this 
+interface.
+Recommendation: Change the 
+business model
+4009 This channel is not conﬁgured for the product price Conﬁgure Product Pricing
+4010Channel account balance is insuﬃcient, please top 
+upInsuﬃcient funds
+4011 Package settlement price is illegal!The package settlement price is 
+illegal! Modify  settlementprice
+4012The order start date cannot be less than the current 
+time订单开始时间不能早于当前时间
+4013 product is unvisible,can not to add order channelVisible Change to 1
+5040The latest renewal time has passed, the renewal is 
+not supported!The renewal deadline has passed. 
+Renewal is no longer supported!
+29 / 88
+--- PAGE 30 ---
+Request Example 复制代码
+响应示例 复制代码5041The number of renewals has exceeded the limit, do 
+not support renewal!Cancel individual orders
+5042 This type of card renewal is not supported!The card type has renewal rules 
+conﬁgured but does not support 
+renewal. A diﬀerent card type is 
+required.
+5043Hello, the renewal package you have selected does 
+not match your current card, please select a 
+matching package to renew your subscription. For 
+further assistance, please contact our Customer 
+Service!Changing packages: The selected 
+renewal plan does not match your 
+current card. Please choose a 
+compatible plan for renewal.
+5047 Carrier cards are not conﬁgured for renewal!The TGT system is not conﬁgured 
+for renewal.
+5048 Order status not satisﬁed, no continuing fee ！Order status not satisﬁed, no 
+continuing fee ！
+5049The device does not belong to the channel. Select a 
+new oneReplace the card number belonging 
+to the channel
+{
+  "iccid":"89852342714026530002",
+  "productCode":"E-01-F2-ES-AU-T-7D/60D-1GB(A)",
+  "idempotencyKey":"145632",
+  "channelOrderNo":"88963589"
+}
+{
+  "code":"0000",
+  "msg":"success",
+  "data":{
+      "orderNo":"SE2025112119173234415"}
+}
+30 / 88
+--- PAGE 31 ---
+4.6
+Place
+Order （ SMS
+Push
+eSIM ）
+Business
+Description
+This interface enables channels to create individual orders using the US-TMOBILE push model for local U.S. 
+cards.Special Note: The TGT system uses an asynchronous callback model for order result notiﬁcations via 
+this interface, rather than synchronous returns. See the following description for speciﬁc notiﬁcation logic.
+Core Interaction Logic （ Asynchronous Notiﬁcation Mechanism ）
+Callback
+Address
+Conﬁguration:The channel must provide the callback address for receiving actual 
+order results in advance. This address is pre-conﬁgured into the system by a TGT specialist. After an 
+order is placed, the TGT system will send the actual order details to the channel via the callback 
+address. The channel then processes the business logic based on the received notiﬁcation.
+Key
+Recommendations
+(Preventing
+Repeated
+Callbacks):To prevent duplicate receipt of the same 
+card activation result notiﬁcation within the channel system, it is recommended that the callback 
+interfacecallbackunder development ， Add idempotent processing logic based on order numbers 
+(e.g., determine whether the notiﬁcation has been processed by checking the order number; if already 
+processed, return success directly without re-executing the business process).
+Ordering
+Rules
+Scope
+of
+Application:This section applies only to eSIM products using the “push mode,” such as the 
+“US-TMOBILE” card (whether integration with this mode is required must ﬁrst be conﬁrmed with Tuoge 
+Business; if integration is not needed, this section may be skipped).
+Exception Handling Recommendations (Retry Mechanism)
+To enhance the stability of API calls, it is recommended that the channel system implement a request retry 
+mechanism with the following rules:●
+Basic
+Response
+and
+Asynchronous
+Notiﬁcation
+Triggering: ●
+After the channel initiates an order request, it will ﬁrst receive an order number returned by the 
+TGT system (serving as the unique identiﬁer for the order);
+Once the eSIM card order process is completed, the TGT system will automatically invoke the pre-
+conﬁgured callback address. It will push the complete eSIM card information via asynchronous 
+notiﬁcations (refer to the “eSIM Activation Callback Interface Documentation” for speciﬁc 
+notiﬁcation parameters).○
+○
+●
+●
+Special Requirements: ●
+1.Activation
+Time
+Conﬁguration:The request must specify the activation start date for the eSIM 
+card, which must be set to “current UTC time + 6 days” (e.g., if the current UTC time is 2024-05-
+01, the activation start date must be set to 2024-05-07).
+31 / 88
+--- PAGE 32 ---
+Unique
+Identiﬁer
+Conﬁguration:Each time an order request is initiated, the following must be included 
+in the request parameters: idempotencyKey ﬁeld(Customized by the channel (must be a globally 
+unique string (UUID v4 is the preferred choice));
+Retry
+Trigger
+Scenarios:When exceptions occur such as request interruptions, response timeouts, or 
+unknown system errors, and the channel has not conﬁrmed receipt of a valid response from the TGT 
+system, a retry may be triggered.
+Key
+Rules
+for
+Retries:When initiating a retry request again, you must pass in the exact same
+idempote
+ncyKeyas the previous request to prevent multiple invalid orders from being created due to duplicate 
+requests.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/create/push
+Response Time ： 500ms
+4.6.1
+Request
+Parameters●
+●
+●
+Parameter Name Type RequiredExample Value Description
+productCode String trueE-111-SC-AU-eO1-T-
+15D/60D-5GProduct Code
+startDate String true 2025-10-06Order Start Date
+Currently, this card type only supports 
+productCode with speciﬁed activation 
+(interface 3.1 returns 
+activeType=ACTIVE_ON_ORDER) and 
+requires the speciﬁed activation start date 
+to be the current date plus 6 days. This is 
+a mandatory ﬁeld.
+channelOrderNo String true29b-41d4-a716-
+446655440001Channel Order Number (Customizable 
+order number for channel customers) 
+(Maximum length: 100 characters)
+eid String true2012345678900000000
+0111111111118The unique identiﬁer for an eSIM, 
+composed of a 32-digit number.
+imei2 String true 867120029852612Composed of 15 to 17 digits or (digits + 
+letters)
+32 / 88
+--- PAGE 33 ---
+4.6.2
+Response
+Parameters
+Error
+Code
+ExplanationidempotencyKey String true550e8400-e29b-41d4-
+a716-446655440000The maximum length of the request ID 
+must not exceed 64 characters. In 
+exceptional cases, such as request 
+interruptions or timeouts, if the channel 
+does not receive a response from the TGT 
+system, please pass the previous 
+idempotencyKey when retrying.
+It must be a globally unique string (UUID 
+v4 is the preferred choice).
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns  
+ProductInfo object
+OrderInfo
+Object
+Field
+Description
+orderNo StringSE202505131709294100
+01orderNo
+subCode （Detailed 
+Return Code）subMsg （Return Code Description） Solution
+5006 The IMEI2 must be 15-17 digits long!Enter a ﬁeld that meets the format 
+requirements; IMEI2 length does not 
+meet requirements (15-17 digits).
+33 / 88
+--- PAGE 34 ---
+Request Example 复制代码
+Response Example 复制代码5007The speciﬁed start date of the order cannot be 
+less than the speciﬁed time of the package (the 
+time two days after zero hour in the U.S. time 
+zone)Time must meet the time deﬁned by 
+the requirements.
+5012EID must be 32 characters, Numbers 
+combinations!Time must meet the time deﬁned by 
+the requirements.
+5013 Channel currency does not exist!Currency query error. Contact 
+customer service.
+4001 The product does not exist. Add Product
+{
+  "productCode": "E-111-SC-US-TMOBILE-30D/60D-10G",  // Required, Push Mode 
+Exclusive Product Code
+  "startDate": "2025-10-06",                       // Required, Activation 
+Start Date 
+                                                      (Current UTC + 6 days, 
+only supported by ACTIVATE_ON_ORDER)
+  "channelOrderNo": "CHAN_PUSH20251006001",      // Required: Channel Custom 
+Order Number (Maximum 100 characters)
+  "eid": "20123456789000000000111111111118",         // Required, eSIM Unique 
+Identifier (32-digit number)
+  "imei2": "867120029852612",                       // Required: Device IMEI2 
+(15-17 digit/letter combination)
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440001"  // Required, 
+globally unique request ID
+}
+{
+  "code": "0000",
+  "msg": "success",
+  "subCode": "",
+  "subMsg": "",
+  "data": {
+    "orderNo": "PU20251006112233840003" }          // Push Mode Order Number
+}
+34 / 88
+--- PAGE 35 ---
+4.7
+Pagination
+Query
+for
+Order
+Information
+Business
+Description
+Query information for placed orders based on pagination criteria, including eSIM card QR codes, order 
+validity periods, order statuses, order numbers, ICCIDs, and other details.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/list
+QPS Limit ： 80
+Response Time ： 200ms
+4.7.1
+Request
+Parameters
+Parameter 
+NameType Required Example Value Description
+pageNum int true 1 Page Number Lookup
+pageSize int true 100 Items per page, maximum 100
+orderStatus String false NOTACTIVE Order Status (NOTACTIVE: Not Activated, 
+ACTIVATED: Activated, INUSE: In Use, USED: 
+Used Up, EXPIRED: Expired, ABANDON: 
+Abandoned, TERMINATION: Terminated)
+orderTypeList List<String> false DAYPASS Order Type Collection（DAYPASS 、 DAILY 、
+MULTIPLEMONTHS_AUTO 、
+MULTIPLEMONTHS）
+createdStartTi
+meString false 2025-08-
+01T00:00:00ZStart date (yyyy-MM-dd format), queries records 
+created after the start date.
+If a value is provided, the end date is also 
+required.
+createdEndTi
+meString false 2025-08-
+01T00:00:00ZEnd time (yyyy-MM-dd format), query records 
+where the creation time is less than or equal to 
+the end time. If a value is passed, the start time is 
+also required.
+35 / 88
+--- PAGE 36 ---
+4.7.2
+Response
+Parameterslang String false en Language (English: en, Japanese: ja-JP, Chinese: 
+zh-CN), default English
+Parameter Name Type Example Value Description
+code String String 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns  ProductInfo 
+object
+OrderRes
+Object
+Field
+Description
+total Integer 100 Data total 
+list JSONArray  Data encapsulation entity, returns an array of 
+OrderInfo objects
+OrderInfo
+Object
+Field
+Description
+orderNo String TG202509251310149158 orderNo
+productCode String D2309141025035378683 Product code
+productName String np-cmlink-C3(AU ⽇⽤包
+4GB/5天 )Product Name
+Supports internationalized display. Based on the 
+value of the input parameter “lang” (language 
+parameter, e.g., zh-CN = Chinese, en = English), 
+it automatically matches and returns the product 
+name in the corresponding language.
+activatedStartTimeString 2025-08-01T00:00:00Z Activation Start use Date
+activatedEndTime String 2025-08-05T23:59:59Z Activation Expiration use Date
+36 / 88
+--- PAGE 37 ---
+latestActivationTi
+meString 2025-09-24T21:10:36Z Latest activation time
+renewExpirationTi
+meString 2025-09-24T21:10:36Z Latest renewal date
+createdTime String 2025-09-24T21:10:36Z Order Creation Time
+orderStatus String ABANDON Order Status: NOTACTIVE: Not activated 
+ACTIVATED: Activated INUSE: In use USED: 
+Used up EXPIRED: Expired ABANDON: 
+Abandoned TERMINATION: Terminated
+proﬁleStatus String unvaliable eSIM Card Status
+“Inactive”,“unavailable”
+‘Activated’,“activated”
+“Deleted”,“deleted”
+‘Downloading’,“downloaded” (activation 
+unsuccessful)
+"Disabled","disabled"
+"Not downloaded","nodownload"
+"Download failed","downloadfail"
+"Generation failed","failed"
+"Not generated","ungenerated"
+qrCode String LPA:1$tgt.toprsp.com$B21
+B96B156C040B8A422334
+55FRDSADVeSIM QR code information, in the format 
+ofLPA:1$ RSP
+Server
+Address  $ Activation
+Code
+channelOrderNo String 2342342342 Channel order number, a customizable order 
+number for channel customers
+orderType String DAYPASS Order Type (DAYPASS: Speciﬁed Activation Daily 
+Package, DAILY: Auto-Activation Daily Package, 
+MULTIPLEMONTHS_AUTO: Auto-Activation Data 
+Package, MULTIPLEMONTHS: Speciﬁed 
+Activation Data Package)
+cardInfo Object  Return the CardInfo object
+37 / 88
+--- PAGE 38 ---
+Error
+Code
+Explanation
+Request Example 复制代码
+Response Example 复制代码CardInfo
+Object
+Field
+Description
+iccid String 95514350628283049898 ICCID
+imsi String 454120051751432 IMSI
+msisdn String 1670173 Mobile phone number
+rentalContractNu
+mberString 8180508970 Lease Code
+subCode （Detailed 
+Return Code）subMsg （Return Code Description） Solution
+5037Both createdStartTime and createdEndTime are 
+either empty or not empty at the same timecreatedStartTime and 
+createdEndTime Either both are null, 
+or both are not null.
+{
+  "pageSize":5,
+  "pageNum":1
+}
+ {
+   "code":"0000",
+     "msg":"success",
+     "data":{"total":2,
+             "list":[{"orderNo":"SE2025112119173234415",
+             "productCode":"E-01-F2-ES-AU-T-7D/60D-1GB(A)",
+             "productName":"【ESIM】 UK 1GB/7 days (valid for 60 days) (F2)",
+              "activatedStartTime":"2025-11-21T11:17:33Z",
+             "activatedEndTime":"2025-11-28T11:17:32Z",
+             "latestActivationTime":"2026-01-20T11:17:32Z",
+             "renewExpirationTime":"2026-01-27T11:17:32Z",
+             "createdTime":"2025-11-21T11:17:33Z",
+             "orderStatus":"NOTACTIVE",
+             "profileStatus":"activated",
+38 / 88
+--- PAGE 39 ---
+4.8
+Filter
+and
+query
+order
+information
+Business
+Description
+Retrieve order details by order number, channel order, or ICCID. At least one of these three criteria must be 
+provided. Information includes the eSIM card's QR code, order validity period, order status, order number, 
+ICCID, and other relevant details.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/orders
+QPS Limit ： 50
+Response Time ： 200ms
+4.8.1
+Request
+Parameters             
+"qrCode":"LPA:1$esiminfra.toprsp.com$98F57097621E451F8649135AC0A03011",
+             "channelOrderNo":"88963589",
+             "orderType":"MULTIPLEMONTHS_AUTO",
+             "cardInfo":{"iccid":"89852342714026530002",
+             "imsi":"454179386020002",
+               "msisdn":"852136416970002"}},
+             {"orderNo":"TG202511131717024170",
+               "productCode":"E-184-ES-AU-eO1-D-10D/60D-10GB",
+               "productName":"【Esim】 Europe (11 Countries) 10 Days (10GB High-
+Speed Data/Day) (eO1) (AU)",
+               "activatedStartTime":"2025-11-13T09:17:22Z",
+               "activatedEndTime":"2025-11-23T09:17:21Z",
+               "latestActivationTime":"2026-01-12T09:17:21Z",
+               "renewExpirationTime":"2026-01-22T09:17:21Z",
+               "createdTime":"2025-11-13T09:17:22Z",
+               "orderStatus":"NOTACTIVE",
+               "profileStatus":"nodownload",
+               
+"qrCode":"LPA:1$esiminfra.toprsp.com$D0C23496B79C4179A7FA57E757C12299",
+               "orderType":"DAILY",
+               "cardInfo":{"iccid":"89852345127626040002",
+               "imsi":"453128365970002",
+               "msisdn":"852657436910002"}}]}}
+39 / 88
+--- PAGE 40 ---
+4.8.2
+Response
+ParametersParameter 
+NameType RequiredExample Value Description
+orderNo
+String falseTG239829483838
+762orderNo
+iccid
+String false891248939273728
+82317ICCID
+channelOrderN
+oString false ORDER123Channel Order Number, a customizable order 
+number for channel customers
+lang String false enLanguage (English: en, Japanese: ja-JP, Chinese: 
+zh-CN), default English
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns an OrderList 
+object
+OrderList
+Object
+Field
+Description
+list JSONArray  Data encapsulation entity, returns an array of 
+OrderInfo
+objects
+OrderInfo
+Object
+Field
+Description
+orderNo String TG2025092513101491
+58orderNo
+40 / 88
+--- PAGE 41 ---
+productCode String ptsk-6 Product code
+productName String SKTeSIM-10days_V Product Name
+Supports internationalized display. Based on the 
+value of the input parameter “lang” (language 
+parameter, e.g., zh-CN = Chinese, en = English), it 
+automatically matches and returns the product 
+name in the corresponding language.
+activatedStartTime String 2025-08-01T00:00:00Z Activation Start Use Date
+activatedEndTime String 2025-08-05T23:59:59Z Activation Expiration Use Date
+latestActivationTim
+eString 2025-08-05T23:59:59Z Latest activation time
+renewExpirationTi
+meString 2025-08-05T23:59:59Z Latest renewal date
+createdTime String 2025-08-05T23:59:59Z Ordering time
+orderStatus String NOTACTIVE Order Status: NOTACTIVE: Not activated 
+ACTIVATED: Activated INUSE: In use USED: Used 
+up EXPIRED: Expired ABANDON: Abandoned 
+TERMINATION: Terminated
+proﬁleStatus String nodownload eSIM Card Status
+“Inactive”,“unavailable”
+‘Activated’,“activated”
+“Deleted”,“deleted”
+‘Downloading’,“downloaded” (activation 
+unsuccessful)
+"Disabled","disabled"
+"Not downloaded","nodownload"
+"Download failed","downloadfail"
+"Generation failed","failed"
+"Not generated","ungenerated"
+41 / 88
+--- PAGE 42 ---
+Error
+Code
+Explanation
+Request Example 复制代码qrCode String LPA:1$tgt.toprsp.com$
+B21B96B156C040B8A
+42233455FRDSADVeSIM QR code information, in the format of  LPA:1$ 
+RSP
+Server
+Address  $ Activation
+Code
+channelOrderNo String 1400819766678787878
+9Channel order number, a customizable order 
+number for channel customers
+orderType String DAYPASS Order Type (DAYPASS: Speciﬁed Activation Daily 
+Package, DAILY: Auto-Activation Daily Package, 
+MULTIPLEMONTHS_AUTO: Auto-Activation Data 
+Package, MULTIPLEMONTHS: Speciﬁed Activation 
+Data Package)
+CardInfo
+Object
+Field
+Description
+iccid String 8982052207013909758
+FICCID
+imsi String 078945294185657 IMSI
+msisdn String 12345464 Mobile phone number
+rentalContractNum
+berString 8180508970 Lease Code
+subCode （Detailed 
+Return Code）subMsg （Return Code Description） Solution
+5032orderNo, iccid, channelOrderNo, at 
+least one is not empty ！Order Number, ICCID, Channel Order Number
+—at least one of these ﬁelds cannot be left 
+blank!
+{
+  "iccid":"89852342714026530002",
+  "orderNo":"SE2025112119173234415"
+  }
+42 / 88
+--- PAGE 43 ---
+Response Example 复制代码
+4.9
+Check
+Account
+balance
+Business
+Description
+This endpoint can be used to query channel account and balance information.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/account/balance
+QPS Limit ： 50
+Response Time ： 50ms
+4.9.1
+Request
+Parameters {
+   "code":"0000",
+     "msg":"success",
+     "data":{
+           "list":[{"orderNo":"SE2025112119173234415",
+             "productCode":"E-01-F2-ES-AU-T-7D/60D-1GB(A)",
+             "productName":"【ESIM】 UK 1GB/7 days (valid for 60 days) (F2)",
+             "activatedStartTime":"2025-11-21T11:17:33Z",
+             "activatedEndTime":"2025-11-28T11:17:32Z",
+             "latestActivationTime":"2026-01-20T11:17:32Z",
+             "renewExpirationTime":"2026-01-27T11:17:32Z",
+             "createdTime":"2025-11-21T11:17:33Z",
+             "orderStatus":"NOTACTIVE",
+             "profileStatus":"activated",
+             
+"qrCode":"LPA:1$esiminfra.toprsp.com$98F57097621E451F8649135AC0A03011",
+             "channelOrderNo":"88963589",
+             "orderType":"MULTIPLEMONTHS_AUTO",
+             "cardInfo":{"iccid":"89852342714026530002",
+             "imsi":"454179386020002",
+             "msisdn":"852136416970002"}}]}}
+43 / 88
+--- PAGE 44 ---
+4.9.2
+Response
+ParametersParameter 
+NameType Required Example ValueDescription
+type String false BASICAccount Type:  
+BASIC（ Basic Account ）
+DEPOSIT(Deposit Account)
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns an 
+AccountInfo object
+AccountInfo
+Object
+Field
+Description
+currency String USD Settlement currency for channel accounts
+accountId String tgt_salesapp Channel coding
+name String 途鸽app Channel Name
+settlementType String CASHPayment Methods （ Pay as you go CASH 、
+Monthly settlement MONTHSETTLE ）
+accountList JSONArray  Data encapsulation entity, returns a 
+BalanceInfo object
+BalanceInfoInternal
+Field
+Description
+id String 1 id
+44 / 88
+--- PAGE 45 ---
+Request Example 复制代码
+Response Example 复制代码
+4.10
+Real-time
+Traﬃc
+Data
+Query
+Business
+Description
+Check real-time data information by order number
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/usage
+QPS Limit ： 50
+Response Time ： 800ms
+4.10.1
+Request
+Parameterstype String BASICAccount Type （ BASIC ： Basic Account  
+DEPOSIT ： Margin Account ）
+status String ENABLEAccount Status （ ENABLE ： Enable ，
+DISABLE ： Not enabled ）
+balance BigDecimal 1000.00 Account balance, default to two decimal places
+{"type":"BASIC"}
+ {
+   "code":"0000",
+     "msg":"success",
+     "data":{"currency":"USD",
+     "accountId":"api-test-01-US",
+     "name":"api-test 一级渠道（美元现付） ",
+     "settlementType":"CASH",
+     "accountList":[
+             {"id":"27db3ec3fb1647319229e3497a5a7c37",
+             "type":"BASIC",
+             "status":"ENABLE",
+             "balance":"99954.30"}]}}
+45 / 88
+--- PAGE 46 ---
+4.10.2
+Response
+Parameters
+Error
+Code
+ExplanationParameter 
+NameType Required Example Value Description
+orderNo String trueSE20250513170929410
+001orderNo
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data Object  Data encapsulation entity, returns a UsageInfo 
+object
+UsageInfo
+Object
+Field
+Description
+dataTotal String 1000 Total data for the cycle, in MB
+Daily package, No such parameter returned
+dataUsage String 100 Current cycle data usage, in MB
+dataResidual String 900 Remaining data allowance for the current billing 
+cycle, in MB
+Daily package, No such parameter returned
+refuelingTotal String 0 Daily Refueling package data total, in MB
+qtaconsumption String 100 Daily high-speed data usage, in MB
+46 / 88
+--- PAGE 47 ---
+Request Example 复制代码
+Response Example 复制代码
+4.11
+eSIM
+Proﬁle
+Inquiry
+Business
+Description
+Query proﬁle information and renewal information based on ICCID.subCode
+（Detailed Return 
+Code）subMsg （Return Code Description） Solution
+5002 The order does not exist. Check if the order number exists
+5005The order card type does not support querying real-
+time traﬃcOrder card type does not support 
+real-time data queries.
+4068 
+Real-time traﬃc calculation in progress, please try 
+again later!In real-time data calculations, orders 
+in a state where queries are not 
+supported, or queries may fail due 
+to exceptions.
+{
+  "orderNo": "SE20250513170929410001"  // Required, Order Number
+}
+{
+  "code": "0000",
+  "msg": "success",
+  "data": {                // UsageInfo Object
+    "dataTotal": "1000",   // Total Cycle Data （ Unit ： MB ， This parameter is 
+not available for daily package. ）
+    "dataUsage": "100",    // Current Data Usage （ Unit ： MB ）
+    "dataResidual": "900", // Remaining data （ Unit ： MB ， This parameter is not 
+available for daily package. ）
+    "refuelingTotal": "0", // Daily Refueling package data total （ Unit ： MB ）
+    "qtaconsumption": "100"  // Daily high-speed data usage （ Unit ： MB ）
+  }
+}
+47 / 88
+--- PAGE 48 ---
+Note: 
+1.There is a certain delay in eSIM order status.
+2.Cancelled orders are not supported for query.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/iccid/proﬁle
+QPS Limit ： 50
+Response Time ： 200ms
+4.11.1
+Request
+Parameters
+4.11.2
+Response
+ParametersParameter 
+NameType Required Example Value Description
+iccid String true893720000100000300
+01ICCID
+Parameter 
+NameType Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data object  Data encapsulation entity, returns 
+a ProﬁleInfo
+ object
+ProﬁleInfo
+Object
+Field
+Description
+iccid String 8997250212345555894F ICCID
+eid String 89049032007408882600198987
+512345eID, a globally unique 32-digit code, the 
+unique identiﬁer for an eSIM (embedded 
+SIM card)
+48 / 88
+--- PAGE 49 ---
+Error
+Code
+Explanation
+Request Example 复制代码
+Response Example 复制代码imsi String 260036699995661 IMSI
+state String Enabled Esim proﬁle state
+Downloaded (Downloading)
+Installed (Download completed)
+Error (Download retry limit exceeded)
+Unavailable (Revoked)
+Disabled
+Enabled
+Deleted
+Released (Initial state)
+installDevice String iPhone 16 Pro Installation device
+installCount String 1 Installation count
+installTime String 2025-11-10T14:27:53Z Installation time
+updateTime String 2025-11-10T14:27:54Z Update time
+subCode subMsg Solution
+5004Orders under the iccid do not exist or all have been 
+cancelled.Channel order does not exist or has 
+been cancelled.
+6002 The card proﬁle ﬁle does not exist. Proﬁle information does not exist.
+{"iccid":"89852342714026530002"}
+ {"code":"0000",
+   "msg":"success",
+   "data":{"iccid":"89852342714026530002",
+   "imsi":"454179386020002",
+   "state":"Enabled",
+   "installCount":"0",
+   "updateTime":"2025-11-13T10:22:11Z"}
+49 / 88
+--- PAGE 50 ---
+4.12
+Termination
+Order
+Plan
+(Applies
+to
+C4
+Cards
+Only)
+Business
+Description
+For speciﬁc card types (C4), terminate the plan based on order number and card number. Not all cards 
+support plan termination; conﬁrmation with the business team is required. Note: Only activated and used 
+plans can be terminated.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/terminate
+QPS Limit ： 50
+Response Time ： 500ms
+4.12.1
+Request
+Parameters
+4.12.2
+Response
+Parameters
+Error
+Code
+Explanation }
+Parameter 
+NameType Required Example Value Description
+orderNo String trueTG20251121038347
+88Order Number
+iccid String true89129858981922456
+777ICCID
+Parameter 
+NameType Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+50 / 88
+--- PAGE 51 ---
+Request Example 复制代码
+Response Example 复制代码
+4.13
+Place
+top
+up
+order
+Business
+Description
+Purchase a top-up package for data recharge (Currently only applicable to speciﬁc carrier cards (C4 cards) 
+supporting daily packages).
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/topup/create
+QPS Limit ： 50
+Response Time ： 500ms
+4.13.1
+Request
+ParameterssubCode subMsg Solution
+6001The card type of the current order does not 
+support termination.Card type does not support termination; 
+cannot terminate this card type.
+5003 The order status does not support termination.Only orders with status 'In Use' or 'Used Up' 
+support termination.
+5001 Channel iccid or order mismatches.Channel ICCID or order number mismatch; 
+check if the order number and card number 
+are consistent for the channel account.
+4000 System issue, contact TGT technical support.System issue, contact TGT technical 
+support.
+{
+  "iccid":"89852342621027010000",
+  "orderNo":"TG202511121917117289"
+}
+ {
+   "code":"0000",
+   "msg":"success"
+ }
+51 / 88
+--- PAGE 52 ---
+4.13.2
+Response
+Parameters
+Error
+Code
+ExplanationParameter Name TypeRequire
+dExample Value Description
+orderNo String true TG2198392592 Order Number
+purchaseType int true 1 Purchase Type (1: For the current day 2: Daily)
+idempotencyKey String true550e8400-e29b-41d4-
+a716-446655440000Request ID, maximum length 64 characters. 
+(In exceptional cases like request interruption, 
+timeout, etc., where the channel did not 
+receive a response from the TGT system, 
+pass the same idempotencyKey
+ when 
+retrying).
+Must be a globally
+unique  string (UUID v4 is 
+the best choice).
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data object  Data encapsulation entity, returns 
+a TopupOrderInfo object
+TopupOrderInfo
+Object
+Field
+Description
+topupNumber String TU123141893179414 Top-up Order Number
+subCode subMsg Solution
+52 / 88
+--- PAGE 53 ---
+Request Example 复制代码
+Response Example 复制代码5031The Topup order is currently being 
+processedTop-up order is currently being processed.
+5028 The order does not exist. Order does not exist.
+5018 Order status does not support topup Order status does not support top-up.
+5019 The product type does not support topup Product type does not support top-up.
+5020The product card type does not support 
+topupProduct card type does not support top-up.
+5015The product package is not available for 
+topupProduct package is not available for top-up 
+(or top-up price is not conﬁgured).
+5023 The order has expiredOrder has expired (not within the valid usage 
+period).
+5017Test coin orders do not allow ordering fuel 
+packsTest coin orders (and non-manufacturer 
+orders) do not allow ordering top-up 
+packages.
+{
+  "orderNo": "TG2198392592",
+  "purchaseType": 1,
+  "idempotencyKey": "550e8400-e29b-41d4-a716-446655440003"
+}
+{
+  "code": "0000",
+  "msg": "success",
+  "subCode": "",
+  "subMsg": "",
+  "data": {
+    "topupNumber": "TU123141893179414"
+  }
+}
+53 / 88
+--- PAGE 54 ---
+4.14
+Paginated
+Query
+of
+Top-up
+Orders
+Business
+Description
+Paginated query of all top-up orders under the channel account. Returns all order records by default, sorted 
+by creation time in descending order. Supports querying top-up orders within a speciﬁc creation time range.
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/topup/list
+QPS Limit：50
+Response Time ： 500ms
+4.14.1
+Request
+Parameters
+4.14.2
+Response
+ParametersParameter Name Type Required Example Value Description
+pageNum int true 1 Page number to query (>=1)
+pageSize int true 10Number of items per page, maximum 
+100
+createdStartTime String false2025-07-
+10T00:00:00ZStart time for querying order creation 
+time, format: yyyy-MM-
+dd'T'HH:mm:ss'Z'
+createdEndTime String false2025-07-
+10T23:59:59ZEnd time for querying order creation 
+time, format: yyyy-MM-
+dd'T'HH:mm:ss'Z'
+lang String false en Language (English: en, Japanese: ja-
+JP, Chinese: zh-CN), default is 
+English
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+54 / 88
+--- PAGE 55 ---
+subCode String  Business Error Code
+subMsg String  Business Error Description
+data object  Data encapsulation entity, returns 
+a TopupOrderRes
+ object
+TopupOrderRes
+Object
+Field
+Description
+total Integer 1 Total number of records
+list JSONArray  Data encapsulation entity, returns an array 
+of TopupOrderInfo
+ objects
+TopupOrderInfo
+Object
+Field
+Description
+iccid String 20250709181134000023 ICCID
+orderNo String TG202507111329423579 Order Number
+topupNumber String TU2507111752212546664001 Top-up Order Number
+productName String CT-C4-addon-test-esim-plus-1 Package Name
+Supports internationalization; automatically 
+matches and returns the product name in 
+the language speciﬁed by the 'lang' 
+parameter.
+productType String DAILY_PACK Product Type
+topupName String 100MB add-on Top-up Package Name
+quantity String 1 Quantity of top-up packages ordered
+channelStartTimeString 2025-07-10T18:30:14Z Top-up package start time (UTC+0)
+channelEndTime String 2025-07-11T18:30:14Z Top-up package end time (UTC+0)
+settlementCurren
+cyString CNY Settlement currency
+settlementAmoun
+tDecimal(28,
+2)111.00 Settlement amount (2 decimal places)
+55 / 88
+--- PAGE 56 ---
+Request Example 复制代码
+Response Example 复制代码
+4.15
+Query
+Top-up
+Orders
+Associated
+with
+the
+orderNo
+
+Business
+Description
+Query the top-up orders associated with an order number.channelCreatedTi
+meString 2025-07-11T05:42:27Z Creation time (UTC+0)
+{
+  "pageNum": 1,
+  "pageSize": 10,
+  "createdStartTime": "2025-07-10T00:00:00Z",
+  "createdEndTime": "2025-07-10T23:59:59Z",
+  "lang": "en"
+}
+{
+  "code": "0000",
+  "msg": "success",
+  "subCode": "",
+  "subMsg": "",
+  "data": {
+    "total": 3,
+    "data": [
+      {
+        "iccid": "20250709181134000023",
+        "orderNo": "TG202507111329423579",
+        "topupNumber": "TU2507111752212546664001",
+        "productName": "CT-C4-addon-test-esim-plus-1",
+        "productType": "DAILY_PACK",
+        "topupName": "100MB add-on",
+        "quantity": "1", 
+        "channelStartTime": "2025-07-10T18:30:14Z",
+        "channelEndTime": "2025-07-11T18:30:14Z",
+        "settlementCurrency": "CNY",
+        "settlementAmount": 111.00,
+        "channelCreatedTime": "2025-07-11T05:42:27Z"
+      }]}}
+56 / 88
+--- PAGE 57 ---
+Interface
+Description
+Request URL ： BaseUrl+/eSIMApi/v2/order/topups
+QPS Limit ： 50
+Response Time ： 500ms
+4.15.1
+Request
+Parameters
+4.15.2
+Response
+ParametersParameter 
+NameType Required Example Value Description
+pageNum int true 1 Page number to query (>=1)
+pageSize int true 10 Number of items per page, maximum 100
+orderNo String false 202507091811340000
+23Order Number (At least one of orderNo, 
+iccid, or topupNumber must be provided)
+iccid String false TG2025071113294235
+79ICCID (At least one of orderNo, iccid, or 
+topupNumber must be provided)
+topupNumber String false TU2507111752212546
+664001Top-up Order Number (At least one of 
+orderNo, iccid, or topupNumber must be 
+provided)
+lang String false en Language (English: en, Japanese: ja-JP, 
+Chinese: zh-CN), default is English
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+subCode String  Business Error Code
+subMsg String  Business Error Description
+57 / 88
+--- PAGE 58 ---
+data JSONArray  Data encapsulation entity, returns 
+a TopupOrderRes
+ object
+TopupOrderRes
+Object
+Field
+Description
+total Integer 1 Total number of records
+list JSONArray  Data encapsulation entity, returns an 
+array of TopupOrderInfo
+ objects
+TopupOrderInfo
+Object
+Field
+Description
+iccid String 20250709181134000023 ICCID
+orderNo String TG202507111329423579 Order Number
+topupNumber String TU2507111752212546664001 Top-up Order Number
+productName String CT-C4-addon-test-esim-plus-1 Package Name
+Supports internationalization; 
+automatically matches and returns the 
+product name in the language 
+speciﬁed by the 'lang' parameter.
+productType String DAILY_PACK Product Type
+topupName String 100MB add-on Top-up Package Name
+quantity String 1 Quantity of top-up packages ordered
+channelStartTim
+eString 2025-07-10T18:30:14Z Top-up package start time (UTC+0)
+channelEndTime String 2025-07-11T18:30:14Z Top-up package end time (UTC+0)
+settlementCurren
+cyString CNY Settlement currency
+settlementAmou
+ntDecimal(28,2) 111.00 Settlement amount (2 decimal places)
+58 / 88
+--- PAGE 59 ---
+Error
+Code
+Explanation
+Request Example 复制代码
+Response Example 复制代码channelCreatedT
+imeString 2025-07-11T05:42:27Z Creation time (UTC+0)
+subCode subMsg Solution
+5030iccid, topupNumber, orderNo, at least one is not 
+empty！At least one of iccid, topupNumber, 
+or orderNo must be provided.
+{
+  "pageNum": 1, 
+  "pageSize": 10,
+  "orderNo": "TG202509261801071410092",
+  "iccid": "8982052207013909758F",
+  "topupNumber": "TU2507111752212546664001",
+  "lang": "en"
+}
+{
+  "code": "0000",
+  "msg": "success",
+  "data": {
+    "total": 2,
+    "data": [
+      {
+        "iccid": "8982052207013909758F",
+        "orderNo": "TG202509261801071410092",
+        "topupNumber": "TU2507111752212546664001",
+        "productName": "CT-C4-addon-test-esim-plus-1",
+        "productType": "DAILY_PACK",
+        "topupName": "1GB add-on",
+        "quantity": "1",
+        "channelStartTime": "2025-09-27T00:00:00Z",
+        "channelEndTime": "2025-09-27T23:59:59Z",
+        "settlementCurrency": "CNY",
+        "settlementAmount": 2.50,
+        "channelCreatedTime": "2025-09-26T18:05:00Z"
+59 / 88
+--- PAGE 60 ---
+5
+Webhook
+notiﬁcation
+General
+Callback
+Interaction
+Rules
+Deﬁne the webhook callback interaction standards between the TGT system and the channel system, 
+covering response format requirements to avoid callback failures due to non-standard interactions.
+Channel
+Response
+Speciﬁcation
+(Mandatory)
+After the TGT system sends a callback request, the channel must return a response in the speciﬁed format; 
+otherwise, it will be judged as a callback failure and trigger a retry.
+Response Format: Only application/jsontype is supported. Fields must strictly follow camelCase 
+format without additional nesting.
+Required Fields:      },
+      {
+        "iccid": "8982052207013909758F",
+        "orderNo": "TG202509261801071410092",
+        "topupNumber": "TU2507111752212546664002",
+        "productName": "CT-C4-addon-test-esim-plus-1",
+        "productType": "DAILY_PACK",
+        "topupName": "500MB add-on",
+        "quantity": "1",
+        "channelStartTime": "2025-09-28T00:00:00Z",
+        "channelEndTime": "2025-09-28T23:59:59Z",
+        "settlementCurrency": "CNY",
+        "settlementAmount": 1.00,
+        "channelCreatedTime": "2025-09-27T10:30:00Z"
+      }
+    ]
+  }
+}
+●
+●
+Field Name TypeValue 
+RequirementDescription
+code String Fixed as "0000"Indicates that the channel has successfully received and 
+processed the callback (regardless of business logic success, 
+only conﬁrmation of "receipt" is needed).
+60 / 88
+--- PAGE 61 ---
+Error
+Response: If a business exception occurs when the channel receives the callback (e.g., order does 
+not exist), the
+channel
+must
+still
+return
+the
+successful
+response
+above
+ﬁrst, and then handle the 
+business exception internally (must not return a response code other than "0000", otherwise TGT will retry).
+Response Example 复制代码
+Timeout
+Requirement:
+
+The channel must return a response within 10
+seconds. Failure to respond 
+within 10
+seconds  will be judged by TGT as a "callback timeout".
+Retry
+Mechanism:
+
+Retries occur every 5 seconds for up to 2 hours, after which retries stop.
+Callback
+Signature
+Veriﬁcation
+Core
+Signature
+Rules
+To ensure data transmission security and prevent parameters from being tampered with during transmission, 
+all requests must carry a digital signature (sign) calculated from the parameters. After receiving the request, 
+the server will recalculate the signature using the same rules and compare it. Only requests with matching 
+signatures will be processed.
+Signature
+Generation
+Steps:
+1.Filter
+Valid
+Parameters
+Ignore the following two types of parameters; they do not participate in the signature calculation:
+The signparameter itself, which is included in the request.
+Any binary ﬁle parameters (such as byte[]type).
+2.Sort
+Parameters
+Sort all remaining parameters alphabetically by parameter name based on ASCII code, in ascending 
+order (i.e., A-Z, 0-9).
+3.Concatenate
+String
+Directly concatenate the sorted parameters in the format parameter name + parameter value, 
+without adding any symbols or delimiters in between.
+Example:
+Parameters name=Johnand age=25would be concatenated as nameJohnage25.
+4.Add
+Security
+Secret
+Key
+Add the exclusive secret key (secret) assigned to you to both the beginning and the end of the 
+concatenated string.
+Format: secret+ concatenated parameter string+ secret msg StringFixed as 
+"success"Response description, only this ﬁxed value is supported.
+{
+  "code": "0000",
+  "msg": "success"
+}
+●
+●
+●
+●
+●
+61 / 88
+--- PAGE 62 ---
+5.Generate
+Signature
+Calculate the MD5 hash of the ﬁnal string. The resulting hash value is the signature (sign) for this 
+request.
+(Note:  The secretmust be kept strictly conﬁdential. It is recommended to add a timestampparameter 
+to set a validity period for the signature to enhance security.)
+Key
+Example
+Original parameters: foo:1, bar:2, foo_bar:3, foobar:4, sign:xxx, ﬁle:byte []
+After ﬁltering and sorting: bar:2, foo:1, foo_bar:3, foobar:4
+Parameter concatenation result: bar2foo1foo_bar3foobar4
+Signature calculation formula: sign = MD5(secret + "bar2foo1foo_bar3foobar4" + secret)
+Signature
+Algorithm
+(Java,
+PHP,
+Python
+examples
+provided
+in
+original
+document
+-
+omitted
+here
+for
+brevity
+in
+translation,
+but
+essential
+logic
+described
+above)
+JAVA 复制代码●
+●
+    private static final String MD5 = "MD5";
+    public static final String SIGN = "sign";
+    public static String getStringToSign(JSONObject params, String secretKey) {
+        //Filter and flatten all fields (exclude sign and empty values, handle 
+nesting)
+        List<String> keyValueList = new ArrayList<>();
+        flattenParams(params, "", keyValueList);
+        // Sort by field name ASCII ascending order
+        Collections.sort(keyValueList);
+        // Concatenate all key+value (no separators)
+        StringBuilder keyValueStr = new StringBuilder();
+        for (String kv : keyValueList) {
+            keyValueStr.append(kv);
+        }
+        // Concatenate secret + key-value string + secret
+        String signSource = secretKey + keyValueStr + secretKey;
+        return signSource;
+    }
+    // Recursively flatten nested Map: convert key=value to keyvalue string 
+and store in list
+62 / 88
+--- PAGE 63 ---
+    private static void flattenParams(Map<String, Object> params, String 
+parentKey, List<String> keyValueList) {
+        for (Map.Entry<String, Object> entry : params.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            // Exclude sign field
+            if (SIGN.equals(key)) {
+                continue;
+            }
+            // Exclude empty values (null, empty strings)
+            if (value == null || value.toString().trim().isEmpty()) {
+                continue;
+            }
+            // Handle nested objects (recursive flattening)
+            String currentKey = parentKey.isEmpty() ? key : parentKey + "." + 
+key;
+            if (value instanceof Map) {
+                flattenParams((Map<String, Object>) value, currentKey, 
+keyValueList);
+            } else {
+                // Non-object type: concatenate key+value (convert value to 
+string)
+                keyValueList.add(currentKey + value);
+            }
+        }
+    }
+    public static String getMd5Str(String str) {
+        return toHex(getMd5(str));
+    }
+    
+    private static byte[] getMd5(String str) {
+        MessageDigest messageDigest;
+        try {
+            messageDigest = MessageDigest.getInstance(MD5);
+            messageDigest.reset();
+            messageDigest.update(str.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException e) {
+            log.error("NoSuchAlgorithmException caught!", e);
+            return ArrayUtils.EMPTY_BYTE_ARRAY;
+        }
+        return messageDigest.digest();
+63 / 88
+--- PAGE 64 ---
+PHP 复制代码    }
+    private static String toHex(byte[] byteArray) {
+        if (null == byteArray) {
+            return null;
+        }
+        StringBuilder md5Str = new StringBuilder();
+        for (byte b: byteArray) {
+            md5Str.append(String.format("%02x", b));
+        }
+        return md5Str.toString();
+    }
+  public static function sign($params, $secret) {
+        // 1. Filter and flatten all fields (exclude sign and empty values, 
+handle nesting)
+        $keyValueList = [];
+        self::flattenParams($params, '', $keyValueList);
+        // 2. Sort by field name ASCII ascending order
+        sort($keyValueList, SORT_STRING);
+        // 3. Concatenate all key+value (no separators)
+        $keyValueStr = implode('', $keyValueList);
+        // 4. Concatenate secret + key-value string + secret
+        $signSource = $secret . $keyValueStr . $secret;
+        // 5. MD5 signature (32-bit lowercase)
+        return md5($signSource);
+    }
+    // Recursively flatten nested arrays: convert key=value to keyvalue string 
+and store in array
+    private static function flattenParams($params, $parentKey, &$keyValueList) 
+{
+        foreach ($params as $key => $value) {
+            // Exclude sign field
+            if ($key === 'sign') {
+                continue;
+            }
+            // Exclude empty values (null, empty strings)
+64 / 88
+--- PAGE 65 ---
+Python 复制代码            if ($value === null || trim((string)$value) === '') {
+                continue;
+            }
+            // Handle nested arrays (recursive flattening)
+            $currentKey = $parentKey === '' ? $key : $parentKey . '.' . $key;
+            if (is_array($value)) {
+                self::flattenParams($value, $currentKey, $keyValueList);
+            } else {
+                // Non-array type: concatenate key+value (convert value to 
+string)
+                $keyValueList[] = $currentKey . (string)$value;
+            }
+        }
+}
+    @staticmethod
+    def sign(params: Dict[str, Any], secret: str) -> str:
+        # 1. Filter and flatten all fields (exclude sign and empty values, 
+handle nesting)
+        key_value_list: List[str] = []
+        SignUtil._flatten_params(params, '', key_value_list)
+        # 2. Sort by field name ASCII ascending order
+        key_value_list.sort()
+        # 3. Concatenate all key+value (no separators)
+        key_value_str = ''.join(key_value_list)
+        # 4. Concatenate secret + key-value string + secret
+        sign_source = f"{secret}{key_value_str}{secret}"
+        # 5. MD5 signature
+        md5 = hashlib.md5()
+        md5.update(sign_source.encode('utf-8'))
+        return md5.hexdigest()
+    # Recursively flatten nested dictionary: convert key=value to keyvalue 
+string and store in list
+    @staticmethod
+    def _flatten_params(params: Dict[str, Any], parent_key: str, 
+key_value_list: List[str]) -> None:
+        for key, value in params.items():
+            # Exclude sign field
+65 / 88
+--- PAGE 66 ---
+5.1
+eSim
+Callback
+5.1.1
+Place
+Order
+Webhook
+(Standard
+eSIM)
+
+
+
+Business
+Description
+Trigger: Triggered only when the card issuance process for a "Create Order" request (regular eSIM / 
+push mode eSIM) is completed (regardless of success or failure).
+After the card issuance task is submitted, the asynchronous processing result will be sent to the 
+channel's provided card issuance notiﬁcation callback URL. This section describes the parameter format 
+sent by the TGT system to the channel. The channel needs to develop an interface to receive this 
+notiﬁcation. Upon receiving TGT's callback notiﬁcation, the channel must respond to the TGT system. 
+The response format must be {"code":"0000","msg":"success"}.
+(Note: This is not a channel API integration interface. If the channel's customer system has whitelist 
+restrictions, it must be informed to add our system IP addresses.)
+5.1.1.1
+Callback
+Parameters            if key == 'sign':
+                continue
+            # Exclude empty values (None, empty strings)
+            if value is None or str(value).strip() == '':
+                continue
+            # Handle nested dictionaries (recursive flattening)
+            current_key = f"{parent_key}.{key}" if parent_key else key
+            if isinstance(value, dict):
+                SignUtil._flatten_params(value, current_key, key_value_list)
+            else:
+                # Non-dictionary type: concatenate key+value (convert value to 
+string)
+                key_value_list.append(f"{current_key}{str(value)}")
+●
+●
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+timestamp String 2025-08-01T00:00:00Z Signature timestamp (UTC+0)
+66 / 88
+--- PAGE 67 ---
+sign String qweasdzxcdsaq Signature parameter
+data Object  Data encapsulation entity, returns 
+a CallbackInfo
+ object
+CallbackInfo
+Object
+Field
+Description
+eventType int 1Notiﬁcation event enumeration:
+1: Card Issuance Notiﬁcation
+businessType String sucess Business type, for ESIM business: ESIM
+idempotencyKey String550e8400-e29b-41d4-a716-
+446655440000Returned if the channel's initial request 
+included it; otherwise, this parameter is 
+absent.
+orderInfo Object  Data encapsulation entity, returns 
+an OrderInfo  object
+OrderInfo
+Object
+Field
+Description
+orderNo String SE20251110111104020001 Order Number
+iccid String 89972502300001111194F ICCID
+qrCode String LPA:1$esiminfra.toprsp.com$7ADBC7
+BBD32B47438D0BB3F411111DB6eSIM proﬁle download address. The 
+channel can use the content of this ﬁeld 
+to generate a QR code. The format is: 
+LPA:1$ ∗∗∗ $ ∗∗∗
+channelOrderNo String  Channel Order Number, deﬁned by the 
+channel
+imsi String 260036615121111 IMSI
+msisdn String 837383282 MSISDN, phone number
+rentalContractNu
+mberString8182551111 Rental contract number (returned only 
+for P1, otherwise not returned)
+activatedStartTim
+eString 2025-11-10T14:26:04Z Activation/Usage start time (returned only 
+for specified activation)
+67 / 88
+--- PAGE 68 ---
+Error
+Code
+ExplanationactivatedEndTime String 2026-12-09T14:26:03Z Activation/Usage end time (returned only 
+for speciﬁed activation)
+latestActivationTi
+meString 2026-01-09T14:26:03Z Latest activation time (returned only for 
+auto-activation)
+renewExpirationTi
+meString 2026-01-16T14:26:03Z Latest renewal time (not returned for 
+orders that do not support renewal)
+createdTime String 2025-11-10T14:26:04Z Order creation time
+orderType String MULTIPLEMONTHS_AUTO Order Type
+code msg Solution
+5044The order failed, please contact customer service or 
+administratorOrder creation failure, e.g., no 
+available cards, etc.
+4012 The order start date cannot be less than the current timeOrder start date cannot be earlier 
+than the current time.
+4007 The product belongs to the incorrect platform Product platform is incorrect.
+4009This channel is not conﬁgured for the product price
+ Product price organization status 
+issue; contact TGT to check if the 
+price is conﬁgured for this product.
+4011 Package settlement price is illegal!Product package conﬁguration 
+issue.
+4013 product is unvisible,can not to add orderProduct is not listed/shelf; list the 
+product. Or, this device does not 
+support purchasing this product.
+4008The channels of this business model do not support 
+calling this interfaceAccount attributes do not match.
+4016The purchase of producttype of data package is not 
+supported 流Data packages only support regular 
+data packs, not other forms.
+68 / 88
+--- PAGE 69 ---
+5.1.2
+Renewal
+webhook
+(Standard
+eSIM)
+Business
+Description
+When a renewal task is submitted, the asynchronous processing result will be sent to the channel's provided 
+notiﬁcation callback address. This section describes the parameter format sent by the TGT system to the 
+channel. The channel needs to develop an interface to receive this notiﬁcation. Upon receiving TGT's 
+callback notiﬁcation, the channel must respond to the TGT system. The response format must be 
+{"code":"0000","msg":"success"} 
+(Note: This is not a channel API integration interface. If the channel's customer system has whitelist 
+restrictions, it must be informed to add our system IP addresses.)
+5.1.2.1
+Callback
+Parameters4010 Channel account balance is insuﬃcient, please top upChannel account balance is 
+insuﬃcient; please recharge.
+4000 Failure, please contact the service staﬀ!System issue, contact TGT 
+technical support.
+4004ESIM products only support ESIM device model group 
+productsESIM interface only supports 
+ordering products from ESIM device 
+model groups.
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+timestamp String 2025-08-01T00:00:00Z Signature timestamp (UTC+0)
+sign String qweasdzxcdsaq Signature parameter
+data Object  Data encapsulation entity, returns 
+a CallbackInfo
+ object
+CallbackInfo
+Object
+Field
+Description
+eventType int 2 2: Renewal Notiﬁcation
+69 / 88
+--- PAGE 70 ---
+businessType String ESIMBusiness type, for ESIM business: 
+ESIM
+idempotencyKey String550e8400-e29b-41d4-a716-
+446655440000Returned if the channel's initial 
+request included it; otherwise, this 
+parameter is absent.
+orderInfo JSONArray  Data encapsulation entity, returns an 
+array of OrderInfo
+ objects
+OrderInfo
+Object
+Field
+Description
+orderNo String SE20251110111104020001 Order Number
+iccid String 89972502300001111194F ICCID
+qrCode String LPA:1$esiminfra.toprsp.com$7ADBC7
+BBD32B47438D0BB3F411111DB6eSIM proﬁle download address. This 
+ﬁeld is returned only when 
+operate
+Type is 1 and code is 0000. The 
+channel can use it to generate a QR 
+code. Format: LPA:1$ ∗∗∗ $ ∗∗∗
+channelOrderNo String 12345 Channel Order Number, deﬁned by 
+the channel
+imsi String 260036615121111 IMSI
+msisdn String 837383282 MSISDN, phone number
+activatedStartTi
+meString 2025-11-10T14:26:04Z Activation/Usage start time (returned 
+only for specified activation)
+activatedEndTim
+eString 2026-12-09T14:26:03Z Activation/Usage end time (returned 
+only for speciﬁed activation)
+latestActivationTi
+meString 2026-01-09T14:26:03Z Latest activation time (returned only 
+for auto-activation)
+renewExpirationT
+imeString 2026-01-16T14:26:03Z Latest renewal time (not returned for 
+orders that do not support renewal)
+createdTime String 2025-11-10T14:26:04T Order creation time
+70 / 88
+--- PAGE 71 ---
+Error
+Code
+Explanation
+5.1.3
+Place
+Order
+Webhook （ SMS
+Push
+eSIM
+ ）
+Business
+Description
+When a push mode task is submitted, the asynchronous processing result will be sent to the channel's 
+provided notiﬁcation callback address. This section describes the parameter format sent by the TGT system 
+to the channel. The channel needs to develop an interface to receive this notiﬁcation. Upon receiving TGT's 
+callback notiﬁcation, the channel must respond to the TGT system. The response format must be 
+{"code":"0000","msg":"success"} 
+(Note: This is not a channel API integration interface. If the channel's customer system has whitelist 
+restrictions, it must be informed to add our system IP addresses.)
+5.1.3.1
+Callback
+ParametersorderType String MULTIPLEMONTHS_AUTO Order Type
+code msg Solution
+4010 Channel account balance is insuﬃcient, please top upChannel account balance is 
+insuﬃcient; please recharge.
+4000 Failure, please contact the service staﬀ!System issue, contact TGT 
+technical support.
+4004ESIM products only support ESIM device model group 
+productsESIM interface only supports 
+products from ESIM device model 
+groups.
+Parameter Name Type Example Value Description
+code String 0000 0000=Success
+msg String sucess Information about error codes
+timestamp String 2025-08-01T00:00:00Z Signature timestamp (UTC+0)
+sign String qweasdzxcdsaq Signature parameter
+71 / 88
+--- PAGE 72 ---
+Error
+Code
+Explanationdata Object  Data encapsulation entity, returns 
+a CallbackInfo
+ object
+CallbackInfo
+Object
+Field
+Description
+eventType int 33: Callback Card Issuance 
+Notiﬁcation
+businessType String ESIMBusiness type, for ESIM 
+business: ESIM
+idempotencyKey String550e8400-e29b-41d4-a716-
+446655440000Returned if the channel's initial 
+request included it; otherwise, 
+this parameter is absent.
+orderInfo Object  Data encapsulation entity, returns 
+an OrderInfo
+ object
+OrderInfo
+Object
+Field
+Description
+orderNo String SE20251010184131920001 Order Number
+channelOrderNo String 2222 Channel Order Number, deﬁned 
+by the channel
+activatedStartTime String 2025-10-20T04:59:59Z Activation/Usage start time 
+(returned only for speciﬁed 
+activation)
+activatedEndTime String 2025-10-20T04:59:59Z Activation/Usage end time 
+(returned only for speciﬁed 
+activation)
+createdTime String 2025-10-10T23:41:32Z Order creation time
+orderType String DAYPASS Order Type
+code msg Solution
+72 / 88
+--- PAGE 73 ---
+6
+Error
+Codes
+6.1
+Public
+Error
+Codes4007 The product belongs to the incorrect platformCheck product package 
+conﬁguration.
+4009 This channel is not conﬁgured for the product priceProduct price organization status 
+issue.
+4011 Package settlement price is illegal!Product package conﬁguration 
+issue.
+4013 product is unvisible,can not to add orderProduct is not listed/shelf; list the 
+product.
+4008 The channels of this business model do not support 
+calling this interfaceAccount attributes do not match.
+4010 Channel account balance is insuﬃcient, please top upChannel account balance is 
+insuﬃcient; please recharge.
+4000 Failure, please contact the service staﬀ!System issue, contact TGT 
+technical support.
+code msg Solution
+1003[ {Parameter key} ] can't be blank
+[ {Parameter key} ] can't be null
+[ {Parameter key} ] can't be empty
+[ {Parameter key} ] length must be less than {max}
+[ {Parameter key} ] must be {param1}, {param2}... or 
+{param3}
+[ {Parameter key} ] style must be yyyy-MM-dd 
+[ {Parameter key} ] style must be yyyy-MM-
+dd'T'HH:mm:ss'Z'
+[ {Parameter key} ] Parameter types do not match!Check parameters: parameter is empty, 
+wrong format, illegal value, out of bounds, 
+etc.
+73 / 88
+--- PAGE 74 ---
+7
+FAQ
+Q1: How do I obtain the Account ID and Secret Key parameters?
+A1: Both the Account ID and Secret Key are required for production and sandbox environments and are 
+provided by Tuge Technology. You must complete API testing in the sandbox environment before switching 
+to production.
+Q2: What is the diﬀerence between the Sandbox and Production environments?
+A2: The Sandbox environment is for API testing during the integration phase. You can test all API endpoints 
+here without incurring actual order charges. eSIMs in the Sandbox cannot be activated on physical devices. 
+The Production environment is for commercial use. Your account must be pre-funded, and all orders will 
+generate actual charges.1004 page parameter errorPagination parameter exception.
+Check parameters: pageNum must be >=1, 
+pageSize not greater than 100.
+1005 Character set error, please checkCharacter set error, request parameter 
+charset is wrong. Currently supported 
+format: UTF-8.
+2000 The service is unavailable, please try again later Service unavailable, try again later.
+2001 Insuﬃcient interface permissionInsufficient permissions. The current account 
+lacks interface permissions. Please contact 
+TGT administrator for confirmation.
+2003 Token invalidToken invalid. Obtain a new token via 
+the Authorization
+to
+get
+new
+token  
+interface.
+2004 Token unknownToken unknown. Obtain a new token via 
+the Authorization
+to
+get
+new
+token  interface.
+0429 Frequent requests, please try again laterAccess restricted. QPS limit exceeded. 
+Requests beyond the threshold are rejected. 
+Requests within the limit will return normally.
+5000 Remote service errorBusiness processing failed. Refer to the 
+speciﬁc interface's business error code.
+74 / 88
+--- PAGE 75 ---
+Q3: How can I verify if an API test order is successful in the Sandbox?
+A3: After placing an order via API, you can log in to the Sandbox portal at 
+https://enterpriseapisandbox.tugegroup.com to review the order details.
+Q4: What is the diﬀerence between Auto-Activate and Activate-on-Order?
+A4:AUTO_ACTIVATE: The eSIM can be activated on any day within the order's validity period. Once 
+activated, the order's validity period is refreshed to become the actual usage period. For example, an 
+18GB/15-day plan (60-day validity) can be activated anytime within 60 days. The 15-day usage period starts 
+from the activation date.
+ACTIVATE_ON_ORDER: The activation start date is speciﬁed at the time of order creation. The eSIM cannot 
+be used before this date. The usage period is ﬁxed upon order creation and does not refresh.
+Q5: What does "Cycle Type Timezone" mean?
+A5: The cycle type (24-hour or calendar day) is determined by carrier rules and varies by eSIM.
+24-hour cycle: The usage period is based on 24-hour increments. For example, a 1-day plan activated at 
+2025-11-22 13:33:47 will expire at 2025-11-23 13:33:46.
+Calendar day cycle: The usage period follows the carrier's designated timezone (e.g., UTC+8). A 1-day plan 
+activated at 2025-11-25 13:48:35 may expire at 2025-11-26 08:00:00.
+Q6. How often is the product packages updated? If there are updates, how can I obtain them?
+A6: The product plan does not have a ﬁxed update schedule. You can use the interface in section 4.1 to 
+query all product information, store it in your database, and periodically retrieve the latest details. 
+Additionally, when product packages change, the business team will also synchronize updates to the plan.
+Q7: Is a callback interface mandatory?
+A7: Yes. Since the order creation process is asynchronous, a callback interface is required to receive order 
+status notiﬁcations (e.g., success/failure). Without it, you would need to repeatedly poll the "Paginated Order 
+Query" API (section 4.7), which is not the recommended integration approach.
+Q8: How is the eSIM QR code generated?
+A8: After order creation, eSIM details (including the qrCode ﬁeld) are sent to your callback interface. You can 
+convert this qrCode data into a scannable QR code using your own code.
+Q9: Can I customize the product package name?
+A9: Yes. Orders are created using the unique productCode value. You may display any custom name for the 
+product package in your system as long as it correctly maps to the corresponding productCode.
+75 / 88
+--- PAGE 76 ---
+Q10: What is the diﬀerence between a package Renewal and a Data Add-on?
+A10:Package Renewal: Allows repurchasing a data plan (same or diﬀerent) for the same eSIM, extending 
+both the data allowance and the validity period. Supported by multiple eSIM types.
+Place top up order: Only available for C4-type daily plans. It adds extra data for one or more days to the 
+existing plan without extending the eSIM's overall validity period. Ideal for daily plans that have exhausted 
+high-speed data and entered throttled speeds.
+Q11: What product packages are available in the Sandbox environment for API testing?
+A11: You can retrieve all available product packages for API testing in the Sandbox environment by calling 
+the "Paginated Query All eSIM Product packages" API. Alternatively, refer to Appendix
+1 for the product 
+plan list.
+Q12: How can I categorize product packages by country/region?
+A12: The "Paginated Query All eSIM Product packages" API response includes the countryCodeList (country 
+codes) and mccList (Mobile Country Code collections) ﬁelds. You can use these parameters to classify 
+product packages by geographic region. For detailed information on countryCodeList and mccList, please 
+see Appendix
+2.
+Q13: How to use Universal Links for direct eSIM installation on iOS?
+A13: With the introduction of Universal Links by iOS, users running iOS 17.4 or later can install eSIMs 
+directly via a dedicated URL. If your customers are using iOS 17.4+, you can provide them with this URL.
+Implementation: After order creation, you will receive a qrCode value. Concatenate the oﬃcial Apple link 
+https://esimsetup.apple.com/esim_qrcode_provisioning?carddata= with the qrCode value to generate the 
+one-tap installation URL for iOS.Example URL:https://esimsetup.apple.com/esim_qrcode_provisioning?
+carddata=1$esiminfra.toprsp.com$D0785A57B85C46858A96F802F8E811A1
+8
+Release
+Version
+9
+Appendix
+Appendix
+1Version Release Time Author Description
+V2.0 20251124 Yujia.tang Initial Version
+Product Code Product NameProduct 
+TypeCard Type 
+Coding
+76 / 88
+--- PAGE 77 ---
+A-002-ES-AU-DZ-A1-
+8D/120D-17GB【Esim】 AIS Thailand 17GB/8days （ AU)(Valid 
+for 120 days)Data 
+packageA1
+A-166-ES-AU-DZ-A1-8D/60D-
+6GB【Esim】 AIS Asia10 6GB/8days （ AU)(Valid for 
+60 days)Data 
+packageA1
+E-184-ES-ZD-eO1-D-10D/60D-
+10GB【Esim】 Europe (11 Countries) 10 Days (10GB 
+High-Speed Data/Day) (eO1) (ZD)Daypass Euro-eO1
+A-002-ES-AU-T-30D/180D-
+3GB(A)【ESIM】 Israel 3GB/30 Days (180-Day Validity) 
+(M1) (A)Data 
+packageM1
+A-013-ES-AU-eO1-T-3D/60D-
+2GB【Esim】 North America (3) 2GB/3 days (valid for 
+60 days) (eO1) (AU)Data 
+packageEuro-eO1
+A-136-ES-AU-C4-1D/60D-1GB【Esim】 Asia 5 Countries 1 Day (1GB High-
+Speed/Day)(C4)(AU)Daypass C4
+A-167-ES-AU-D-A1-8D/60D-
+U(A)【Esim】 AIS Asia 8 Days (Unlimited/Day) (60-
+Day Validity) (A1)Daypass A1
+A-002-ES-AU-D-30D/180D-
+500MB【ESIM】 Israel 500MB/30 days (valid for 180 
+days) (M1) (A1)Daypass M1
+E-02-ES-eP1-ZD-T-30D/60D-
+5GB(A)【ESIM】 Russia 5GB/30 days (eP1)Data 
+packageEuro-ep1
+A-002-ES-ZD-C4-6D/60D-
+500MB【Esim】 Japan 6 Days (500MB High-Speed 
+Data/Day) (C4)Data 
+packageC4
+E-01-F2-ES-AU-T-7D/60D-
+1GB(A)【ESIM】 UK 1GB/7 days (valid for 60 days) (F2)Data 
+packageF2
+E-02-F2-ES-ZD-T-7D/60D-
+1GB(A)【ESIM】 UK 1GB/7 days (valid for 60 days) (F2)Data 
+packageF2
+A-001-ES-AU-C4-5D/60D-1GB【Esim】 Japan 5 Days (500MB High-Speed 
+Data/Day) (C4)Data 
+packageC4
+E-01-ES-eP1-AU-T-15D/60D-
+3GB(A)【ESIM】 Austria 3GB/15 Days (60-Day Validity) 
+(eP1)Data 
+packageEuro-ep1
+77 / 88
+--- PAGE 78 ---
+Appendix
+2B-01-ES-AU-eP1-D-1D/60D-
+500MB(A)【Esim】 US & Canada 1-Day Plan (500MB High-
+Speed Data/Day)(eP1)(AU)Daypass Euro-ep1
+B-02-ES-ZD-eP1-D-3D/60D-
+500MB(A)【Esim】 US & Canada 3 Days (500MB High-
+Speed Data/Day)(eP1)(AU)Daypass Euro-ep1
+A-136-ES-ZD-C4-1D/60D-1GB【Esim】 Asia 5 Countries 1 Day (1GB High-
+Speed/Day)(C4)(ZD)Daypass C4
+A-013-ES-ZD-eO1-T-3D/60D-
+2GB【Esim】 North America (3) 2GB/3 days (valid for 
+60 days) (eO1) (ZD)Data 
+packageEuro-eO1
+E-184-ES-AU-eO1-D-
+10D/60D-10GB【Esim】 Europe (11 Countries) 10 Days (10GB 
+High-Speed Data/Day) (eO1) (AU)Daypass Euro-eO1
+Country
+Code Country
+name mcc
+GE Georgia 282
+PM Saint Pierre and Miquelon 308
+CL Chile 730
+CH Switzerland 228
+ZM Zambia 645
+GW Guinea-Bissau 632
+IQ Iraq 418
+CD Democratic Republic of Congo (DRC) 630
+KR Korea 450
+CM Cameroon 624
+LB Lebanon 415
+AA Global 000
+78 / 88
+--- PAGE 79 ---
+BO Bolivia 736
+TO Tonga 539
+MT Malta 278
+AL Albania 276
+PF French Polynesia 547
+PL Poland 260
+GT Guatemala 704
+KZ Kazakhstan 401
+MA Morocco 604
+AU Australia 505
+ES Spain 214
+GXD Guernsey 591
+LC Saint Lucia 358
+WS Samoa 549
+PK Pakistan 410
+SN Senegal 608
+EE Estonia 248
+HR Croatia 219
+DE Germany 262
+BS Bahamas 364
+DM Dominica 366
+QA Qatar 427
+79 / 88
+--- PAGE 80 ---
+JO Jordan 416
+MY Malaysia 502
+EG Egypt 602
+GB UK 234,235
+AR Argentina 722
+KN Saint Kitts and Nevis 356
+MR Mauritania 609
+CF Central Africa 623
+SBTD St Barts 592
+ET Ethiopia 636
+GN Guinea 611
+KI Kiribati 545
+CG Republic of Congo(Brazzaville) 629
+UA Ukraine 255
+BJ Benin 616
+BI Burundi 642
+SD Sudan 634
+LS Lesotho 651
+ID Indonesia 510
+PY Paraguay 744
+FM Micronesia 550
+RW Rwanda 635
+80 / 88
+--- PAGE 81 ---
+TG Togo 615
+TW Taiwan(China) 466
+SY Syria 417
+AG Antigua and Barbuda 344
+GP Guadeloupe (French Caribbean Region) 340
+BD Bangladesh 470
+LU Luxembourg 270
+SM San Marino 292
+AW Aruba 363
+MDD Isle of Man 584
+ER Eritrea 657
+LK Sri Lanka 413
+SZ Swaziland 653
+HU Hungary 216
+SB Solomon Islands 540
+AM Armenia 283
+IN India 404,405,406
+MBLT Gibraltar 266
+US USA 310,311,312,313,314,315,316
+DJ Djibouti 638
+BLW Bulavan 596
+LI Liechtenstein 295
+81 / 88
+--- PAGE 82 ---
+LY Libya 606
+TM Turkmenistan 438
+GQ Equatorial Guinea 627
+ST Sao Tome and Principe 626
+GD Grenada 888
+TN Tunisia 605
+ZW Zimbabwe 648
+UG Uganda 641
+LV Latvia 247
+GA Gabon 628
+NG Nigeria 621
+MP Northern Mariana 534
+BT Bhutan 402
+VE Venezuela 734
+FO The Faroe Islands (Denmark) 288
+SL Sierra Leone 619
+SG Singapore 525
+BA Bosnia and herzegovina 218
+FJ Fiji 542
+KE Kenya 639
+SK Slovakia 231
+AT Austria 232
+82 / 88
+--- PAGE 83 ---
+ML Mali 610
+MM Myanmar 414
+BW Botswana 652
+KGZ Kyrgyzstan 437
+UZ Uzbekistan 434
+YE Yemen 421
+MZ Mozambique 643
+NR Nauru 536
+JM Jamaica 338,352
+GDLP Guadalupe 590
+UY Uruguay 748
+AE United Arab emirates 424,430,431
+KY Cayman Islands 346
+NC New Caledonia 546
+FI Finland 244
+GM Gambia 607
+IT Italy 222
+SE Sweden 240
+GR Greece 202
+NI Nicaragua 710
+BY Belarus 257
+CY Cyprus 280
+83 / 88
+--- PAGE 84 ---
+TC Turks and Caicos Islands (UK) 376
+VN Vietnam 452
+IL Israel 425
+BR Brazil 724
+VG British virgin islands 348
+GL Greenland 290
+ZA South Africa 655
+SGBD Saipan 595
+BE Belgium 206
+ZXD Jersey 587
+EC Ecuador 740
+SI Slovenia 293
+MC Monaco 212
+TZ Tanzania 640
+MV Maldives 472
+CZ Czech 230
+HT Haiti 372
+TJ Tajikistan 436
+CV Cape Verde 625
+KM Comoros 654
+PT Portugal 268
+PH Philippines 515
+84 / 88
+--- PAGE 85 ---
+DO Dominican 370
+TD Chad 622
+GH Ghana 620
+CU Cuba 368
+JP Japan 440,441
+GF French Guiana 742
+AD Andorra 213
+DZ Algeria 603
+BM Bermuda 350
+AF Afghanistan 412
+GY Guyana 738
+CW Curaçao (The Netherlands) 362
+DK Denmark 238
+VU Vanuatu 541
+KH Cambodia 456
+VC Saint Vincent and the Grenadines 360
+VI United States Virgin Islands 332
+IS Iceland 274
+PR Puerto Rico 330
+BH Bahrain 426
+BB Barbados 342
+PE Peru 716
+85 / 88
+--- PAGE 86 ---
+MD Moldova 259
+MX Mexico 334
+SV Salvador 706
+NP Nepal 429
+SR Suriname 746
+AO Angola 631
+RE Reunion 647
+BZ Belize 702
+LA Laos 457
+CI Cote d'Ivoire 612
+NE Niger 614
+LR Liberia 618
+NA Namibia 649
+RO Romania 226
+BF Burkina Faso 613
+MU Mauritius 617
+TR Turkey 286
+IR Iran 432
+RU Russia 250
+BN Brunei 528
+CN China 460
+CO Colombia 732
+86 / 88
+--- PAGE 87 ---
+MW Malawi 650
+OM Oman 422
+TT Trinidad and Tobago 374
+ME Montenegro 297
+TL East Timor 514
+TH Thailand 520
+RS Serbia 220
+MK Macedonia 294
+MN Mongolia 428
+CR Costa rica 712
+KW Kuwait 419
+KOS Kosovo 221
+NO Norway 242
+PW Palau 552
+PG Papua New Guinea 537
+NL Netherlands 204
+CA Canada 302
+MH Marshall Islands 551
+HK Hong Kong(China) 454
+SO Somalia 637
+FR France 208
+PA Panama 714
+87 / 88
+--- PAGE 88 ---
+SA Saudi Arabia 420
+VA Vatican 225
+NZ New Zealand 530
+MG Madagascar 646
+AS American Samoa 544
+SC Seychelles 633
+BG Bulgaria 284
+AI Anguilla 365
+IE Ireland 272
+LT Lithuania 246
+KP North Korea 467
+AZ Azerbaijan 400
+GU Guam 535
+HN Honduras 708
+CK Cook Islands 548
+MO Macau(China) 455
+88 / 88

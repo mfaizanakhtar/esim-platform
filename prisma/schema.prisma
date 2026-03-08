@@ -68,3 +68,28 @@ model ProviderSkuMapping {
   @@index([isActive])
   @@index([packageType])
 }
+
+model ProviderSkuCatalog {
+  id            String   @id @default(cuid())
+  provider      String
+  productCode   String
+  productName   String
+  productType   String?
+  region        String?
+  countryCodes  Json?
+  dataAmount    String?
+  validity      String?
+  netPrice      Decimal? @db.Decimal(28, 2)
+  currency      String?
+  cardType      String?
+  activeType    String?
+  rawPayload    Json?
+  isActive      Boolean  @default(true)
+  lastSyncedAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([provider, productCode])
+  @@index([provider])
+  @@index([isActive])
+}

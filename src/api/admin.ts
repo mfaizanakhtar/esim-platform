@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { getJobQueue } from '~/queue/jobQueue';
 import { sendDeliveryEmail, type EsimPayload } from '~/services/email';
 import { decrypt } from '~/utils/crypto';
+import TgtClient from '~/vendor/tgtClient';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
@@ -26,6 +27,21 @@ export default function adminRoutes(
   _opts: FastifyPluginOptions,
   done: () => void,
 ) {
+  // NOTE:
+  // `providerSkuCatalog` exists in generated Prisma client, but VS Code's TS server
+  // can temporarily report stale diagnostics if Prisma types were generated in a
+  // different workspace context. We bind the delegate through a narrow local type
+  // so route logic remains strictly typed and resilient to stale editor state.
+  const providerSkuCatalog = (
+    prisma as unknown as {
+      providerSkuCatalog: {
+        findMany: (args: unknown) => Promise<unknown[]>;
+        count: (args: unknown) => Promise<number>;
+        upsert: (args: unknown) => Promise<unknown>;
+      };
+    }
+  ).providerSkuCatalog;
+
   /**
    * GET /admin/deliveries
    * List deliveries, optionally filtered by status.
@@ -384,6 +400,149 @@ export default function adminRoutes(
 
     app.log.info(`[Admin] Deactivated SKU mapping: ${id} (${existing.shopifySku})`);
     return reply.send({ ok: true, message: `SKU mapping ${existing.shopifySku} deactivated` });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Provider SKU Catalog
+  // ---------------------------------------------------------------------------
+
+  /**
+   * GET /admin/provider-catalog
+   * List synced provider catalog products for frontend mapping UI.
+   * Query: provider, isActive, search, limit, offset
+   */
+  app.get('/provider-catalog', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const query = request.query as {
+      provider?: string;
+      isActive?: string;
+      search?: string;
+      limit?: string;
+      offset?: string;
+    };
+
+    const limit = Math.min(parseInt(query.limit || '100', 10), 500);
+    const offset = parseInt(query.offset || '0', 10);
+
+    const where: Record<string, unknown> = {};
+    if (query.provider) where.provider = query.provider;
+    if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
+    if (query.search) {
+      where.OR = [
+        { productCode: { contains: query.search, mode: 'insensitive' } },
+        { productName: { contains: query.search, mode: 'insensitive' } },
+        { region: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [items, total] = await Promise.all([
+      providerSkuCatalog.findMany({
+        where,
+        orderBy: { productName: 'asc' },
+        skip: offset,
+        take: limit,
+      }),
+      providerSkuCatalog.count({ where }),
+    ]);
+
+    return reply.send({ total, limit, offset, items });
+  });
+
+  /**
+   * POST /admin/provider-catalog/sync
+   * Sync provider catalog products into DB.
+   * Body: { provider: 'tgt', pageSize?: number, maxPages?: number }
+   */
+  app.post('/provider-catalog/sync', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = (request.body || {}) as {
+      provider?: string;
+      pageSize?: number;
+      maxPages?: number;
+      lang?: string;
+    };
+
+    const provider = (body.provider || '').toLowerCase();
+    if (provider !== 'tgt') {
+      return reply.code(400).send({ error: 'Only provider=tgt is supported for sync right now' });
+    }
+
+    const pageSize = Math.min(Math.max(body.pageSize || 100, 1), 100);
+    const maxPages = Math.min(Math.max(body.maxPages || 10, 1), 200);
+    const lang = body.lang || 'en';
+
+    const client = new TgtClient();
+    let pageNum = 1;
+    let processed = 0;
+    let total = 0;
+
+    while (pageNum <= maxPages) {
+      const result = await client.listProducts({ pageNum, pageSize, lang });
+      total = result.total;
+
+      for (const product of result.products) {
+        const dataAmount =
+          product.dataTotal !== undefined && product.dataUnit
+            ? `${product.dataTotal}${product.dataUnit}`
+            : null;
+        const validity =
+          product.validityPeriod !== undefined ? `${product.validityPeriod} days` : null;
+
+        await providerSkuCatalog.upsert({
+          where: {
+            provider_productCode: {
+              provider: 'tgt',
+              productCode: product.productCode,
+            },
+          },
+          update: {
+            productName: product.productName,
+            productType: product.productType || null,
+            region: null,
+            countryCodes: product.countryCodeList
+              ? (product.countryCodeList as unknown as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+            dataAmount,
+            validity,
+            netPrice: new Prisma.Decimal(product.netPrice),
+            currency: null,
+            cardType: product.cardType || null,
+            activeType: product.activeType || null,
+            rawPayload: product as unknown as Prisma.InputJsonValue,
+            isActive: true,
+            lastSyncedAt: new Date(),
+          },
+          create: {
+            provider: 'tgt',
+            productCode: product.productCode,
+            productName: product.productName,
+            productType: product.productType || null,
+            region: null,
+            countryCodes: product.countryCodeList
+              ? (product.countryCodeList as unknown as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+            dataAmount,
+            validity,
+            netPrice: new Prisma.Decimal(product.netPrice),
+            currency: null,
+            cardType: product.cardType || null,
+            activeType: product.activeType || null,
+            rawPayload: product as unknown as Prisma.InputJsonValue,
+            isActive: true,
+            lastSyncedAt: new Date(),
+          },
+        });
+
+        processed += 1;
+      }
+
+      if (result.products.length < pageSize || processed >= total) break;
+      pageNum += 1;
+    }
+
+    return reply.send({ ok: true, provider: 'tgt', processed, total, pages: pageNum });
   });
 
   done();
