@@ -44,8 +44,8 @@ vi.mock('~/vendor/firoamClient', () => {
   };
 });
 
-vi.mock('~/vendor/registry', async (importOriginal) => {
-  const orig = await importOriginal<typeof import('~/vendor/registry')>();
+vi.mock('~/vendor/registry', async () => {
+  const orig = await vi.importActual<typeof import('~/vendor/registry')>('~/vendor/registry');
   return {
     getProvider: (name: string) => {
       if (name === 'tgt') {
@@ -53,6 +53,7 @@ vi.mock('~/vendor/registry', async (importOriginal) => {
           name: 'tgt',
           provision: (...args: unknown[]) => {
             if (!mockTgtProvision) mockTgtProvision = vi.fn();
+            // @ts-expect-error - apply signature mismatch is acceptable in tests
             return mockTgtProvision(...args);
           },
         };
