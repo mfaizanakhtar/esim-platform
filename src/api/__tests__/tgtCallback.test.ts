@@ -197,4 +197,62 @@ describe('TGT callback route', () => {
     expect(TgtClient.verifyCallbackSignature(payload, sign, 'abc')).toBe(true);
     expect(TgtClient.verifyCallbackSignature(payload, sign, 'different')).toBe(false);
   });
+
+  it('handles duplicate callbacks without error — idempotency via finalizeDelivery', async () => {
+    const mockDelivery = {
+      id: 'delivery-dup',
+      shop: 'test.myshopify.com',
+      orderId: 'order-dup',
+      orderName: '#2001',
+      lineItemId: 'line-dup',
+      variantId: 'var-dup',
+      customerEmail: 'dup@example.com',
+      vendorReferenceId: 'SE-DUP',
+      payloadEncrypted: null,
+      status: 'awaiting_callback',
+      lastError: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(mockDelivery);
+    // first-wins: first call succeeds, second returns alreadyDone
+    vi.mocked(finalizeDelivery)
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true, alreadyDone: true });
+
+    const app = Fastify();
+    app.register(tgtCallbackRoutes, { prefix: '/webhook/tgt' });
+
+    const unsigned = {
+      code: '0000',
+      msg: 'success',
+      timestamp: '2026-03-08T00:00:00Z',
+      data: {
+        eventType: 1,
+        businessType: 'ESIM',
+        orderInfo: {
+          orderNo: 'SE-DUP',
+          qrCode: 'LPA:1$host$ACTDUP',
+          iccid: '8000',
+        },
+      },
+    };
+    const sign = createTgtSignature(unsigned, process.env.TGT_CALLBACK_SECRET || '');
+    const payload = { ...unsigned, sign };
+
+    const [res1, res2] = await Promise.all([
+      app.inject({ method: 'POST', url: '/webhook/tgt/callback', payload }),
+      app.inject({ method: 'POST', url: '/webhook/tgt/callback', payload }),
+    ]);
+
+    // Both responses must be 200 — retry-safe
+    expect(res1.statusCode).toBe(200);
+    expect(res1.json()).toEqual({ code: '0000', msg: 'success' });
+    expect(res2.statusCode).toBe(200);
+    expect(res2.json()).toEqual({ code: '0000', msg: 'success' });
+
+    // Handler calls finalizeDelivery for each request; idempotency lives inside it
+    expect(vi.mocked(finalizeDelivery)).toHaveBeenCalledTimes(2);
+  });
 });

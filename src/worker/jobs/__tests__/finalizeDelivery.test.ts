@@ -10,8 +10,8 @@ vi.mock('~/db/prisma', () => ({
 }));
 
 vi.mock('~/utils/crypto', () => ({
-  encrypt: vi.fn(async () => 'encrypted-payload'),
-  decrypt: vi.fn(async () => JSON.stringify({ lpa: 'LPA:1$h$a', activationCode: 'a', iccid: '1' })),
+  encrypt: vi.fn(() => 'encrypted-payload'),
+  decrypt: vi.fn(() => JSON.stringify({ lpa: 'LPA:1$h$a', activationCode: 'a', iccid: '1' })),
 }));
 
 vi.mock('~/services/email', () => ({

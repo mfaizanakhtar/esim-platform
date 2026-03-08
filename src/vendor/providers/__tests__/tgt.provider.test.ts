@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ProviderMappingConfig, ProvisionContext } from '~/vendor/types';
 import { TgtProvider } from '~/vendor/providers/tgt';
 
@@ -34,8 +34,12 @@ describe('TgtProvider', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('returns pending result for callback mode', async () => {
-    process.env.TGT_FULFILLMENT_MODE = 'callback';
+    vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
     createOrder.mockResolvedValue({ orderNo: 'SE100' });
 
     const provider = new TgtProvider();
@@ -47,9 +51,9 @@ describe('TgtProvider', () => {
   });
 
   it('returns ready result in polling mode when credentials resolve', async () => {
-    process.env.TGT_FULFILLMENT_MODE = 'polling';
-    process.env.TGT_POLL_INTERVAL_SECONDS = '1';
-    process.env.TGT_POLL_MAX_ATTEMPTS = '2';
+    vi.stubEnv('TGT_FULFILLMENT_MODE', 'polling');
+    vi.stubEnv('TGT_POLL_INTERVAL_SECONDS', '1');
+    vi.stubEnv('TGT_POLL_MAX_ATTEMPTS', '2');
 
     createOrder.mockResolvedValue({ orderNo: 'SE200' });
     tryResolveOrderCredentials.mockResolvedValue({
@@ -69,9 +73,9 @@ describe('TgtProvider', () => {
   });
 
   it('throws when polling mode cannot resolve credentials in max attempts', async () => {
-    process.env.TGT_FULFILLMENT_MODE = 'polling';
-    process.env.TGT_POLL_INTERVAL_SECONDS = '1';
-    process.env.TGT_POLL_MAX_ATTEMPTS = '1';
+    vi.stubEnv('TGT_FULFILLMENT_MODE', 'polling');
+    vi.stubEnv('TGT_POLL_INTERVAL_SECONDS', '1');
+    vi.stubEnv('TGT_POLL_MAX_ATTEMPTS', '1');
 
     createOrder.mockResolvedValue({ orderNo: 'SE404' });
     tryResolveOrderCredentials.mockResolvedValue({ ready: false });
@@ -83,7 +87,7 @@ describe('TgtProvider', () => {
   });
 
   it('returns pending result for hybrid mode', async () => {
-    process.env.TGT_FULFILLMENT_MODE = 'hybrid';
+    vi.stubEnv('TGT_FULFILLMENT_MODE', 'hybrid');
     createOrder.mockResolvedValue({ orderNo: 'SE300' });
 
     const provider = new TgtProvider();
@@ -94,7 +98,7 @@ describe('TgtProvider', () => {
   });
 
   it('passes startDate string from providerConfig to createOrder', async () => {
-    process.env.TGT_FULFILLMENT_MODE = 'callback';
+    vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
     createOrder.mockResolvedValue({ orderNo: 'SE400' });
 
     const configWithDate: ProviderMappingConfig = {
@@ -109,9 +113,9 @@ describe('TgtProvider', () => {
   });
 
   it('sleeps between polling attempts when credentials not ready on first try', async () => {
-    process.env.TGT_FULFILLMENT_MODE = 'polling';
-    process.env.TGT_POLL_INTERVAL_SECONDS = '1';
-    process.env.TGT_POLL_MAX_ATTEMPTS = '2';
+    vi.stubEnv('TGT_FULFILLMENT_MODE', 'polling');
+    vi.stubEnv('TGT_POLL_INTERVAL_SECONDS', '1');
+    vi.stubEnv('TGT_POLL_MAX_ATTEMPTS', '2');
 
     createOrder.mockResolvedValue({ orderNo: 'SE500' });
     tryResolveOrderCredentials.mockResolvedValueOnce({ ready: false }).mockResolvedValueOnce({

@@ -104,6 +104,7 @@ describe('provisionEsim Worker Job', () => {
 
   afterEach(() => {
     vi.resetAllMocks();
+    vi.unstubAllEnvs();
   });
 
   describe('Basic Job Processing', () => {
@@ -628,7 +629,7 @@ describe('provisionEsim Worker Job', () => {
       });
 
     it('sets awaiting_callback status when TGT callback mode returns pending', async () => {
-      process.env.TGT_FULFILLMENT_MODE = 'callback';
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
 
       const mockDelivery = createMockDelivery();
       const mockMapping = createTgtMockMapping();
@@ -658,7 +659,7 @@ describe('provisionEsim Worker Job', () => {
     });
 
     it('sets vendor_ordered status and enqueues poll job for TGT hybrid mode', async () => {
-      process.env.TGT_FULFILLMENT_MODE = 'hybrid';
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'hybrid');
 
       const mockDelivery = createMockDelivery();
       const mockMapping = createTgtMockMapping();
@@ -686,6 +687,60 @@ describe('provisionEsim Worker Job', () => {
         'tgt-poll-order',
         expect.objectContaining({ deliveryId: 'delivery-123', orderNo: 'SE-HYBRID-456' }),
         expect.any(Object),
+      );
+    });
+
+    it('sets polling status when TGT polling mode returns pending', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'polling');
+
+      const mockDelivery = createMockDelivery();
+      const mockMapping = createTgtMockMapping();
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockTgtProvision.mockResolvedValue({
+        pending: true,
+        vendorOrderId: 'SE-POLL-789',
+        lpa: '',
+        activationCode: '',
+        iccid: '',
+      });
+
+      const result = await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-AU-3GB-TGT' });
+
+      expect(result).toEqual({ ok: true, pending: true });
+      expect(prisma.esimDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'polling',
+            vendorReferenceId: 'SE-POLL-789',
+          }),
+        }),
+      );
+      // Polling mode does NOT enqueue a poll job — hybrid does
+      expect(mockJobSend).not.toHaveBeenCalled();
+    });
+
+    it('records failure status when TGT provisioning throws', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
+
+      const mockDelivery = createMockDelivery();
+      const mockMapping = createTgtMockMapping();
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      mockTgtProvision.mockRejectedValue(new Error('TGT API unavailable'));
+
+      await expect(
+        handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-AU-3GB-TGT' }),
+      ).rejects.toThrow('TGT API unavailable');
+
+      expect(prisma.esimDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'failed' }),
+        }),
       );
     });
   });

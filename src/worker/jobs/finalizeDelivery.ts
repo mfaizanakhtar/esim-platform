@@ -32,7 +32,7 @@ export async function finalizeDelivery(
     iccid: args.iccid,
   };
 
-  const payloadEncrypted = await encrypt(
+  const payloadEncrypted = encrypt(
     JSON.stringify({
       vendorId: args.vendorOrderId,
       lpa: args.lpa,
@@ -113,7 +113,7 @@ export async function getDecryptedEsimPayload(deliveryId: string): Promise<EsimP
   if (!delivery?.payloadEncrypted) return null;
 
   try {
-    const decrypted = await decrypt(delivery.payloadEncrypted);
+    const decrypted = decrypt(delivery.payloadEncrypted);
     const parsed = JSON.parse(decrypted) as {
       lpa?: string;
       activationCode?: string;
