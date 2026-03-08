@@ -983,6 +983,24 @@ describe('Admin Routes', () => {
         }),
       );
     });
+
+    it('filters by isActive=true when provided', async () => {
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.count).mockResolvedValue(0);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/provider-catalog?isActive=true',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(prismaCatalog.findMany)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ isActive: true }),
+        }),
+      );
+    });
   });
 
   describe('POST /provider-catalog/sync', () => {
@@ -1027,6 +1045,35 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledTimes(1);
       expect(res.json()).toMatchObject({ ok: true, provider: 'tgt', processed: 1 });
+    });
+
+    it('breaks when processed equals total even if page is full', async () => {
+      adminMocks.mockTgtListProducts.mockResolvedValue({
+        total: 1,
+        products: [
+          {
+            productCode: 'BREAK-001',
+            productName: 'Break Test',
+            productType: 'DATA_PACK',
+            netPrice: 1.0,
+          },
+        ],
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        // pageSize=1 means products.length (1) >= pageSize (1), so left branch is false
+        // but processed (1) >= total (1) triggers the break via right branch
+        payload: { provider: 'tgt', pageSize: 1, maxPages: 5, lang: 'en' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, processed: 1 });
+      // Only one page fetched despite maxPages=5
+      expect(adminMocks.mockTgtListProducts).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -81,4 +81,50 @@ describe('TgtProvider', () => {
       'TGT order SE404 created but credentials not ready after polling',
     );
   });
+
+  it('returns pending result for hybrid mode', async () => {
+    process.env.TGT_FULFILLMENT_MODE = 'hybrid';
+    createOrder.mockResolvedValue({ orderNo: 'SE300' });
+
+    const provider = new TgtProvider();
+    const result = await provider.provision(config, ctx);
+
+    expect(result.pending).toBe(true);
+    expect(result.vendorOrderId).toBe('SE300');
+  });
+
+  it('passes startDate string from providerConfig to createOrder', async () => {
+    process.env.TGT_FULFILLMENT_MODE = 'callback';
+    createOrder.mockResolvedValue({ orderNo: 'SE400' });
+
+    const configWithDate: ProviderMappingConfig = {
+      providerSku: 'A-002-ES-AU-T-30D/180D-3GB(A)',
+      providerConfig: { startDate: '2026-06-01' },
+    };
+
+    const provider = new TgtProvider();
+    await provider.provision(configWithDate, ctx);
+
+    expect(createOrder).toHaveBeenCalledWith(expect.objectContaining({ startDate: '2026-06-01' }));
+  });
+
+  it('sleeps between polling attempts when credentials not ready on first try', async () => {
+    process.env.TGT_FULFILLMENT_MODE = 'polling';
+    process.env.TGT_POLL_INTERVAL_SECONDS = '1';
+    process.env.TGT_POLL_MAX_ATTEMPTS = '2';
+
+    createOrder.mockResolvedValue({ orderNo: 'SE500' });
+    tryResolveOrderCredentials.mockResolvedValueOnce({ ready: false }).mockResolvedValueOnce({
+      ready: true,
+      lpa: 'LPA:1$host$ACT2',
+      activationCode: 'ACT2',
+      iccid: '8888',
+    });
+
+    const provider = new TgtProvider();
+    const result = await provider.provision(config, ctx);
+
+    expect(tryResolveOrderCredentials).toHaveBeenCalledTimes(2);
+    expect(result.lpa).toBe('LPA:1$host$ACT2');
+  });
 });

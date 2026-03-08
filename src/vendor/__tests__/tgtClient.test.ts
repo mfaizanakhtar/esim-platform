@@ -226,4 +226,75 @@ describe('TgtClient', () => {
     expect(result.usage?.dataUsage).toBe('100');
     expect(result.usage?.dataTotal).toBe('1000');
   });
+
+  it('reuses cached token without re-authenticating on second call', async () => {
+    // Only one auth request should be made
+    nock(base)
+      .post('/oauth/token')
+      .once()
+      .reply(200, {
+        code: '0000',
+        msg: 'success',
+        data: { accessToken: 'token-cached', expires: 86400 },
+      });
+
+    nock(base)
+      .post('/eSIMApi/v2/order/orders')
+      .reply(200, { code: '0000', msg: 'success', data: { list: [] } });
+
+    nock(base)
+      .post('/eSIMApi/v2/order/orders')
+      .reply(200, { code: '0000', msg: 'success', data: { list: [] } });
+
+    const client = new TgtClient();
+    await client.queryOrders({ orderNo: 'SE10' });
+    await client.queryOrders({ orderNo: 'SE11' }); // reuses cached token
+
+    // If auth was called a second time nock would throw since only one mock is registered
+    expect(nock.isDone()).toBe(true);
+  });
+
+  it('throws VendorError when getUsage returns non-0000 code', async () => {
+    nock(base)
+      .post('/oauth/token')
+      .reply(200, {
+        code: '0000',
+        msg: 'success',
+        data: { accessToken: 'token-1', expires: 86400 },
+      });
+
+    nock(base).post('/eSIMApi/v2/order/usage').reply(200, {
+      code: '4001',
+      msg: 'Order not found',
+    });
+
+    const client = new TgtClient();
+    await expect(client.getUsage('SE-MISSING')).rejects.toThrow('TGT usage failed');
+  });
+
+  it('retries on 2004 token expired code', async () => {
+    nock(base)
+      .post('/oauth/token')
+      .reply(200, { code: '0000', msg: 'success', data: { accessToken: 'token-1', expires: 1 } })
+      .post('/oauth/token')
+      .reply(200, {
+        code: '0000',
+        msg: 'success',
+        data: { accessToken: 'token-2', expires: 86400 },
+      });
+
+    nock(base)
+      .post('/eSIMApi/v2/order/orders')
+      .reply(200, { code: '2004', msg: 'Token expired' })
+      .post('/eSIMApi/v2/order/orders')
+      .reply(200, {
+        code: '0000',
+        msg: 'success',
+        data: { list: [{ orderNo: 'SE99' }] },
+      });
+
+    const client = new TgtClient();
+    const result = await client.queryOrders({ orderNo: 'SE99' });
+    expect(result.orders.length).toBe(1);
+  });
 });
