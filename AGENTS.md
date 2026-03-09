@@ -257,6 +257,7 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 |----------|---------|-------------|--------|
 | [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) | Test & CI/CD setup completion summary | Reference for what testing infrastructure exists | 🗂️ Historical |
 | [docs/REFACTORING_ANALYSIS.md](docs/REFACTORING_ANALYSIS.md) | Code quality analysis & recommendations | Planning refactoring work, understanding tech debt | 🗂️ Historical |
+| [docs/MONOREPO_MIGRATION_PLAN.md](docs/MONOREPO_MIGRATION_PLAN.md) | Full plan to migrate to monorepo (`fulfillment-engine` + `dashboard`) | Executing the monorepo migration or scaffolding the admin UI | 🔄 Active |
 
 ### 📁 Data Files (Not Documentation)
 - `FiRoam.pdf` - FiRoam vendor documentation (PDF format)

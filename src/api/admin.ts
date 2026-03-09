@@ -5,6 +5,7 @@ import { getJobQueue } from '~/queue/jobQueue';
 import { sendDeliveryEmail, type EsimPayload } from '~/services/email';
 import { decrypt } from '~/utils/crypto';
 import TgtClient from '~/vendor/tgtClient';
+import FiRoamClient from '~/vendor/firoamClient';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
@@ -452,7 +453,10 @@ export default function adminRoutes(
   /**
    * POST /admin/provider-catalog/sync
    * Sync provider catalog products into DB.
-   * Body: { provider: 'tgt', pageSize?: number, maxPages?: number }
+   * Body: { provider: 'tgt' | 'firoam', pageSize?: number, maxPages?: number, maxSkus?: number }
+   *
+   * FiRoam: fetches all SKUs then calls getPackages() for each, upserting every
+   * plan into ProviderSkuCatalog with productCode = package.apiCode.
    */
   app.post('/provider-catalog/sync', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
@@ -462,11 +466,117 @@ export default function adminRoutes(
       pageSize?: number;
       maxPages?: number;
       lang?: string;
+      maxSkus?: number;
     };
 
     const provider = (body.provider || '').toLowerCase();
-    if (provider !== 'tgt') {
-      return reply.code(400).send({ error: 'Only provider=tgt is supported for sync right now' });
+    if (provider !== 'tgt' && provider !== 'firoam') {
+      return reply.code(400).send({ error: "provider must be 'tgt' or 'firoam'" });
+    }
+
+    // ── FiRoam sync ──────────────────────────────────────────────────────────
+    if (provider === 'firoam') {
+      const maxSkus = Math.min(Math.max(body.maxSkus || 500, 1), 2000);
+      const client = new FiRoamClient();
+
+      const skuResult = await client.getSkus();
+      if (!skuResult.skus) {
+        return reply.code(502).send({
+          error: 'FiRoam getSkus failed',
+          raw: skuResult.raw,
+        });
+      }
+
+      const skus = skuResult.skus.slice(0, maxSkus);
+      let processedSkus = 0;
+      let processedPackages = 0;
+      let skipsNoApiCode = 0;
+
+      for (const sku of skus) {
+        const pkgResult = await client.getPackages(String(sku.skuid));
+        processedSkus += 1;
+
+        if (!pkgResult.packageData) continue;
+
+        const pkgData = pkgResult.packageData;
+
+        for (const pkg of pkgData.esimPackageDtoList) {
+          if (!pkg.apiCode) {
+            skipsNoApiCode += 1;
+            continue;
+          }
+
+          const dataAmount = `${pkg.flows}${pkg.unit}`;
+          const validity = `${pkg.days} days`;
+          const productName = pkgData.displayEn
+            ? `${pkgData.displayEn} - ${pkg.showName}`
+            : pkg.showName;
+
+          const rawPayload = {
+            ...pkg,
+            skuId: sku.skuid,
+            skuDisplay: sku.display,
+            countryCode: sku.countryCode,
+            skuCountryCodes: pkgData.supportCountry,
+          } as unknown as Prisma.InputJsonValue;
+
+          const countryCodes = pkgData.supportCountry?.length
+            ? (pkgData.supportCountry as unknown as Prisma.InputJsonValue)
+            : Prisma.JsonNull;
+
+          await providerSkuCatalog.upsert({
+            where: {
+              provider_productCode: {
+                provider: 'firoam',
+                productCode: pkg.apiCode,
+              },
+            },
+            update: {
+              productName,
+              productType: null,
+              region: sku.countryCode || null,
+              countryCodes,
+              dataAmount,
+              validity,
+              netPrice: new Prisma.Decimal(pkg.price),
+              currency: 'USD',
+              cardType: null,
+              activeType: null,
+              rawPayload,
+              isActive: true,
+              lastSyncedAt: new Date(),
+            },
+            create: {
+              provider: 'firoam',
+              productCode: pkg.apiCode,
+              productName,
+              productType: null,
+              region: sku.countryCode || null,
+              countryCodes,
+              dataAmount,
+              validity,
+              netPrice: new Prisma.Decimal(pkg.price),
+              currency: 'USD',
+              cardType: null,
+              activeType: null,
+              rawPayload,
+              isActive: true,
+              lastSyncedAt: new Date(),
+            },
+          });
+
+          processedPackages += 1;
+        }
+      }
+
+      return reply.send({
+        ok: true,
+        provider: 'firoam',
+        processedSkus,
+        processedPackages,
+        totalSkus: skuResult.skus.length,
+        skipsNoApiCode,
+      });
     }
 
     const pageSize = Math.min(Math.max(body.pageSize || 100, 1), 100);
