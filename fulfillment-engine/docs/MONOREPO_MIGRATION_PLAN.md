@@ -73,11 +73,11 @@ esim-platform/                        ← GitHub repo root
 
 | Phase | What | Status |
 |-------|------|--------|
-| 1 | GitHub repo rename | ⬜ Not started |
-| 2 | Monorepo root setup | ⬜ Not started |
-| 3 | Move backend into `fulfillment-engine/` | ⬜ Not started |
-| 4 | Update CI + Railway config | ⬜ Not started |
-| 5 | Write root AGENTS.md | ⬜ Not started |
+| 1 | GitHub repo rename | ✅ Done (user renames on GitHub + `git remote set-url`) |
+| 2 | Monorepo root setup | ✅ Done |
+| 3 | Move backend into `fulfillment-engine/` | ✅ Done |
+| 4 | Update CI + Railway config | ✅ Done (ci.yml created, Railway root dir update pending) |
+| 5 | Write root AGENTS.md | ✅ Done |
 | 6 | Scaffold `dashboard/` | ⬜ Not started |
 | 7 | Dashboard: Auth + routing shell | ⬜ Not started |
 | 8 | Dashboard: Deliveries page | ⬜ Not started |
@@ -635,11 +635,11 @@ interface CatalogSyncState {
 
 ## Post-Migration Checklist
 
-- [ ] Phase 1: GitHub renamed, local remote updated
-- [ ] Phase 2: pnpm workspace root created
-- [ ] Phase 3: Backend moved to `fulfillment-engine/`, all tests pass
-- [ ] Phase 4: Railway root dir updated, CI yml created and green
-- [ ] Phase 5: Root AGENTS.md written
+- [x] Phase 1: GitHub renamed, local remote updated
+- [x] Phase 2: pnpm workspace root created
+- [x] Phase 3: Backend moved to `fulfillment-engine/`, all tests pass (363/363)
+- [x] Phase 4: CI yml created (`ci.yml`); Railway root dir update → set to `fulfillment-engine/` in dashboard
+- [x] Phase 5: Root AGENTS.md written
 - [ ] Phase 6: `dashboard/` scaffolded, `npm test` passes (0 tests)
 - [ ] Phase 7: Auth + routing shell working
 - [ ] Phase 8: Deliveries page working

@@ -1,18 +1,6 @@
 node_modules/
-dist/
+.DS_Store
 .env
 .env.*
-/.DS_Store
-.idea/
 coverage/
-prisma/dev.db
-firoam-data/*
-csv-exports/*
-test-output/*
-
-# Compiled JS files (TypeScript project - only keep source .ts files)
-src/**/*.js
-scripts/**/*.js
-
-# Docker
-docker-compose.override.yml.backups/
+dist/
