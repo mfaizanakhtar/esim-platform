@@ -1,34 +1,23 @@
-# eSIM Backend (scaffold)
+# fulfillment-engine
 
-This repository is a scaffold for the Shopify → FiRoam eSIM fulfillment backend.
+Node.js backend for the eSIM fulfillment platform. Handles Shopify webhooks, provisions eSIMs via FiRoam and TGT Technology, and delivers credentials by email.
 
-Quick start:
+**For full context, read [`AGENTS.md`](AGENTS.md).**
 
-1. Install dependencies
+## Quick Start
 
 ```bash
 npm install
-```
-
-2. Create a `.env` with at minimum:
-
-```
-DATABASE_URL=postgresql://user:pass@localhost:5432/esim
-SHOPIFY_ADMIN_TOKEN=...
-SHOPIFY_WEBHOOK_SECRET=...
-FIROAM_API_KEY=...
-ENCRYPTION_KEY=... # 32-byte key
-```
-
-3. Generate Prisma client and run migrations (Postgres required)
-
-```bash
+cp ../.env.example .env   # fill in required vars
 npm run prisma:generate
 npm run prisma:migrate
+npm run dev               # starts API + worker
 ```
 
-4. Start in dev mode
+## Key Commands
 
 ```bash
-npm run dev
+npm test -- --run    # run all tests
+npm run verify       # type-check + build + lint + tests
+npm run pr:create "feat: description"  # create PR with CI + CodeRabbit review
 ```

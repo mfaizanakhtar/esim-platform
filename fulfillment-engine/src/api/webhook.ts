@@ -105,7 +105,10 @@ export default function webhookRoutes(
 
       // Use customer email if available, fallback to order email
       const customerEmail =
-        webhook.customer?.email || webhook.contact_email || webhook.email || webhook.billing_address?.email;
+        webhook.customer?.email ||
+        webhook.contact_email ||
+        webhook.email ||
+        webhook.billing_address?.email;
 
       if (!customerEmail) {
         app.log.error(
@@ -130,7 +133,10 @@ export default function webhookRoutes(
       // Process each line item
       for (const lineItem of webhook.line_items) {
         if (!lineItem.variant_id) {
-          app.log.warn({ orderId, orderName, lineItemId: lineItem.id }, 'Skipping line item with null variant_id');
+          app.log.warn(
+            { orderId, orderName, lineItemId: lineItem.id },
+            'Skipping line item with null variant_id',
+          );
           continue;
         }
 

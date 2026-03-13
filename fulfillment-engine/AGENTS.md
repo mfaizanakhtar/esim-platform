@@ -1,5 +1,22 @@
 # Agent Instructions - Shopify eSIM Fulfillment System
 
+## Start Here
+
+| Task type | Read this |
+|-----------|-----------|
+| Any coding task | This file top-to-bottom, then the specific doc from the index below |
+| Before committing | Run `npm run verify` (type-check + build + lint + tests) |
+| Creating a PR | Use the **Create PR** skill: `npm run pr:create "feat: description"` |
+| Active decisions/gotchas | [`../DECISIONS.md`](../DECISIONS.md) |
+
+## Agent Skills
+
+| Skill | Directory | Purpose | npm script |
+|-------|-----------|---------|------------|
+| Create PR | [`.claude/skills/create-pr/`](../.claude/skills/create-pr/SKILL.md) | Branch → commit → push → PR → CI → CodeRabbit review → agent fixes → merge | `npm run pr:create "<message>"` |
+
+---
+
 ## Table of Contents
 - [System Overview](#system-overview)
 - [Coding Standards](#coding-standards)
@@ -115,7 +132,7 @@ src/
 #### 1. Unit Tests
 - **Location**: `src/**/__tests__/*.test.ts`
 - **Purpose**: Test individual functions/classes
-- **Framework**: Jest
+- **Framework**: Vitest
 - **Mock**: External APIs, database calls
 - **Run**: `npm test`
 
@@ -189,16 +206,6 @@ src/
 
 ## Documentation Index
 
-### 🤖 Agent Skills Index
-
-Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow + details) and an executable script.
-
-| Skill | Directory | Purpose | npm script |
-|-------|-----------|---------|------------|
-| Create PR | [`.claude/skills/create-pr/`](.claude/skills/create-pr/SKILL.md) | Branch → commit → push → PR → CI → CodeRabbit review → agent fixes → merge | `npm run pr:create "<message>"` |
-
----
-
 ### 📋 Core Documentation (You Are Here)
 - **AGENTS.md** (this file) - Master index, coding standards, testing strategy
 
@@ -257,7 +264,7 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 |----------|---------|-------------|--------|
 | [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) | Test & CI/CD setup completion summary | Reference for what testing infrastructure exists | 🗂️ Historical |
 | [docs/REFACTORING_ANALYSIS.md](docs/REFACTORING_ANALYSIS.md) | Code quality analysis & recommendations | Planning refactoring work, understanding tech debt | 🗂️ Historical |
-| [docs/MONOREPO_MIGRATION_PLAN.md](docs/MONOREPO_MIGRATION_PLAN.md) | Full plan to migrate to monorepo (`fulfillment-engine` + `dashboard`) | Executing the monorepo migration or scaffolding the admin UI | 🔄 Active |
+| [docs/MONOREPO_MIGRATION_PLAN.md](docs/MONOREPO_MIGRATION_PLAN.md) | Full plan to migrate to monorepo (`fulfillment-engine` + `dashboard`) | Executing the monorepo migration or scaffolding the admin UI | 🔄 Active (Phases 6-12 pending — dashboard/ not yet scaffolded) |
 
 ### 📁 Data Files (Not Documentation)
 - `FiRoam.pdf` - FiRoam vendor documentation (PDF format)
@@ -274,7 +281,7 @@ Skills live in `.claude/skills/<skill-name>/`. Each skill has a `SKILL.md` (flow
 - **🗂️ Historical** - Reference/archive, may contain outdated information
 
 > 💡 **Tip**: Always check `docs/UPDATE.md` for recent changes that might affect your task.
-> 📅 **Last index update**: 2026-03-08
+> 📅 **Last index update**: 2026-03-13
 
 ---
 
@@ -493,7 +500,7 @@ For questions about:
 
 ---
 
-**Last Updated**: March 8, 2026
+**Last Updated**: March 13, 2026
 **System Version**: 0.2.0
 **Deployment**: Railway (Production)
 **Vendors**: FiRoam (primary, sync) + TGT Technology (secondary, async callback/polling)
