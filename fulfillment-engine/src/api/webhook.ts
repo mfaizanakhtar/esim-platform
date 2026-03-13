@@ -5,33 +5,35 @@ import { verifyShopifyWebhook } from '~/shopify/webhooks';
 import { getJobQueue } from '~/queue/jobQueue';
 
 const ShopifyLineItemSchema = z.object({
-  id: z.number(),
-  variant_id: z.number(),
-  quantity: z.number().default(1),
-  product_id: z.number(),
-  title: z.string(),
-  name: z.string(),
+  id: z.coerce.number(),
+  variant_id: z.coerce.number().nullable().optional(),
+  quantity: z.coerce.number().default(1),
+  product_id: z.coerce.number().nullable().optional(),
+  title: z.string().nullable().optional(),
+  name: z.string().nullable().optional(),
   sku: z.string().nullable().optional(),
 });
 
 const ShopifyOrderPaidSchema = z.object({
-  id: z.number(),
+  id: z.coerce.number(),
   name: z.string(),
-  email: z.string().default(''),
-  contact_email: z.string().optional(),
+  email: z.string().nullable().optional().default(''),
+  contact_email: z.string().nullable().optional(),
   customer: z
     .object({
-      id: z.number(),
-      email: z.string(),
-      first_name: z.string(),
-      last_name: z.string(),
-      phone: z.string().optional(),
+      id: z.coerce.number(),
+      email: z.string().nullable().optional(),
+      first_name: z.string().nullable().optional(),
+      last_name: z.string().nullable().optional(),
+      phone: z.string().nullable().optional(),
     })
+    .nullable()
     .optional(),
   billing_address: z
     .object({
-      email: z.string().optional(),
+      email: z.string().nullable().optional(),
     })
+    .nullable()
     .optional(),
   line_items: z.array(ShopifyLineItemSchema),
 });
@@ -53,6 +55,7 @@ export default function webhookRoutes(
       const rawBody = (request as unknown as { rawBody?: string }).rawBody;
       const hmacHeader = request.headers['x-shopify-hmac-sha256'] as string;
       const shopDomain = request.headers['x-shopify-shop-domain'] as string;
+      const topic = request.headers['x-shopify-topic'] as string | undefined;
 
       if (!rawBody) {
         app.log.error('No raw body available');
@@ -77,6 +80,13 @@ export default function webhookRoutes(
         return reply.code(401).send({ error: 'Invalid signature' });
       }
 
+      // Ignore unexpected topics if this URL is reused by other Shopify webhook subscriptions.
+      // We only process orders/paid payloads in this handler.
+      if (topic && topic !== 'orders/paid') {
+        app.log.info({ topic }, 'Ignoring unsupported webhook topic for /orders/paid endpoint');
+        return reply.code(200).send({ received: true, ignored: true });
+      }
+
       // Parse and validate webhook payload shape
       const parseResult = ShopifyOrderPaidSchema.safeParse(JSON.parse(rawBody));
       if (!parseResult.success) {
@@ -94,7 +104,8 @@ export default function webhookRoutes(
       );
 
       // Use customer email if available, fallback to order email
-      const customerEmail = webhook.customer?.email || webhook.email;
+      const customerEmail =
+        webhook.customer?.email || webhook.contact_email || webhook.email || webhook.billing_address?.email;
 
       if (!customerEmail) {
         app.log.error(
@@ -118,6 +129,11 @@ export default function webhookRoutes(
 
       // Process each line item
       for (const lineItem of webhook.line_items) {
+        if (!lineItem.variant_id) {
+          app.log.warn({ orderId, orderName, lineItemId: lineItem.id }, 'Skipping line item with null variant_id');
+          continue;
+        }
+
         const lineItemId = lineItem.id.toString();
         const variantId = lineItem.variant_id.toString();
 
