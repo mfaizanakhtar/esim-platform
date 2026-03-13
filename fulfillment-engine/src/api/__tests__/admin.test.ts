@@ -14,6 +14,8 @@ const adminMocks = vi.hoisted(() => {
     mockSendDeliveryEmail: vi.fn(),
     mockDecrypt: vi.fn(),
     mockTgtListProducts: vi.fn(),
+    mockFiroamGetSkus: vi.fn(),
+    mockFiroamGetPackages: vi.fn(),
   };
 });
 
@@ -49,6 +51,17 @@ vi.mock('~/vendor/tgtClient', () => ({
   default: class MockTgtClient {
     async listProducts(...args: unknown[]) {
       return adminMocks.mockTgtListProducts(...args);
+    }
+  },
+}));
+
+vi.mock('~/vendor/firoamClient', () => ({
+  default: class MockFiRoamClient {
+    async getSkus(...args: unknown[]) {
+      return adminMocks.mockFiroamGetSkus(...args);
+    }
+    async getPackages(...args: unknown[]) {
+      return adminMocks.mockFiroamGetPackages(...args);
     }
   },
 }));
@@ -1009,7 +1022,7 @@ describe('Admin Routes', () => {
         method: 'POST',
         url: '/provider-catalog/sync',
         headers: JSON_HEADERS,
-        payload: { provider: 'firoam' },
+        payload: { provider: 'stripe' },
       });
 
       expect(res.statusCode).toBe(400);
@@ -1046,6 +1059,239 @@ describe('Admin Routes', () => {
       expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledTimes(1);
       expect(res.json()).toMatchObject({ ok: true, provider: 'tgt', processed: 1 });
     });
+
+    // ── FiRoam sync tests ────────────────────────────────────────────────
+
+    it('syncs FiRoam catalog: fetches SKUs + packages and upserts each', async () => {
+      adminMocks.mockFiroamGetSkus.mockResolvedValue({
+        skus: [{ skuid: 156, display: 'United States', countryCode: 'US' }],
+      });
+      adminMocks.mockFiroamGetPackages.mockResolvedValue({
+        packageData: {
+          skuid: 156,
+          detailId: null,
+          countrycode: 'US',
+          imageUrl: '',
+          display: '美国',
+          displayEn: 'United States',
+          supportCountry: ['US'],
+          expirydate: null,
+          countryImageUrlDtoList: [],
+          esimPackageDtoList: [
+            {
+              flows: 10,
+              days: 30,
+              unit: 'GB',
+              price: 5.99,
+              priceid: 1,
+              flowType: 1,
+              countryImageUrlDtoList: null,
+              showName: '10GB 30 Days',
+              pid: 100,
+              premark: '',
+              expireDays: 0,
+              networkDtoList: [],
+              supportDaypass: 0,
+              openCardFee: 0,
+              minDay: 0,
+              singleDiscountDay: 0,
+              singleDiscount: 0,
+              maxDiscount: 0,
+              maxDay: 0,
+              mustDate: 0,
+              apiCode: 'US-10GB-30D',
+            },
+            {
+              flows: 5,
+              days: 15,
+              unit: 'GB',
+              price: 3.49,
+              priceid: 2,
+              flowType: 1,
+              countryImageUrlDtoList: null,
+              showName: '5GB 15 Days',
+              pid: 101,
+              premark: '',
+              expireDays: 0,
+              networkDtoList: [],
+              supportDaypass: 0,
+              openCardFee: 0,
+              minDay: 0,
+              singleDiscountDay: 0,
+              singleDiscount: 0,
+              maxDiscount: 0,
+              maxDay: 0,
+              mustDate: 0,
+              apiCode: 'US-5GB-15D',
+            },
+          ],
+        },
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledTimes(2);
+      expect(res.json()).toMatchObject({
+        ok: true,
+        provider: 'firoam',
+        processedSkus: 1,
+        processedPackages: 2,
+        totalSkus: 1,
+        skipsNoApiCode: 0,
+      });
+      // Verify upsert uses apiCode as productCode
+      expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { provider_productCode: { provider: 'firoam', productCode: 'US-10GB-30D' } },
+        }),
+      );
+    });
+
+    it('returns 502 when FiRoam getSkus fails', async () => {
+      adminMocks.mockFiroamGetSkus.mockResolvedValue({
+        raw: { code: 500, message: 'Internal error' },
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam' },
+      });
+
+      expect(res.statusCode).toBe(502);
+      expect(res.json()).toMatchObject({ error: 'FiRoam getSkus failed' });
+      expect(vi.mocked(prismaCatalog.upsert)).not.toHaveBeenCalled();
+    });
+
+    it('skips packages with no apiCode and counts them in skipsNoApiCode', async () => {
+      adminMocks.mockFiroamGetSkus.mockResolvedValue({
+        skus: [{ skuid: 200, display: 'Canada', countryCode: 'CA' }],
+      });
+      adminMocks.mockFiroamGetPackages.mockResolvedValue({
+        packageData: {
+          skuid: 200,
+          detailId: null,
+          countrycode: 'CA',
+          imageUrl: '',
+          display: '加拿大',
+          displayEn: 'Canada',
+          supportCountry: ['CA'],
+          expirydate: null,
+          countryImageUrlDtoList: [],
+          esimPackageDtoList: [
+            {
+              flows: 3,
+              days: 7,
+              unit: 'GB',
+              price: 2.0,
+              priceid: 10,
+              flowType: 1,
+              countryImageUrlDtoList: null,
+              showName: '3GB 7 Days',
+              pid: 200,
+              premark: '',
+              expireDays: 0,
+              networkDtoList: [],
+              supportDaypass: 0,
+              openCardFee: 0,
+              minDay: 0,
+              singleDiscountDay: 0,
+              singleDiscount: 0,
+              maxDiscount: 0,
+              maxDay: 0,
+              mustDate: 0,
+              apiCode: '', // empty → should be skipped
+            },
+            {
+              flows: 10,
+              days: 30,
+              unit: 'GB',
+              price: 6.0,
+              priceid: 11,
+              flowType: 1,
+              countryImageUrlDtoList: null,
+              showName: '10GB 30 Days',
+              pid: 201,
+              premark: '',
+              expireDays: 0,
+              networkDtoList: [],
+              supportDaypass: 0,
+              openCardFee: 0,
+              minDay: 0,
+              singleDiscountDay: 0,
+              singleDiscount: 0,
+              maxDiscount: 0,
+              maxDay: 0,
+              mustDate: 0,
+              apiCode: 'CA-10GB-30D',
+            },
+          ],
+        },
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledTimes(1);
+      expect(res.json()).toMatchObject({
+        ok: true,
+        processedPackages: 1,
+        skipsNoApiCode: 1,
+      });
+    });
+
+    it('respects maxSkus cap and only processes that many SKUs', async () => {
+      adminMocks.mockFiroamGetSkus.mockResolvedValue({
+        skus: [
+          { skuid: 1, display: 'Country A', countryCode: 'AA' },
+          { skuid: 2, display: 'Country B', countryCode: 'BB' },
+          { skuid: 3, display: 'Country C', countryCode: 'CC' },
+        ],
+      });
+      const emptyPkg = {
+        packageData: {
+          skuid: 1,
+          detailId: null,
+          countrycode: 'AA',
+          imageUrl: '',
+          display: 'A',
+          displayEn: 'Country A',
+          supportCountry: ['AA'],
+          expirydate: null,
+          countryImageUrlDtoList: [],
+          esimPackageDtoList: [],
+        },
+      };
+      adminMocks.mockFiroamGetPackages.mockResolvedValue(emptyPkg);
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam', maxSkus: 2 },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(adminMocks.mockFiroamGetPackages).toHaveBeenCalledTimes(2);
+      expect(res.json()).toMatchObject({ ok: true, processedSkus: 2, totalSkus: 3 });
+    });
+
+    // ── TGT sync tests ───────────────────────────────────────────────────────
 
     it('breaks when processed equals total even if page is full', async () => {
       adminMocks.mockTgtListProducts.mockResolvedValue({

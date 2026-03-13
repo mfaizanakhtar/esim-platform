@@ -224,6 +224,26 @@ describe('POST /orders/paid — Fastify handler', () => {
     expect(res.json()).toMatchObject({ error: 'Invalid webhook payload' });
   });
 
+  it('returns 200 and ignores payload when x-shopify-topic is not orders/paid', async () => {
+    const nonPaidPayload = { id: 999999, admin_graphql_api_id: 'gid://shopify/Order/999999' };
+    const rawBody = JSON.stringify(nonPaidPayload);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/paid',
+      headers: {
+        ...signedHeaders(rawBody),
+        'x-shopify-topic': 'orders/updated',
+      },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ received: true, ignored: true });
+    expect(vi.mocked(prisma.esimDelivery.create)).not.toHaveBeenCalled();
+    expect(mockJobSend).not.toHaveBeenCalled();
+  });
+
   // ── No customer email → 400 ──────────────────────────────────────────
 
   it('returns 400 when no customer email can be resolved', async () => {
@@ -494,6 +514,140 @@ describe('POST /orders/paid — Fastify handler', () => {
       expect.objectContaining({
         data: expect.objectContaining({ customerEmail: 'fallback@example.com' }),
       }),
+    );
+  });
+
+  it('falls back to contact_email when customer.email and email are missing', async () => {
+    const payload = {
+      id: 565656,
+      name: '#5050',
+      email: null,
+      contact_email: 'contact-fallback@example.com',
+      customer: null,
+      line_items: [
+        {
+          id: 911,
+          variant_id: 1011,
+          quantity: 1,
+          product_id: 1111,
+          title: null,
+          name: null,
+          sku: 'ESIM-CONTACT',
+        },
+      ],
+    };
+
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.esimDelivery.create).mockResolvedValue(
+      makeDelivery({ customerEmail: 'contact-fallback@example.com' }),
+    );
+
+    const rawBody = JSON.stringify(payload);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/paid',
+      headers: signedHeaders(rawBody),
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(vi.mocked(prisma.esimDelivery.create)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ customerEmail: 'contact-fallback@example.com' }),
+      }),
+    );
+  });
+
+  it('accepts nullable customer fields from Shopify payload', async () => {
+    const payload = {
+      id: 575757,
+      name: '#5151',
+      email: 'nullable-fields@example.com',
+      customer: {
+        id: 1000,
+        email: null,
+        first_name: null,
+        last_name: null,
+        phone: null,
+      },
+      line_items: [
+        {
+          id: 921,
+          variant_id: 1021,
+          quantity: 1,
+          product_id: 1121,
+          title: null,
+          name: null,
+          sku: 'ESIM-NULLABLE',
+        },
+      ],
+    };
+
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.esimDelivery.create).mockResolvedValue(
+      makeDelivery({ customerEmail: 'nullable-fields@example.com' }),
+    );
+
+    const rawBody = JSON.stringify(payload);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/paid',
+      headers: signedHeaders(rawBody),
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockJobSend).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips line items with null variant_id and still processes valid line items', async () => {
+    const payload = {
+      ...ORDER_PAYLOAD,
+      id: 585858,
+      name: '#5252',
+      line_items: [
+        {
+          id: 931,
+          variant_id: null,
+          quantity: 1,
+          product_id: 1131,
+          title: 'Gift Card',
+          name: 'Gift Card',
+          sku: null,
+        },
+        {
+          id: 932,
+          variant_id: 1032,
+          quantity: 1,
+          product_id: 1132,
+          title: 'US eSIM',
+          name: 'US eSIM',
+          sku: 'ESIM-US',
+        },
+      ],
+    };
+
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.esimDelivery.create).mockResolvedValue(makeDelivery({ lineItemId: '932' }));
+
+    const rawBody = JSON.stringify(payload);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/paid',
+      headers: signedHeaders(rawBody),
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(vi.mocked(prisma.esimDelivery.create)).toHaveBeenCalledTimes(1);
+    expect(mockJobSend).toHaveBeenCalledTimes(1);
+    expect(mockJobSend).toHaveBeenCalledWith(
+      'provision-esim',
+      expect.objectContaining({ lineItemId: '932', variantId: '1032' }),
+      expect.any(Object),
     );
   });
 
