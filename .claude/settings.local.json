@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit:*)",
+      "Bash(cd /Users/faizanakhter/esim_backend/fulfillment-engine && npm run pr:create \"docs: add CLAUDE.md auto-load files and slim agent documentation\")"
+    ]
+  }
+}
