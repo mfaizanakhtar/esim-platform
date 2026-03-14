@@ -226,22 +226,34 @@ jobs:
         run: npm outdated || true
 
   # ── dashboard ───────────────────────────────────────────────────────────────
-  # Placeholder — enabled once dashboard/ scaffold is in place (Phase 6+)
 
-  # test-dashboard:
-  #   name: Test dashboard
-  #   runs-on: ubuntu-latest
-  #   defaults:
-  #     run:
-  #       working-directory: dashboard
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #         cache: 'npm'
-  #         cache-dependency-path: dashboard/package-lock.json
-  #     - run: npm ci
-  #     - name: Install Chromium (Vitest browser mode)
-  #       run: npx playwright install chromium --with-deps
-  #     - run: npm run verify
+  build-dashboard:
+    name: Build dashboard
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify dist exists
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build failed: dist directory not created"
+            exit 1
+          fi
+          echo "✅ Dashboard build successful"
