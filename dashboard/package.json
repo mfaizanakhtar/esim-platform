@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "serve -s dist -l tcp://0.0.0.0:$PORT",
+    "start": "serve -s dist -l tcp://0.0.0.0:${PORT:-8080}",
     "type-check": "tsc --noEmit -p tsconfig.app.json",
     "preview": "vite preview",
     "test": "vitest",
