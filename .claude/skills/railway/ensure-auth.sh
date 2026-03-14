@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ensure-auth.sh — Check Railway auth; open a Terminal window to login if needed.
-# Usage: source this or call it; exits 1 if auth cannot be established.
+# Usage: bash ensure-auth.sh  — do NOT source; uses exit and set -euo pipefail.
 
 set -euo pipefail
 
