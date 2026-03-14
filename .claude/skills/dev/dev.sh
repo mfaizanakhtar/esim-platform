@@ -45,16 +45,16 @@ if ! pg_isready -h localhost -p 5432 -q 2>/dev/null; then
 fi
 echo "   ✅ PostgreSQL running"
 
-# 2. Root .env
-if [[ ! -f "$REPO_ROOT/.env" ]]; then
-  echo "❌ Missing $REPO_ROOT/.env"
-  echo "   Copy .env.example and fill in values."
+# 2. fulfillment-engine .env
+if [[ ! -f "$ENGINE_DIR/.env" ]]; then
+  echo "❌ Missing $ENGINE_DIR/.env"
+  echo "   Copy fulfillment-engine/.env.example and fill in values."
   exit 1
 fi
 echo "   ✅ .env found"
 
 # 3. ADMIN_API_KEY set
-ADMIN_API_KEY=$(grep -E '^ADMIN_API_KEY=' "$REPO_ROOT/.env" | cut -d= -f2- | tr -d '[:space:]' | sed 's/#.*//')
+ADMIN_API_KEY=$(grep -E '^ADMIN_API_KEY=' "$ENGINE_DIR/.env" | cut -d= -f2- | tr -d '[:space:]' | sed 's/#.*//')
 if [[ -z "$ADMIN_API_KEY" ]]; then
   echo "❌ ADMIN_API_KEY is blank in .env — set it to any string to use the dashboard."
   exit 1
@@ -99,15 +99,13 @@ echo ""
 echo "🚀 Starting services..."
 
 # fulfillment-engine HTTP server
-(cd "$ENGINE_DIR" && DOTENV_CONFIG_PATH="$REPO_ROOT/.env" \
-  node_modules/.bin/ts-node-dev --respawn --transpile-only \
+(cd "$ENGINE_DIR" && node_modules/.bin/ts-node-dev --respawn --transpile-only \
   -r tsconfig-paths/register src/index.ts \
   > "$ENGINE_LOG" 2>&1) &
 echo $! >> "$PID_FILE"
 
 # fulfillment-engine worker
-(cd "$ENGINE_DIR" && DOTENV_CONFIG_PATH="$REPO_ROOT/.env" \
-  node_modules/.bin/ts-node-dev --respawn --transpile-only \
+(cd "$ENGINE_DIR" && node_modules/.bin/ts-node-dev --respawn --transpile-only \
   -r tsconfig-paths/register src/worker/index.ts \
   > "$WORKER_LOG" 2>&1) &
 echo $! >> "$PID_FILE"

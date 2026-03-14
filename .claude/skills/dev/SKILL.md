@@ -48,7 +48,7 @@ Or call the script directly:
 | Requirement | How to fix if missing |
 |-------------|----------------------|
 | PostgreSQL on `:5432` | `brew services start postgresql@15` |
-| `$REPO_ROOT/.env` | Copy `.env.example`, fill in values |
+| `fulfillment-engine/.env` | Copy `fulfillment-engine/.env.example`, fill in values |
 | `ADMIN_API_KEY` in `.env` | Set to any string (e.g. `my-local-secret`) |
 | `tsconfig-paths` in engine | `cd fulfillment-engine && npm install` (auto-done by script) |
 
