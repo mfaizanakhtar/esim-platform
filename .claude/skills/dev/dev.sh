@@ -93,7 +93,7 @@ lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 # ── Start services ─────────────────────────────────────────────────────────────
 
 mkdir -p "$LOG_DIR"
-> "$PID_FILE"
+: > "$PID_FILE"
 
 echo ""
 echo "🚀 Starting services..."
