@@ -13,6 +13,7 @@ export default {
     // Integration tests only - these hit the real FiRoam API and place real orders
     // Required env vars: FIROAM_PHONE, FIROAM_PASSWORD, FIROAM_SIGN_KEY
     // Required flags:    FIROAM_INTEGRATION=true (and FIROAM_E2E_ORDERS=true for order placement)
+    setupFiles: ['dotenv/config'],
     include: ['src/**/*.integration.test.ts'],
     exclude: ['node_modules', 'dist'],
 

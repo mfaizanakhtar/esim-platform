@@ -8,7 +8,9 @@ export const TgtBaseResponseSchema = z.object({
 });
 
 export const TgtTokenInfoSchema = z.object({
-  accessToken: z.string(),
+  // Docs say "accessToken" but sandbox returns "token" — accept both
+  accessToken: z.string().optional(),
+  token: z.string().optional(),
   expires: z.coerce.number(),
 });
 
@@ -41,6 +43,12 @@ export const TgtProductSchema = z.object({
   activeType: z.string().optional(),
   cardType: z.string().optional(),
   topupInfoList: z.array(TgtTopupInfoSchema).optional(),
+  ruleDesc: z.string().optional(),
+  operatorDesc: z.string().optional(),
+  apnDesc: z.string().optional(),
+  highSpeed: z.string().optional(),
+  limitSpeed: z.string().optional(),
+  showGradeContent: z.string().optional(),
 });
 
 export const TgtProductsListResponseSchema = TgtBaseResponseSchema.extend({

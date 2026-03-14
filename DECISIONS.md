@@ -12,7 +12,8 @@
 | Backend (fulfillment-engine) | ✅ Complete — 367 tests passing |
 | Monorepo structure | ✅ Phases 1-5 done (pnpm workspaces, git history preserved) |
 | Dashboard (dashboard/) | ⬜ Not scaffolded — Phases 6-12 pending |
-| Current branch | `feat/monorepo-restructure` — ready for PR to main |
+| TGT sandbox integration | ✅ Live E2E verified 2026-03-14 — auth, products, order, poll, credentials all working |
+| Current branch | `main` |
 
 **Next action**: Scaffold `dashboard/` (Phase 6) — see [`fulfillment-engine/docs/MONOREPO_MIGRATION_PLAN.md`](fulfillment-engine/docs/MONOREPO_MIGRATION_PLAN.md) for full phase plan.
 
@@ -49,6 +50,17 @@ TGT orders are asynchronous. Three modes are supported via env var `TGT_FULFILLM
 - `callback` — wait for TGT to POST to `/webhook/tgt/callback`
 - `polling` — worker polls TGT API at intervals
 - `hybrid` (default) — poll first, fall back to awaiting callback
+
+**TGT auth token field name discrepancy**
+TGT's docs describe the `/oauth/token` response field as `accessToken`, but the actual API
+(confirmed on sandbox 2026-03-14) returns it as `token`. `TgtTokenInfoSchema` accepts both
+(`accessToken ?? token`) so this is handled, but don't trust the field name in TGT docs.
+
+**TGT sandbox account activation**
+A new TGT sandbox account requires explicit API activation by TGT's FAE team — credentials alone
+are not enough. Symptom: `/oauth/token` returns `code=2001: Insufficient interface permission`
+even with the correct `accountId`/`secret`. Resolution: email TGT FAE and ask them to enable
+API access for the account. Typically resolved within one business day.
 
 ---
 
