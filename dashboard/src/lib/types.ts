@@ -57,17 +57,20 @@ export interface DeliveryDetail extends Delivery {
   esimOrders: EsimOrder[];
 }
 
+export type SkuMappingProvider = 'firoam' | 'tgt';
+export type SkuMappingPackageType = 'fixed' | 'daypass';
+
 export interface SkuMapping {
   id: string;
   shopifySku: string;
-  provider: string;
+  provider: SkuMappingProvider;
   providerSku: string;
   providerConfig: Record<string, unknown> | null;
   name: string | null;
   region: string | null;
   dataAmount: string | null;
   validity: string | null;
-  packageType: string | null;
+  packageType: SkuMappingPackageType | null;
   daysCount: number | null;
   isActive: boolean;
   createdAt: string;
@@ -94,13 +97,22 @@ export interface CatalogItem {
   updatedAt: string;
 }
 
-export interface PaginatedResponse<T> {
+interface OffsetPage {
   total: number;
   limit: number;
   offset: number;
-  items?: T[];
-  deliveries?: T[];
-  mappings?: T[];
+}
+
+export interface DeliveriesPage<T> extends OffsetPage {
+  deliveries: T[];
+}
+
+export interface SkuMappingsPage<T> extends OffsetPage {
+  mappings: T[];
+}
+
+export interface CatalogPage<T> extends OffsetPage {
+  items: T[];
 }
 
 export interface ApiErrorResponse {

@@ -1,16 +1,16 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import type { SkuMapping } from '@/lib/types';
+import type { SkuMapping, SkuMappingsPage, SkuMappingProvider, SkuMappingPackageType } from '@/lib/types';
 
 interface CreateSkuMappingInput {
   shopifySku: string;
-  provider: string;
+  provider: SkuMappingProvider;
   providerSku: string;
   name?: string;
   region?: string;
   dataAmount?: string;
   validity?: string;
-  packageType?: string;
+  packageType?: SkuMappingPackageType;
   daysCount?: number;
   providerConfig?: Record<string, unknown>;
   isActive?: boolean;
@@ -52,7 +52,7 @@ export function useToggleSkuMapping() {
       const prevData = qc.getQueriesData({ queryKey: ['sku-mappings'] });
       qc.setQueriesData({ queryKey: ['sku-mappings'] }, (old: unknown) => {
         if (!old || typeof old !== 'object') return old;
-        const data = old as { mappings: SkuMapping[] };
+        const data = old as SkuMappingsPage<SkuMapping>;
         return {
           ...data,
           mappings: data.mappings.map((m) => (m.id === id ? { ...m, isActive } : m)),

@@ -1,13 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import type { SkuMapping, PaginatedResponse } from '@/lib/types';
-
-interface SkuMappingsResponse extends PaginatedResponse<SkuMapping> {
-  mappings: SkuMapping[];
-}
+import type { SkuMapping, SkuMappingsPage, SkuMappingProvider } from '@/lib/types';
 
 interface UseSkuMappingsParams {
-  provider?: string;
+  provider?: SkuMappingProvider;
   isActive?: boolean;
   limit?: number;
   offset?: number;
@@ -24,6 +20,6 @@ export function useSkuMappings(params: UseSkuMappingsParams = {}) {
 
   return useQuery({
     queryKey: ['sku-mappings', { provider, isActive, limit, offset }],
-    queryFn: () => apiClient.get<SkuMappingsResponse>(`/sku-mappings?${searchParams.toString()}`),
+    queryFn: () => apiClient.get<SkuMappingsPage<SkuMapping>>(`/sku-mappings?${searchParams.toString()}`),
   });
 }

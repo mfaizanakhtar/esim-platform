@@ -58,17 +58,45 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
   const packageType = watch('packageType');
 
   useEffect(() => {
-    reset();
+    reset(
+      initial
+        ? {
+            shopifySku: initial.shopifySku,
+            provider: initial.provider,
+            providerSku: initial.providerSku,
+            name: initial.name ?? '',
+            region: initial.region ?? '',
+            dataAmount: initial.dataAmount ?? '',
+            validity: initial.validity ?? '',
+            packageType: initial.packageType ?? 'fixed',
+            daysCount: initial.daysCount ?? undefined,
+            providerConfigJson: initial.providerConfig
+              ? JSON.stringify(initial.providerConfig, null, 2)
+              : '',
+            isActive: initial.isActive,
+          }
+        : { packageType: 'fixed', isActive: true },
+    );
   }, [initial, reset]);
 
   function handleFormSubmit(values: FormValues) {
     let providerConfig: Record<string, unknown> | undefined;
     if (values.providerConfigJson) {
+      let parsed: unknown;
       try {
-        providerConfig = JSON.parse(values.providerConfigJson) as Record<string, unknown>;
+        parsed = JSON.parse(values.providerConfigJson);
       } catch {
-        // ignore invalid JSON
+        // setError would need the setError from useForm — skip submission instead
+        return;
       }
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
+        return; // reject arrays and primitives
+      }
+      providerConfig = parsed as Record<string, unknown>;
     }
     onSubmit({ ...values, providerConfig });
   }

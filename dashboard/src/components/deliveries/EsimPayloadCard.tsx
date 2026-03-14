@@ -11,9 +11,13 @@ function CopyButton({ value }: { value: string }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard write failed (e.g. permissions denied) — silently ignore
+    }
   }
 
   return (
@@ -50,6 +54,8 @@ export function EsimPayloadCard({ payload }: EsimPayloadCardProps) {
         <h3 className="text-sm font-semibold">eSIM Credentials</h3>
         <button
           onClick={() => setExpanded((p) => !p)}
+          aria-expanded={expanded}
+          aria-controls="esim-credentials-details"
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           {expanded ? (
@@ -71,7 +77,7 @@ export function EsimPayloadCard({ payload }: EsimPayloadCardProps) {
       )}
 
       {expanded && (
-        <div className="space-y-3">
+        <div id="esim-credentials-details" className="space-y-3">
           {payload.iccid && <Field label="ICCID" value={payload.iccid} />}
           {payload.lpa && <Field label="LPA String" value={payload.lpa} />}
           {payload.activationCode && (

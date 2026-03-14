@@ -1,10 +1,10 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { LayoutDashboard, Map, Package, LogOut } from 'lucide-react';
+import { LayoutDashboard, Map as MapIcon, Package, LogOut } from 'lucide-react';
 
 const navItems = [
   { to: '/deliveries', label: 'Deliveries', icon: LayoutDashboard },
-  { to: '/sku-mappings', label: 'SKU Mappings', icon: Map },
+  { to: '/sku-mappings', label: 'SKU Mappings', icon: MapIcon },
   { to: '/catalog', label: 'Catalog', icon: Package },
 ];
 

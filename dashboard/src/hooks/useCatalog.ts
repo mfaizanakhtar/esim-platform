@@ -1,13 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import type { CatalogItem, PaginatedResponse } from '@/lib/types';
-
-interface CatalogResponse extends PaginatedResponse<CatalogItem> {
-  items: CatalogItem[];
-}
+import type { CatalogItem, CatalogPage } from '@/lib/types';
 
 interface UseCatalogParams {
-  provider?: string;
+  provider?: 'firoam' | 'tgt';
   search?: string;
   isActive?: boolean;
   limit?: number;
@@ -41,7 +37,7 @@ export function useCatalog(params: UseCatalogParams = {}) {
 
   return useQuery({
     queryKey: ['catalog', { provider, search, isActive, limit, offset }],
-    queryFn: () => apiClient.get<CatalogResponse>(`/provider-catalog?${searchParams.toString()}`),
+    queryFn: () => apiClient.get<CatalogPage<CatalogItem>>(`/provider-catalog?${searchParams.toString()}`),
   });
 }
 

@@ -41,8 +41,9 @@ export function Login() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium">API Key</label>
+            <label htmlFor="api-key" className="text-sm font-medium">API Key</label>
             <input
+              id="api-key"
               type="password"
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}

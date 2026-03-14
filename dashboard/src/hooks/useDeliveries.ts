@@ -1,15 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import type { Delivery, PaginatedResponse } from '@/lib/types';
+import type { Delivery, DeliveriesPage } from '@/lib/types';
 
 interface UseDeliveriesParams {
   status?: string;
   limit?: number;
   offset?: number;
-}
-
-interface DeliveriesResponse extends PaginatedResponse<Delivery> {
-  deliveries: Delivery[];
 }
 
 export function useDeliveries(params: UseDeliveriesParams = {}) {
@@ -22,7 +18,7 @@ export function useDeliveries(params: UseDeliveriesParams = {}) {
 
   return useQuery({
     queryKey: ['deliveries', { status, limit, offset }],
-    queryFn: () => apiClient.get<DeliveriesResponse>(`/deliveries?${searchParams.toString()}`),
+    queryFn: () => apiClient.get<DeliveriesPage<Delivery>>(`/deliveries?${searchParams.toString()}`),
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return false;
