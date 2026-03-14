@@ -17,7 +17,7 @@ echo ""
 
 echo "── Deployments ──────────────────────────────"
 if [[ -n "$SERVICE" ]]; then
-  railway deployment list --service "$SERVICE" 2>&1 | head -30
+  railway deployment list --service "$SERVICE" 2>&1 | sed -n '1,30p'
 else
-  railway deployment list 2>&1 | head -30
+  railway deployment list 2>&1 | sed -n '1,30p'
 fi

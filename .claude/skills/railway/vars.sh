@@ -25,6 +25,9 @@ if [[ $# -eq 0 ]]; then
   railway variables --service "$SERVICE" 2>&1
 else
   for kv in "$@"; do
+    if [[ "$kv" != *=* ]] || [[ -z "${kv%%=*}" ]]; then
+      echo "Invalid format: '$kv' (expected KEY=VALUE)" >&2; exit 1
+    fi
     KEY="${kv%%=*}"
     VALUE="${kv#*=}"
     echo "Setting $KEY on $SERVICE..."

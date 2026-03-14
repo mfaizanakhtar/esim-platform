@@ -15,13 +15,17 @@ echo "   Opening a Terminal window for 'railway login'..."
 echo "   Complete the browser auth, then come back — this script will wait."
 echo ""
 
-# Open a new Terminal window that runs railway login
-osascript <<'APPLESCRIPT'
+# Open a new Terminal window that runs railway login (macOS only)
+if [[ "$(uname)" == "Darwin" ]] && command -v osascript &>/dev/null; then
+  osascript <<'APPLESCRIPT'
 tell application "Terminal"
   activate
   do script "echo '🚂 Railway Login' && railway login && echo '✅ Done — you can close this window.'"
 end tell
 APPLESCRIPT
+else
+  echo "   Run 'railway login' in another terminal, then return here."
+fi
 
 # Poll until auth succeeds (max 120s)
 for i in $(seq 1 24); do

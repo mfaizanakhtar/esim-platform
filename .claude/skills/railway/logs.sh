@@ -23,7 +23,11 @@ LINES=100
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --build) BUILD_FLAG="--build"; shift ;;
-    --lines) LINES="$2"; shift 2 ;;
+    --lines)
+      if [[ $# -lt 2 || ! "$2" =~ ^[0-9]+$ || "$2" -lt 1 ]]; then
+        echo "Invalid --lines value. Expected a positive integer." >&2; exit 1
+      fi
+      LINES="$2"; shift 2 ;;
     *) echo "Unknown option: $1"; exit 1 ;;
   esac
 done
