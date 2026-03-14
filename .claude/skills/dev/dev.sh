@@ -54,7 +54,7 @@ fi
 echo "   ✅ .env found"
 
 # 3. ADMIN_API_KEY set
-ADMIN_API_KEY=$(grep -E '^ADMIN_API_KEY=' "$ENGINE_DIR/.env" | cut -d= -f2- | tr -d '[:space:]' | sed 's/#.*//')
+ADMIN_API_KEY=$(grep -E '^ADMIN_API_KEY=' "$ENGINE_DIR/.env" | cut -d= -f2- | tr -d '[:space:]' | sed 's/#.*//' || true)
 if [[ -z "$ADMIN_API_KEY" ]]; then
   echo "❌ ADMIN_API_KEY is blank in .env — set it to any string to use the dashboard."
   exit 1

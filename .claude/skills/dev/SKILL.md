@@ -62,8 +62,6 @@ Or call the script directly:
 | pg-boss worker | — | `ts-node-dev -r tsconfig-paths/register src/worker/index.ts` | `/tmp/esim-dev-logs/worker.log` |
 | Vite dashboard | 5173 | `npm run dev` | `/tmp/esim-dev-logs/dashboard.log` |
 
-**Key detail**: `DOTENV_CONFIG_PATH=$REPO_ROOT/.env` is passed to the engine processes because `.env` lives at the repo root, not inside `fulfillment-engine/`. Without this, `dotenv/config` would look for `fulfillment-engine/.env` and find nothing.
-
 **Key detail**: `-r tsconfig-paths/register` is required for `ts-node-dev` to resolve the `~/*` path alias defined in `fulfillment-engine/tsconfig.json`. Without it, imports like `~/server` fail with "Cannot find module".
 
 ---
@@ -90,7 +88,7 @@ tail -f /tmp/esim-dev-logs/dashboard.log  # Vite
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| Backend exits immediately | `DOTENV_CONFIG_PATH` wrong, or DB not running | Check `engine.log`, verify `pg_isready` |
+| Backend exits immediately | Missing `fulfillment-engine/.env`, or DB not running | Check `engine.log`, verify `pg_isready` |
 | `Cannot find module '~/server'` | `tsconfig-paths/register` missing | `cd fulfillment-engine && npm install` |
 | `@tailwindcss/oxide` native binding error | Only on Railway (Linux x64) | Not a local issue; see `dashboard/nixpacks.toml` |
 | Dashboard shows blank page | `VITE_API_URL` wrong in `.env.local` | Check `dashboard/.env.local` |
