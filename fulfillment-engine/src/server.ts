@@ -24,11 +24,18 @@ export default async function buildServer() {
         `https://${shopifyDomain}`,
         'http://localhost:3000', // Local development
         'http://127.0.0.1:3000',
+        'http://localhost:5173', // Dashboard dev server (Vite)
+        'http://127.0.0.1:5173',
       ];
 
       // Add custom domain if configured
       if (customDomain) {
         allowedOrigins.push(`https://${customDomain}`);
+      }
+
+      // Add deployed dashboard URL if configured (e.g. https://esim-dashboard.vercel.app)
+      if (process.env.DASHBOARD_URL) {
+        allowedOrigins.push(process.env.DASHBOARD_URL);
       }
 
       // Allow requests with no origin (like mobile apps or curl)
