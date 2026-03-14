@@ -3,6 +3,8 @@
   "private": true,
   "packageManager": "pnpm@9.x",
   "scripts": {
+    "dev:local": "./.claude/skills/dev/dev.sh",
+    "dev:stop": "./.claude/skills/dev/dev.sh --stop",
     "test:all": "pnpm -r test -- --run",
     "build:all": "pnpm -r build",
     "verify:all": "pnpm -r verify"
