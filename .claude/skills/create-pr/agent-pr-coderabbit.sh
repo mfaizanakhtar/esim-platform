@@ -137,8 +137,9 @@ except Exception as e:
   done
 
   if [ "$gql_ok" = "0" ]; then
-    echo "ℹ️  GraphQL unavailable after 3 attempts — proceeding to merge."
-    return 0
+    echo "❌ GraphQL unavailable after 3 attempts — cannot verify CodeRabbit unresolved threads."
+    echo "   Please retry after GitHub API recovers."
+    return 2
   fi
 
   # ── Count unresolved CodeRabbit threads ─────────────────────────────────────
