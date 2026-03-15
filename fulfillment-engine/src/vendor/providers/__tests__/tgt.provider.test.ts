@@ -4,7 +4,7 @@ import { TgtProvider } from '~/vendor/providers/tgt';
 
 const createOrder = vi.fn();
 const tryResolveOrderCredentials = vi.fn();
-const mockFindUniqueOrThrow = vi.fn();
+const mockFindUnique = vi.fn();
 
 vi.mock('~/vendor/tgtClient', () => {
   return {
@@ -22,7 +22,7 @@ vi.mock('~/vendor/tgtClient', () => {
 vi.mock('~/db/prisma', () => ({
   default: {
     providerSkuCatalog: {
-      findUniqueOrThrow: (...args: unknown[]) => mockFindUniqueOrThrow(...args),
+      findUnique: (...args: unknown[]) => mockFindUnique(...args),
     },
   },
 }));
@@ -176,7 +176,7 @@ describe('TgtProvider', () => {
 
   it('uses productCode from catalog entry when providerCatalogId is set', async () => {
     vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
-    mockFindUniqueOrThrow.mockResolvedValue({ productCode: 'CATALOG-PRODUCT-CODE' });
+    mockFindUnique.mockResolvedValue({ productCode: 'CATALOG-PRODUCT-CODE' });
     createOrder.mockResolvedValue({ orderNo: 'SE-CAT-001' });
 
     const catalogConfig: ProviderMappingConfig = {
@@ -187,7 +187,10 @@ describe('TgtProvider', () => {
     const provider = new TgtProvider();
     const result = await provider.provision(catalogConfig, ctx);
 
-    expect(mockFindUniqueOrThrow).toHaveBeenCalledWith({ where: { id: 'cat-001' } });
+    expect(mockFindUnique).toHaveBeenCalledWith({
+      where: { id: 'cat-001' },
+      select: { productCode: true },
+    });
     expect(createOrder).toHaveBeenCalledWith(
       expect.objectContaining({ productCode: 'CATALOG-PRODUCT-CODE' }),
     );
@@ -195,9 +198,9 @@ describe('TgtProvider', () => {
     expect(result.pending).toBe(true);
   });
 
-  it('throws MappingError when catalog entry is not found (findUniqueOrThrow rejects)', async () => {
+  it('throws MappingError when catalog entry is not found (findUnique returns null)', async () => {
     vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
-    mockFindUniqueOrThrow.mockRejectedValue(new Error('No ProviderSkuCatalog found'));
+    mockFindUnique.mockResolvedValue(null);
 
     const { MappingError: ME } = await import('~/utils/errors');
     const catalogConfig: ProviderMappingConfig = {
@@ -211,7 +214,7 @@ describe('TgtProvider', () => {
 
   it('throws MappingError when catalog entry has empty productCode', async () => {
     vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
-    mockFindUniqueOrThrow.mockResolvedValue({ productCode: '' });
+    mockFindUnique.mockResolvedValue({ productCode: '' });
 
     const { MappingError: ME } = await import('~/utils/errors');
     const catalogConfig: ProviderMappingConfig = {

@@ -1426,13 +1426,13 @@ describe('Admin Routes', () => {
       expect(res.json().error).toContain('Catalog entry not found');
     });
 
-    it('returns 400 when firoam catalog entry has empty skuId in rawPayload', async () => {
+    it('returns 400 when firoam catalog entry rawPayload is missing skuId', async () => {
       catalogFindUnique.mockResolvedValue(
         makeCatalogItem({
           id: 'cat-firoam-empty',
           provider: 'firoam',
           productCode: '826-0-3-1-G-D',
-          rawPayload: { skuId: '', priceid: 14094 },
+          rawPayload: { priceid: 14094 },
         }),
       );
 
@@ -1448,7 +1448,7 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain('missing skuId');
+      expect(res.json().error).toContain('missing required firoam fields');
     });
   });
 
@@ -1495,7 +1495,7 @@ describe('Admin Routes', () => {
       );
     });
 
-    it('returns 400 when firoam catalog entry has empty skuId in rawPayload', async () => {
+    it('returns 400 when firoam catalog entry rawPayload is missing priceid', async () => {
       const existing = makeMapping({ provider: 'firoam' });
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(existing);
       catalogFindUnique.mockResolvedValue(
@@ -1503,7 +1503,7 @@ describe('Admin Routes', () => {
           id: 'cat-firoam-empty',
           provider: 'firoam',
           productCode: '826-0-3-1-G-D',
-          rawPayload: { skuId: null, priceid: 14094 },
+          rawPayload: { skuId: 120 },
         }),
       );
 
@@ -1515,7 +1515,7 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(400);
-      expect(res.json().error).toContain('missing skuId');
+      expect(res.json().error).toContain('missing required firoam fields');
     });
 
     it('sets providerCatalogId to null when null is passed (unlink)', async () => {
