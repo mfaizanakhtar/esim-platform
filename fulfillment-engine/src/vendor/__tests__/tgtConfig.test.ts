@@ -4,7 +4,6 @@ import {
   getTgtFulfillmentMode,
   getTgtPollIntervalSeconds,
   getTgtPollMaxAttempts,
-  isTgtEnabled,
 } from '~/vendor/tgtConfig';
 
 describe('tgtConfig', () => {
@@ -34,10 +33,7 @@ describe('tgtConfig', () => {
     expect(getTgtPollMaxAttempts()).toBe(8);
   });
 
-  it('reads enable flag and callback secret fallback', () => {
-    vi.stubEnv('TGT_ENABLED', 'true');
-    expect(isTgtEnabled()).toBe(true);
-
+  it('reads callback secret with fallback to TGT_SECRET', () => {
     vi.stubEnv('TGT_CALLBACK_SECRET', 'cb-secret');
     vi.stubEnv('TGT_SECRET', 'tgt-secret');
     expect(getTgtCallbackSecret()).toBe('cb-secret');

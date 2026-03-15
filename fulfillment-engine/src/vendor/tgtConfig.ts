@@ -1,9 +1,5 @@
 export type TgtFulfillmentMode = 'polling' | 'callback' | 'hybrid';
 
-export function isTgtEnabled(): boolean {
-  return process.env.TGT_ENABLED === 'true';
-}
-
 export function getTgtFulfillmentMode(): TgtFulfillmentMode {
   const mode = (process.env.TGT_FULFILLMENT_MODE || 'hybrid').toLowerCase();
   if (mode === 'polling' || mode === 'callback' || mode === 'hybrid') {
