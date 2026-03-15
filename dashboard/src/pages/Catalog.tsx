@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
 import { Pagination } from '@/components/Pagination';
 import { RefreshCw } from 'lucide-react';
@@ -59,14 +60,26 @@ interface CatalogTabProps {
 }
 
 function CatalogTab({ provider }: CatalogTabProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
   const debouncedSearch = useDebounce(search, 300);
+
+  const page = Number(searchParams.get('page') ?? 0);
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams((prev) => {
+        if (p === 0) prev.delete('page');
+        else prev.set('page', String(p));
+        return prev;
+      });
+    },
+    [setSearchParams],
+  );
 
   // Reset to page 0 whenever the search term changes
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch]);
+  }, [debouncedSearch, setPage]);
 
   const { data, isLoading } = useCatalog({
     provider,

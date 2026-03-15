@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useSkuMappings } from '@/hooks/useSkuMappings';
 import {
   useCreateSkuMapping,
@@ -14,10 +15,22 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 const PAGE_SIZE = 25;
 
 export function SkuMappings() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<SkuMapping | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
+
+  const page = Number(searchParams.get('page') ?? 0);
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams((prev) => {
+        if (p === 0) prev.delete('page');
+        else prev.set('page', String(p));
+        return prev;
+      });
+    },
+    [setSearchParams],
+  );
 
   const { data, isLoading } = useSkuMappings({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
   const createMutation = useCreateSkuMapping();
