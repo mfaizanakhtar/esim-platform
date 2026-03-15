@@ -44,6 +44,26 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard Prisma schema changes have migration
+        if: github.event_name == 'pull_request'
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.sha }}"
+
+          CHANGED_FILES="$(git diff --name-only "$BASE_SHA" "$HEAD_SHA")"
+
+          if echo "$CHANGED_FILES" | grep -q '^fulfillment-engine/prisma/schema\.prisma$'; then
+            if ! echo "$CHANGED_FILES" | grep -q '^fulfillment-engine/prisma/migrations/.*/migration\.sql$'; then
+              echo "❌ prisma/schema.prisma changed but no new migration.sql found in prisma/migrations/."
+              echo "Run: cd fulfillment-engine && npx prisma migrate dev --name <change-name>"
+              exit 1
+            fi
+          fi
+
+          echo "✅ Prisma migration guard passed"
 
       - uses: actions/setup-node@v4
         with:

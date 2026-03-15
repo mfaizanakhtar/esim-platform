@@ -121,12 +121,16 @@ export default class TgtClient {
     });
 
     const parsed = TgtTokenResponseSchema.parse(response.data);
-    if (parsed.code !== '0000' || !parsed.data?.accessToken) {
-      throw new VendorError(`TGT auth failed: ${parsed.msg} (${parsed.subCode || 'n/a'})`);
+    const tokenValue = parsed.data?.accessToken ?? parsed.data?.token;
+    if (parsed.code !== '0000' || !tokenValue) {
+      throw new VendorError(
+        `TGT auth failed [code=${parsed.code}]: ${parsed.msg}` +
+          (parsed.subCode ? ` subCode=${parsed.subCode}: ${parsed.subMsg}` : ''),
+      );
     }
 
-    this.accessToken = parsed.data.accessToken;
-    this.accessTokenExpiry = Date.now() + parsed.data.expires * 1000;
+    this.accessToken = tokenValue;
+    this.accessTokenExpiry = Date.now() + parsed.data!.expires * 1000;
     return this.accessToken;
   }
 
@@ -192,7 +196,15 @@ export default class TgtClient {
     email?: string;
     startDate?: string;
   }): Promise<{ raw: TgtApiResponse; orderNo: string }> {
-    const raw = await this.post<{ orderNo: string }>('/eSIMApi/v2/order/create', params);
+    const body: Record<string, unknown> = {
+      productCode: params.productCode,
+      channelOrderNo: params.channelOrderNo,
+      idempotencyKey: params.idempotencyKey,
+    };
+    if (params.email) body.email = params.email;
+    if (params.startDate) body.startDate = params.startDate;
+
+    const raw = await this.post<{ orderNo: string }>('/eSIMApi/v2/order/create', body);
     const parsed = TgtCreateOrderResponseSchema.parse(raw);
 
     if (parsed.code !== '0000' || !parsed.data?.orderNo) {

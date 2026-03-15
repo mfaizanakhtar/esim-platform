@@ -1,8 +1,8 @@
 # TGT Technology eSIM API Integration
 
-> **Document Type**: Integration  
-> **Status**: ✅ Current  
-> **Last Updated**: 2026-03-08  
+> **Document Type**: Integration
+> **Status**: ✅ Current
+> **Last Updated**: 2026-03-14
 > **Purpose**: TGT Technology vendor API client implementation
 
 ---
@@ -97,13 +97,18 @@ TGT uses OAuth2 with a short-lived Bearer token.
 ```
 POST /oauth/token
 { accountId, secret }
-→ { code: "0000", data: { accessToken, expires: 86400 } }
+→ { code: "0000", data: { token: "...", expires: 86400 } }
 ```
 
 - Token is valid for **24 hours** (86400 seconds)
 - `TgtClient` caches the token in memory and refreshes automatically
 - Refresh triggers **5 minutes before expiry** (buffer to avoid mid-request expiry)
 - If API returns code `2003` (token invalid) or `2004` (token unknown) → auto-retry with fresh token
+
+> **⚠️ Sandbox/docs mismatch**: TGT's API docs describe the token field as `accessToken`, but both
+> the sandbox and production API return it as `token`. Our schema (`TgtTokenInfoSchema`) accepts
+> both field names — `parsed.data?.accessToken ?? parsed.data?.token` — to handle either.
+> Confirmed with live sandbox testing on 2026-03-14.
 
 ```typescript
 // Token auto-management is internal to TgtClient — callers never call authIfNeeded()
@@ -464,18 +469,19 @@ to avoid real charges. Sandbox products are test-only and cannot be activated on
 
 **Note**: Unlike FiRoam, TGT provides a proper sandbox environment — always use it for integration tests.
 
-### Verified Working (as of 2026-03-08)
+### Verified Working (as of 2026-03-14, live sandbox)
 
 - ✅ OAuth2 token acquisition and auto-refresh
 - ✅ Token retry on `2003`/`2004` error codes
-- ✅ `listProducts` with filtering
-- ✅ `createOrder` with idempotencyKey
-- ✅ `queryOrders` credential polling
-- ✅ `tryResolveOrderCredentials` LPA extraction
+- ✅ `listProducts` with filtering — sandbox returned real product catalogue
+- ✅ `createOrder` with idempotencyKey — order placed, `orderNo` returned in ~1s
+- ✅ `queryOrders` credential polling — credentials ready in ~2.3s
+- ✅ `tryResolveOrderCredentials` LPA extraction — `LPA:1$...$...` format confirmed
 - ✅ `getUsage` (for supported card types)
 - ✅ Callback signature verification (HMAC MD5)
 - ✅ Hybrid mode polling → `awaiting_callback` fallback
 - ✅ QR code generation from LPA string
+- ✅ Full E2E: auth → products → createOrder → poll → ICCID + LPA → QR report (2026-03-14)
 
 ---
 
@@ -515,6 +521,15 @@ All API responses are validated via Zod schemas in `src/vendor/tgtSchemas.ts`:
    switch both `TGT_BASE_URL` and credentials together
 10. **Token lives in-process** — each worker restart requires a fresh token; the auto-auth logic
     handles this but means the first request after a restart has ~200ms auth overhead
+11. **Sandbox account must be activated by TGT FAE** — after getting sandbox credentials, contact
+    TGT's FAE team to explicitly enable API access for that `accountId`. Until they do, `/oauth/token`
+    returns `code=2001: Insufficient interface permission` even with correct credentials.
+12. **Auth response field is `token`, not `accessToken`** — TGT's docs say `accessToken` but their
+    API (sandbox confirmed, production likely the same) returns the field as `token`. Our schema
+    handles both. If TGT ever fixes their docs/API, the fallback is harmless.
+13. **Error code `2001` means wrong credentials or account not activated** — distinct from `2003`
+    (token expired) and `2004` (token unknown). If you see `2001` on `/oauth/token`, check:
+    (a) the `accountId`/`secret` values are correct, then (b) ask TGT FAE to activate API access.
 
 ---
 

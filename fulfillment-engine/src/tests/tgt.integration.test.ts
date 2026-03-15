@@ -368,8 +368,19 @@ describe('TGT API - Live Integration Tests', () => {
     }
 
     const _client = new TgtClient();
-    const result = await _client.listProducts({ pageNum: 1, pageSize: 20, lang: 'en' });
-    expect(result.products.length).toBeGreaterThan(0);
+    try {
+      const result = await _client.listProducts({ pageNum: 1, pageSize: 20, lang: 'en' });
+      expect(result.products.length).toBeGreaterThan(0);
+    } catch (err) {
+      logger.error(
+        { err },
+        'TGT auth/products call failed. Action needed: ' +
+          '(1) Verify TGT_ACCOUNT_ID + TGT_SECRET in .env, ' +
+          '(2) Contact TGT FAE to enable API access for this sandbox account, ' +
+          '(3) Confirm sandbox URL: https://enterpriseapisandbox.tugegroup.com:8070/openapi',
+      );
+      throw err;
+    }
   });
 
   it('should complete full e2e order flow with QR generation and test reports', async () => {
