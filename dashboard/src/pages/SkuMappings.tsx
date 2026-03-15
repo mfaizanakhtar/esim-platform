@@ -42,27 +42,33 @@ export function SkuMappings() {
   const setPage = useCallback(
     (p: number) => {
       setSearchParams((prev) => {
-        if (p === 0) prev.delete('page');
-        else prev.set('page', String(p));
-        return prev;
+        const next = new URLSearchParams(prev);
+        if (p === 0) next.delete('page');
+        else next.set('page', String(p));
+        return next;
       });
     },
     [setSearchParams],
   );
 
   // Sync debouncedSearch to URL and reset page
+  // Note: setSearchParams intentionally excluded from deps — it is stable like setState
+  // but React Router v7 creates a new reference each render, which would cause this
+  // effect to fire on every render and wipe the page param.
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
     }
     setSearchParams((prev) => {
-      if (debouncedSearch) prev.set('search', debouncedSearch);
-      else prev.delete('search');
-      prev.delete('page');
-      return prev;
+      const next = new URLSearchParams(prev);
+      if (debouncedSearch) next.set('search', debouncedSearch);
+      else next.delete('search');
+      next.delete('page');
+      return next;
     });
-  }, [debouncedSearch, setSearchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedSearch]);
 
   const { data, isLoading } = useSkuMappings({
     limit: PAGE_SIZE,
