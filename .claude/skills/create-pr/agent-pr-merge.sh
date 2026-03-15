@@ -88,6 +88,26 @@ if [ $POLL_COUNT -ge $MAX_POLLS ]; then
   exit 1
 fi
 
+# ── Wait for CodeRabbit review ────────────────────────────────────────────────
+REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "")
+REPO_OWNER=$(echo "$REPO" | cut -d/ -f1)
+REPO_NAME=$(echo "$REPO" | cut -d/ -f2)
+BRANCH_NAME=$(gh pr view "$PR_NUMBER" --json headRefName -q .headRefName 2>/dev/null || echo "")
+
+# shellcheck source=agent-pr-coderabbit.sh
+source "$(dirname "$0")/agent-pr-coderabbit.sh"
+
+set +e
+wait_for_coderabbit "$PR_NUMBER" "$REPO_OWNER" "$REPO_NAME" "$PR_URL" "$BRANCH_NAME" "$COMMIT_MSG"
+CR_EXIT=$?
+set -e
+
+if [ "$CR_EXIT" = "2" ]; then
+  exit 2
+elif [ "$CR_EXIT" != "0" ]; then
+  exit "$CR_EXIT"
+fi
+
 # ── Squash merge ──────────────────────────────────────────────────────────────
 gh pr merge "$PR_NUMBER" \
   --squash \

@@ -80,6 +80,7 @@ export async function handleProvision(data: ProvisionJobData) {
       esimResult = await provider.provision(
         {
           providerSku: mapping.providerSku,
+          providerCatalogId: mapping.providerCatalogId,
           providerConfig: mapping.providerConfig as Record<string, unknown> | null,
           packageType: mapping.packageType,
           daysCount: mapping.daysCount,

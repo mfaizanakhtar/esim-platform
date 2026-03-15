@@ -49,28 +49,31 @@ model EsimOrder {
 }
 
 model ProviderSkuMapping {
-  id             String   @id @default(cuid())
-  shopifySku     String   @unique
-  provider       String   // 'firoam', 'airalo', etc.
-  providerSku    String   // Provider's package/plan code — format is provider-specific (e.g. "skuId:apiCode:priceId" for FiRoam)
-  providerConfig Json?    // Vendor-specific structured extras (nullable, non-breaking for existing rows)
-  name           String?  // Friendly name
-  region         String?  // e.g. 'EU', 'Global', 'Asia'
-  dataAmount     String?  // e.g. '5GB', '10GB'
-  validity       String?  // e.g. '30 days', '7 days'
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  packageType    String?  @default("fixed") // 'fixed' or 'daypass'
-  daysCount      Int?     // Number of days (required for daypass packages)
+  id                String              @id @default(cuid())
+  shopifySku        String              @unique
+  provider          String              // 'firoam', 'airalo', etc.
+  providerSku       String              // Provider's package/plan code — format is provider-specific (e.g. "skuId:apiCode:priceId" for FiRoam)
+  providerConfig    Json?               // Vendor-specific structured extras (nullable, non-breaking for existing rows)
+  name              String?             // Friendly name
+  region            String?             // e.g. 'EU', 'Global', 'Asia'
+  dataAmount        String?             // e.g. '5GB', '10GB'
+  validity          String?             // e.g. '30 days', '7 days'
+  isActive          Boolean             @default(true)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  packageType       String?             @default("fixed") // 'fixed' or 'daypass'
+  daysCount         Int?                // Number of days (required for daypass packages)
+  providerCatalogId String?             // FK to ProviderSkuCatalog — new mappings link here; legacy rows keep providerSku
+  catalogEntry      ProviderSkuCatalog? @relation(fields: [providerCatalogId], references: [id], onDelete: SetNull)
 
   @@index([provider])
   @@index([isActive])
   @@index([packageType])
+  @@index([providerCatalogId])
 }
 
 model ProviderSkuCatalog {
-  id            String   @id @default(cuid())
+  id            String               @id @default(cuid())
   provider      String
   productCode   String
   productName   String
@@ -79,15 +82,16 @@ model ProviderSkuCatalog {
   countryCodes  Json?
   dataAmount    String?
   validity      String?
-  netPrice      Decimal? @db.Decimal(28, 2)
+  netPrice      Decimal?             @db.Decimal(28, 2)
   currency      String?
   cardType      String?
   activeType    String?
   rawPayload    Json?
-  isActive      Boolean  @default(true)
-  lastSyncedAt  DateTime @default(now())
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isActive      Boolean              @default(true)
+  lastSyncedAt  DateTime             @default(now())
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  skuMappings   ProviderSkuMapping[]
 
   @@unique([provider, productCode])
   @@index([provider])

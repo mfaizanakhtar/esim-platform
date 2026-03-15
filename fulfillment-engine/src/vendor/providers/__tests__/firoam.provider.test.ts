@@ -4,6 +4,18 @@ import { MappingError, VendorError } from '~/utils/errors';
 import type { ProviderMappingConfig, ProvisionContext } from '~/vendor/types';
 
 // ---------------------------------------------------------------------------
+// Mock prisma for catalog-linked tests
+// ---------------------------------------------------------------------------
+const mockFindUniqueOrThrow = vi.fn();
+vi.mock('~/db/prisma', () => ({
+  default: {
+    providerSkuCatalog: {
+      findUniqueOrThrow: (...args: unknown[]) => mockFindUniqueOrThrow(...args),
+    },
+  },
+}));
+
+// ---------------------------------------------------------------------------
 // Silence logger output during tests
 // ---------------------------------------------------------------------------
 vi.mock('~/utils/logger', () => ({
@@ -216,6 +228,22 @@ describe('FiRoamProvider.provision()', () => {
       await expect(provider.provision(legacyDaypassConfig, ctx)).rejects.toThrow('timeout');
     });
 
+    it('uses "Unknown error" fallback when getPackages error field is null', async () => {
+      mockClient.getPackages.mockResolvedValue({ packageData: null, error: '' });
+
+      await expect(provider.provision(legacyDaypassConfig, ctx)).rejects.toThrow('Unknown error');
+    });
+
+    it('handles missing esimPackageDtoList (uses || [] fallback)', async () => {
+      mockClient.getPackages.mockResolvedValue({
+        packageData: {
+          /* no esimPackageDtoList */
+        },
+        error: null,
+      });
+
+      await expect(provider.provision(legacyDaypassConfig, ctx)).rejects.toThrow(MappingError);
+    });
     it('throws MappingError when package list is empty', async () => {
       mockClient.getPackages.mockResolvedValue({
         packageData: { esimPackageDtoList: [] },
@@ -405,6 +433,71 @@ describe('FiRoamProvider.provision()', () => {
 
       const result = await provider.provision(makeFixedConfig('120:apiCode:14094'), ctx);
       expect(result.vendorOrderId).toBe('EP-999');
+    });
+  });
+
+  // ── Catalog-linked path ───────────────────────────────────────────────
+
+  describe('catalog-linked path (providerCatalogId set)', () => {
+    const catalogConfig: ProviderMappingConfig = {
+      providerSku: '', // ignored when catalog ID is set
+      providerCatalogId: 'cat-001',
+      packageType: 'fixed',
+    };
+
+    beforeEach(() => {
+      mockFindUniqueOrThrow.mockResolvedValue({
+        productCode: '826-0-?-1-G-D',
+        rawPayload: { skuId: 120, priceid: 14094 },
+      });
+    });
+
+    it('looks up catalog entry by providerCatalogId', async () => {
+      await provider.provision(catalogConfig, ctx);
+
+      expect(mockFindUniqueOrThrow).toHaveBeenCalledWith({ where: { id: 'cat-001' } });
+    });
+
+    it('uses skuId and priceId from rawPayload', async () => {
+      await provider.provision(catalogConfig, ctx);
+
+      expect(mockClient.addEsimOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ skuId: '120', priceId: '14094' }),
+      );
+    });
+
+    it('throws MappingError when skuId is missing from rawPayload', async () => {
+      mockFindUniqueOrThrow.mockResolvedValue({
+        productCode: '826-0-?-1-G-D',
+        rawPayload: { priceid: 14094 }, // no skuId
+      });
+
+      await expect(provider.provision(catalogConfig, ctx)).rejects.toThrow(MappingError);
+    });
+
+    it('returns a valid EsimProvisionResult from catalog path', async () => {
+      const result = await provider.provision(catalogConfig, ctx);
+
+      expect(result).toMatchObject({
+        vendorOrderId: 'EP-001',
+        lpa: 'LPA:1$smdp.io$ACTCODE',
+        activationCode: 'ACTCODE',
+        iccid: '8901000000000000001',
+      });
+    });
+
+    it('uses apiCode as priceId when priceid is absent in catalog rawPayload (fixed pkg)', async () => {
+      mockFindUniqueOrThrow.mockResolvedValue({
+        productCode: 'MY-API-CODE',
+        rawPayload: { skuId: 120 }, // no priceid
+      });
+
+      await provider.provision({ ...catalogConfig, packageType: 'fixed' }, ctx);
+
+      // storedPriceId = null → fixed pkg fallback: priceId = apiCode
+      expect(mockClient.addEsimOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ priceId: 'MY-API-CODE' }),
+      );
     });
   });
 

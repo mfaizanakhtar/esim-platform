@@ -65,8 +65,7 @@ export function SkuMappings() {
             <tr>
               <th className="text-left px-4 py-3 font-medium">Shopify SKU</th>
               <th className="text-left px-4 py-3 font-medium">Provider</th>
-              <th className="text-left px-4 py-3 font-medium">Provider SKU</th>
-              <th className="text-left px-4 py-3 font-medium">Name</th>
+              <th className="text-left px-4 py-3 font-medium">Product</th>
               <th className="text-left px-4 py-3 font-medium">Active</th>
               <th className="text-left px-4 py-3 font-medium">Actions</th>
             </tr>
@@ -75,7 +74,7 @@ export function SkuMappings() {
             {isLoading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 6 }).map((__, j) => (
+                  {Array.from({ length: 5 }).map((__, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 bg-muted animate-pulse rounded" />
                     </td>
@@ -87,10 +86,11 @@ export function SkuMappings() {
               <tr key={mapping.id} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs">{mapping.shopifySku}</td>
                 <td className="px-4 py-3 capitalize">{mapping.provider}</td>
-                <td className="px-4 py-3 font-mono text-xs max-w-xs truncate">
-                  {mapping.providerSku}
+                <td className="px-4 py-3 text-sm max-w-xs truncate">
+                  {mapping.name ?? (
+                    <span className="font-mono text-xs text-muted-foreground">{mapping.providerSku}</span>
+                  )}
                 </td>
-                <td className="px-4 py-3 text-muted-foreground">{mapping.name ?? '—'}</td>
                 <td className="px-4 py-3">
                   <button
                     onClick={() =>
@@ -130,7 +130,7 @@ export function SkuMappings() {
 
             {data?.mappings.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                   No SKU mappings found.
                 </td>
               </tr>

@@ -33,12 +33,23 @@ export default function adminRoutes(
   // can temporarily report stale diagnostics if Prisma types were generated in a
   // different workspace context. We bind the delegate through a narrow local type
   // so route logic remains strictly typed and resilient to stale editor state.
+  type CatalogEntry = {
+    id: string;
+    provider: string;
+    productCode: string;
+    productName: string;
+    region: string | null;
+    dataAmount: string | null;
+    validity: string | null;
+    rawPayload: unknown;
+  };
   const providerSkuCatalog = (
     prisma as unknown as {
       providerSkuCatalog: {
         findMany: (args: unknown) => Promise<unknown[]>;
         count: (args: unknown) => Promise<number>;
         upsert: (args: unknown) => Promise<unknown>;
+        findUnique: (args: { where: { id: string } }) => Promise<CatalogEntry | null>;
       };
     }
   ).providerSkuCatalog;
@@ -278,32 +289,76 @@ export default function adminRoutes(
    * Create a new Shopify SKU → vendor provider mapping.
    *
    * Body (JSON):
-   *   shopifySku     string  required  — Shopify variant SKU (must be unique)
-   *   provider       string  required  — e.g. 'firoam', 'airalo'
-   *   providerSku    string  required  — vendor-specific identifier
-   *   name           string  optional
-   *   region         string  optional
-   *   dataAmount     string  optional
-   *   validity       string  optional
-   *   packageType    string  optional  — 'fixed' | 'daypass' (default: 'fixed')
-   *   daysCount      number  optional  — required when packageType='daypass'
-   *   providerConfig object  optional  — vendor-specific extras (stored as JSON)
-   *   isActive       boolean optional  — defaults to true
+   *   shopifySku        string  required  — Shopify variant SKU (must be unique)
+   *   provider          string  required  — e.g. 'firoam', 'tgt'
+   *   providerCatalogId string  optional  — ID from ProviderSkuCatalog; auto-derives providerSku + metadata
+   *   providerSku       string  required if no providerCatalogId  — vendor-specific identifier
+   *   name              string  optional  — auto-populated from catalog if omitted
+   *   region            string  optional  — auto-populated from catalog if omitted
+   *   dataAmount        string  optional  — auto-populated from catalog if omitted
+   *   validity          string  optional  — auto-populated from catalog if omitted
+   *   packageType       string  optional  — 'fixed' | 'daypass' (default: 'fixed')
+   *   daysCount         number  optional  — required when packageType='daypass'
+   *   providerConfig    object  optional  — vendor-specific extras (stored as JSON)
+   *   isActive          boolean optional  — defaults to true
    */
   app.post('/sku-mappings', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
     const body = request.body as Record<string, unknown>;
-    const { shopifySku, provider, providerSku } = body;
+    const { shopifySku } = body;
+    const providerCatalogId =
+      typeof body.providerCatalogId === 'string' ? body.providerCatalogId.trim() : null;
+    if (providerCatalogId === '') {
+      return reply.code(400).send({ error: 'providerCatalogId cannot be empty' });
+    }
 
     if (!shopifySku || typeof shopifySku !== 'string') {
       return reply.code(400).send({ error: 'shopifySku is required' });
     }
-    if (!provider || typeof provider !== 'string') {
+    if (!body.provider || typeof body.provider !== 'string') {
       return reply.code(400).send({ error: 'provider is required' });
     }
-    if (!providerSku || typeof providerSku !== 'string') {
-      return reply.code(400).send({ error: 'providerSku is required' });
+    if (!providerCatalogId && (!body.providerSku || typeof body.providerSku !== 'string')) {
+      return reply.code(400).send({ error: 'either providerCatalogId or providerSku is required' });
+    }
+
+    // Auto-derive fields from catalog entry when providerCatalogId is supplied
+    const provider = body.provider;
+    let providerSku = typeof body.providerSku === 'string' ? body.providerSku : '';
+    let name = typeof body.name === 'string' ? body.name : null;
+    let region = typeof body.region === 'string' ? body.region : null;
+    let dataAmount = typeof body.dataAmount === 'string' ? body.dataAmount : null;
+    let validity = typeof body.validity === 'string' ? body.validity : null;
+
+    if (providerCatalogId) {
+      const entry = await providerSkuCatalog.findUnique({ where: { id: providerCatalogId } });
+      if (!entry) return reply.code(400).send({ error: 'Catalog entry not found' });
+      if (entry.provider !== provider) {
+        return reply.code(400).send({
+          error: `Catalog entry provider '${entry.provider}' does not match request provider '${provider}'`,
+        });
+      }
+      if (!name) name = entry.productName;
+      if (!region) region = entry.region;
+      if (!dataAmount) dataAmount = entry.dataAmount;
+      if (!validity) validity = entry.validity;
+      // Derive providerSku from catalog rawPayload
+      if (entry.provider === 'firoam') {
+        const raw = (entry.rawPayload ?? {}) as { skuId?: unknown; priceid?: unknown };
+        if (raw.skuId === undefined || raw.priceid === undefined) {
+          return reply.code(400).send({
+            error: 'Catalog entry rawPayload is missing required firoam fields (skuId, priceid)',
+          });
+        }
+        providerSku = `${String(raw.skuId)}:${entry.productCode}:${String(raw.priceid)}`;
+      } else {
+        providerSku = entry.productCode;
+      }
+    }
+
+    if (!providerSku) {
+      return reply.code(400).send({ error: 'Could not determine providerSku' });
     }
 
     // Check for duplicate shopifySku
@@ -317,10 +372,11 @@ export default function adminRoutes(
         shopifySku,
         provider,
         providerSku,
-        name: typeof body.name === 'string' ? body.name : null,
-        region: typeof body.region === 'string' ? body.region : null,
-        dataAmount: typeof body.dataAmount === 'string' ? body.dataAmount : null,
-        validity: typeof body.validity === 'string' ? body.validity : null,
+        providerCatalogId,
+        name,
+        region,
+        dataAmount,
+        validity,
         packageType: typeof body.packageType === 'string' ? body.packageType : 'fixed',
         daysCount: typeof body.daysCount === 'number' ? body.daysCount : null,
         providerConfig:
@@ -352,14 +408,67 @@ export default function adminRoutes(
       return reply.code(404).send({ error: 'SKU mapping not found' });
     }
 
+    // Auto-derive fields from catalog entry when providerCatalogId is supplied
+    // null = explicit unlink; string = link/update; undefined = leave unchanged
+    const providerCatalogId: string | null | undefined =
+      body.providerCatalogId === null
+        ? null
+        : typeof body.providerCatalogId === 'string'
+          ? body.providerCatalogId.trim()
+          : undefined;
+    if (providerCatalogId === '') {
+      return reply.code(400).send({ error: 'providerCatalogId cannot be empty' });
+    }
+
+    let derivedProviderSku: string | undefined;
+    let derivedName: string | undefined;
+    let derivedRegion: string | null | undefined;
+    let derivedDataAmount: string | null | undefined;
+    let derivedValidity: string | null | undefined;
+
+    if (providerCatalogId) {
+      const entry = await providerSkuCatalog.findUnique({ where: { id: providerCatalogId } });
+      if (!entry) return reply.code(400).send({ error: 'Catalog entry not found' });
+      const effectiveProvider =
+        typeof body.provider === 'string' ? body.provider : existing.provider;
+      if (entry.provider !== effectiveProvider) {
+        return reply.code(400).send({
+          error: `Catalog entry provider '${entry.provider}' does not match mapping provider '${effectiveProvider}'`,
+        });
+      }
+      // Derive providerSku from catalog rawPayload
+      if (entry.provider === 'firoam') {
+        const raw = (entry.rawPayload ?? {}) as { skuId?: unknown; priceid?: unknown };
+        if (raw.skuId === undefined || raw.priceid === undefined) {
+          return reply.code(400).send({
+            error: 'Catalog entry rawPayload is missing required firoam fields (skuId, priceid)',
+          });
+        }
+        derivedProviderSku = `${String(raw.skuId)}:${entry.productCode}:${String(raw.priceid)}`;
+      } else {
+        derivedProviderSku = entry.productCode;
+      }
+      // Auto-populate metadata only if not explicitly supplied in the request
+      if (typeof body.name !== 'string') derivedName = entry.productName;
+      if (typeof body.region !== 'string') derivedRegion = entry.region;
+      if (typeof body.dataAmount !== 'string') derivedDataAmount = entry.dataAmount;
+      if (typeof body.validity !== 'string') derivedValidity = entry.validity;
+    }
+
     // Build update payload from only the fields that were provided
     const updateData: Record<string, unknown> = {};
     if (typeof body.provider === 'string') updateData.provider = body.provider;
-    if (typeof body.providerSku === 'string') updateData.providerSku = body.providerSku;
+    if (derivedProviderSku !== undefined) updateData.providerSku = derivedProviderSku;
+    else if (typeof body.providerSku === 'string') updateData.providerSku = body.providerSku;
+    if (providerCatalogId !== undefined) updateData.providerCatalogId = providerCatalogId;
     if (typeof body.name === 'string') updateData.name = body.name;
+    else if (derivedName !== undefined) updateData.name = derivedName;
     if (typeof body.region === 'string') updateData.region = body.region;
+    else if (derivedRegion !== undefined) updateData.region = derivedRegion;
     if (typeof body.dataAmount === 'string') updateData.dataAmount = body.dataAmount;
+    else if (derivedDataAmount !== undefined) updateData.dataAmount = derivedDataAmount;
     if (typeof body.validity === 'string') updateData.validity = body.validity;
+    else if (derivedValidity !== undefined) updateData.validity = derivedValidity;
     if (typeof body.packageType === 'string') updateData.packageType = body.packageType;
     if (typeof body.daysCount === 'number') updateData.daysCount = body.daysCount;
     if (typeof body.isActive === 'boolean') updateData.isActive = body.isActive;

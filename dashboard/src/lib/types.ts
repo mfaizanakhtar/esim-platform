@@ -65,6 +65,7 @@ export interface SkuMapping {
   shopifySku: string;
   provider: SkuMappingProvider;
   providerSku: string;
+  providerCatalogId: string | null;
   providerConfig: Record<string, unknown> | null;
   name: string | null;
   region: string | null;

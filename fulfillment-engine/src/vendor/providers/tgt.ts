@@ -12,6 +12,7 @@ import {
   getTgtPollMaxAttempts,
 } from '~/vendor/tgtConfig';
 import { MappingError, VendorError } from '~/utils/errors';
+import prisma from '~/db/prisma';
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -29,9 +30,27 @@ export class TgtProvider implements VendorProvider {
     config: ProviderMappingConfig,
     ctx: ProvisionContext,
   ): Promise<EsimProvisionResult> {
-    const productCode = config.providerSku;
+    let productCode: string;
+
+    if (config.providerCatalogId) {
+      // Catalog-linked path: use productCode directly from catalog entry
+      const entry = await prisma.providerSkuCatalog.findUnique({
+        where: { id: config.providerCatalogId },
+        select: { productCode: true },
+      });
+      if (!entry) {
+        throw new MappingError(`Catalog entry not found: ${config.providerCatalogId}`);
+      }
+      productCode = entry.productCode;
+    } else {
+      // Legacy path: providerSku is the productCode directly
+      productCode = config.providerSku;
+    }
+
     if (!productCode || typeof productCode !== 'string') {
-      throw new MappingError('Invalid TGT providerSku: expected productCode string');
+      throw new MappingError(
+        'Invalid TGT productCode: expected non-empty string from mapping/catalog',
+      );
     }
 
     const providerConfig = (config.providerConfig ?? {}) as Record<string, unknown>;
