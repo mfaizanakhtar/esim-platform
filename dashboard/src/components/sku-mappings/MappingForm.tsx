@@ -369,11 +369,14 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
         <div className="space-y-1">
           <label className="text-sm font-medium">Days Count</label>
           <input
-            {...register('daysCount', { valueAsNumber: true })}
+            {...register('daysCount', { setValueAs: (v) => (v === '' || v === null) ? undefined : Number(v) })}
             type="number"
             className="w-full border rounded-md px-3 py-2 text-sm"
             placeholder="7"
           />
+          {errors.daysCount && (
+            <p className="text-xs text-red-600">{errors.daysCount.message}</p>
+          )}
         </div>
       )}
 
