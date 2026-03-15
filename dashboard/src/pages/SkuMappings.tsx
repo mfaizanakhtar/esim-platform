@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useSkuMappings } from '@/hooks/useSkuMappings';
 import {
@@ -14,11 +14,29 @@ import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 const PAGE_SIZE = 25;
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
 export function SkuMappings() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<SkuMapping | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const urlSearch = searchParams.get('search') ?? '';
+  const [search, setSearch] = useState(urlSearch);
+  const debouncedSearch = useDebounce(search, 300);
+  const isInitialMount = useRef(true);
+
+  // Keep input in sync when URL changes (e.g. Back/Forward navigation)
+  useEffect(() => {
+    setSearch(urlSearch);
+  }, [urlSearch]);
 
   const page = Number(searchParams.get('page') ?? 0);
   const setPage = useCallback(
@@ -32,7 +50,25 @@ export function SkuMappings() {
     [setSearchParams],
   );
 
-  const { data, isLoading } = useSkuMappings({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
+  // Sync debouncedSearch to URL and reset page
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    setSearchParams((prev) => {
+      if (debouncedSearch) prev.set('search', debouncedSearch);
+      else prev.delete('search');
+      prev.delete('page');
+      return prev;
+    });
+  }, [debouncedSearch, setSearchParams]);
+
+  const { data, isLoading } = useSkuMappings({
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+    search: debouncedSearch || undefined,
+  });
   const createMutation = useCreateSkuMapping();
   const updateMutation = useUpdateSkuMapping();
   const toggleMutation = useToggleSkuMapping();
@@ -65,15 +101,23 @@ export function SkuMappings() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">SKU Mappings</h1>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="h-4 w-4" />
-          Add Mapping
-        </button>
+        <div className="flex items-center gap-3 ml-auto">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by SKU or name..."
+            className="border rounded-md px-3 py-1.5 text-sm w-64"
+          />
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Mapping
+          </button>
+        </div>
       </div>
 
       <div className="border rounded-lg overflow-hidden">
