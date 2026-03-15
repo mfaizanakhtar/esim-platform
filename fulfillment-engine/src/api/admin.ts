@@ -258,6 +258,7 @@ export default function adminRoutes(
       where.OR = [
         { shopifySku: { contains: query.search, mode: 'insensitive' } },
         { name: { contains: query.search, mode: 'insensitive' } },
+        { providerSku: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 

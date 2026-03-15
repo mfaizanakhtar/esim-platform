@@ -28,9 +28,15 @@ export function SkuMappings() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<SkuMapping | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
+  const urlSearch = searchParams.get('search') ?? '';
+  const [search, setSearch] = useState(urlSearch);
   const debouncedSearch = useDebounce(search, 300);
   const isInitialMount = useRef(true);
+
+  // Keep input in sync when URL changes (e.g. Back/Forward navigation)
+  useEffect(() => {
+    setSearch(urlSearch);
+  }, [urlSearch]);
 
   const page = Number(searchParams.get('page') ?? 0);
   const setPage = useCallback(
