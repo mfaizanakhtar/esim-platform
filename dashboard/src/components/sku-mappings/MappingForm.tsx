@@ -70,7 +70,6 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
 
   const provider = watch('provider') as 'firoam' | 'tgt' | undefined;
   const providerCatalogId = watch('providerCatalogId');
-  const packageType = watch('packageType');
 
   // Combobox state
   const [comboQuery, setComboQuery] = useState('');
@@ -150,6 +149,8 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
       setValue('region', '');
       setValue('dataAmount', '');
       setValue('validity', '');
+      setValue('packageType', 'fixed');
+      setValue('daysCount', undefined);
       setComboQuery('');
       return;
     }
@@ -161,21 +162,18 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
     setValue('dataAmount', item.dataAmount ?? '');
     setValue('validity', item.validity ?? '');
     // Auto-derive packageType for FiRoam
-    if (provider === 'firoam') {
-      const derived = item.productCode?.includes('?') ? 'daypass' : 'fixed';
-      setValue('packageType', derived);
-    }
+    const derived = item.productCode?.includes('?') ? 'daypass' : 'fixed';
+    setValue('packageType', derived);
+    // Auto-derive daysCount from validity string (e.g. "7 days" → 7)
+    const parsedDays = parseInt(item.validity ?? '', 10);
+    setValue('daysCount', isNaN(parsedDays) ? undefined : parsedDays);
     setComboQuery('');
     setComboOpen(false);
     setFocusedIndex(-1);
   }
 
   function handleFormSubmit(values: FormValues) {
-    const providerChanged = initial ? values.provider !== initial.provider : false;
-    const requiresCatalogLink =
-      !initial || providerChanged || Boolean(initial?.providerCatalogId);
-
-    if (requiresCatalogLink && !values.providerCatalogId) {
+    if (!values.providerCatalogId) {
       setError('providerCatalogId', { message: 'Select a catalog product' });
       return;
     }
@@ -198,9 +196,6 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
     onSubmit({ ...values, providerConfig });
   }
 
-  // Legacy mapping: has providerSku but no catalog link
-  const isLegacy = initial && !initial.providerCatalogId;
-
   // Combobox input text: show selected label when closed, query while typing
   const comboDisplayValue = comboOpen
     ? comboQuery
@@ -210,6 +205,14 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+      {/* Hidden derived fields — values set automatically on catalog selection */}
+      <input type="hidden" {...register('name')} />
+      <input type="hidden" {...register('region')} />
+      <input type="hidden" {...register('dataAmount')} />
+      <input type="hidden" {...register('validity')} />
+      <input type="hidden" {...register('packageType')} />
+      <input type="hidden" {...register('daysCount', { valueAsNumber: true })} />
+
       <div className="space-y-1">
         <label className="text-sm font-medium">Shopify SKU *</label>
         <input
@@ -234,19 +237,7 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
 
       {/* Catalog product selection — combobox with keyboard support */}
       <div className="space-y-1">
-        <label className="text-sm font-medium">
-          Catalog Product {!initial && '*'}
-        </label>
-        {isLegacy && !providerCatalogId && (
-          <div className="space-y-1">
-            <div className="bg-muted px-3 py-2 rounded-md text-sm font-mono text-muted-foreground">
-              {initial.providerSku}
-            </div>
-            <p className="text-xs text-amber-600">
-              Legacy mapping — select a catalog item below to link it
-            </p>
-          </div>
-        )}
+        <label className="text-sm font-medium">Catalog Product *</label>
         {/* Hidden field to register providerCatalogId in form state */}
         <input type="hidden" {...register('providerCatalogId')} />
         {!provider ? (
@@ -260,7 +251,7 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
               aria-controls="catalog-listbox"
               aria-autocomplete="list"
               value={comboDisplayValue}
-              placeholder={isLegacy ? 'Keep existing / select to update' : 'Search catalog…'}
+              placeholder="Search catalog…"
               className="w-full border rounded-md px-3 py-2 text-sm"
               onChange={(e) => {
                 setComboQuery(e.target.value);
@@ -347,93 +338,32 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
           <p className="text-xs text-red-600">{errors.providerCatalogId.message}</p>
         )}
 
-        {/* Info row for selected catalog item */}
+        {/* Info rows for selected catalog item */}
         {selectedItem && (
-          <p className="text-xs text-muted-foreground mt-1">
-            {selectedItem.netPrice && (
-              <>
-                Price: {selectedItem.netPrice}
-                {selectedItem.currency ? ` ${selectedItem.currency}` : ''}
-                {'  ·  '}
-              </>
-            )}
-            {selectedItem.region && <>Region: {selectedItem.region}{'  ·  '}</>}
-            Type: {selectedItem.productCode?.includes('?') ? 'daypass' : 'fixed'}
-          </p>
+          <div className="space-y-0.5 mt-1">
+            <p className="text-xs text-muted-foreground">
+              {[
+                selectedItem.netPrice
+                  ? `${selectedItem.netPrice}${selectedItem.currency ? ` ${selectedItem.currency}` : ''}`
+                  : null,
+                selectedItem.region ? `Region: ${selectedItem.region}` : null,
+                `Type: ${selectedItem.productCode?.includes('?') ? 'daypass' : 'fixed'}`,
+              ]
+                .filter(Boolean)
+                .join('  ·  ')}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {[
+                selectedItem.productName ? `Name: ${selectedItem.productName}` : null,
+                selectedItem.dataAmount ?? null,
+                selectedItem.validity ?? null,
+              ]
+                .filter(Boolean)
+                .join('  ·  ')}
+            </p>
+          </div>
         )}
       </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Name</label>
-          <input
-            {...register('name')}
-            className="w-full border rounded-md px-3 py-2 text-sm"
-            placeholder="US 5GB 30 days"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Region</label>
-          <input
-            {...register('region')}
-            className="w-full border rounded-md px-3 py-2 text-sm"
-            placeholder="US"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Data Amount</label>
-          <input
-            {...register('dataAmount')}
-            className="w-full border rounded-md px-3 py-2 text-sm"
-            placeholder="5GB"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Validity</label>
-          <input
-            {...register('validity')}
-            className="w-full border rounded-md px-3 py-2 text-sm"
-            placeholder="30 days"
-          />
-        </div>
-      </div>
-
-      {/* packageType — read-only badge for FiRoam with catalog selection, editable otherwise */}
-      <div className="space-y-1">
-        <label className="text-sm font-medium">Package Type</label>
-        {provider === 'firoam' && providerCatalogId ? (
-          <>
-            <input type="hidden" {...register('packageType')} />
-            <div className="inline-flex items-center px-3 py-1.5 rounded-md text-sm border bg-muted text-muted-foreground">
-              {packageType === 'daypass' ? 'Day Pass' : 'Fixed'}
-              <span className="ml-2 text-xs opacity-60">(auto-derived)</span>
-            </div>
-          </>
-        ) : (
-          <select
-            {...register('packageType')}
-            className="w-full border rounded-md px-3 py-2 text-sm"
-          >
-            <option value="fixed">Fixed</option>
-            <option value="daypass">Day Pass</option>
-          </select>
-        )}
-      </div>
-
-      {packageType === 'daypass' && (
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Days Count</label>
-          <input
-            {...register('daysCount', { valueAsNumber: true })}
-            type="number"
-            className="w-full border rounded-md px-3 py-2 text-sm"
-            placeholder="7"
-          />
-        </div>
-      )}
 
       <div className="space-y-1">
         <label className="text-sm font-medium">Provider Config (JSON)</label>
