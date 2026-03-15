@@ -244,6 +244,7 @@ export default function adminRoutes(
     const query = request.query as {
       provider?: string;
       isActive?: string;
+      search?: string;
       limit?: string;
       offset?: string;
     };
@@ -253,6 +254,12 @@ export default function adminRoutes(
     const where: Record<string, unknown> = {};
     if (query.provider) where.provider = query.provider;
     if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
+    if (query.search) {
+      where.OR = [
+        { shopifySku: { contains: query.search, mode: 'insensitive' } },
+        { name: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
 
     const [mappings, total] = await Promise.all([
       prisma.providerSkuMapping.findMany({

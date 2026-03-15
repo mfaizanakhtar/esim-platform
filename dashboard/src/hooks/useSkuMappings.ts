@@ -5,21 +5,23 @@ import type { SkuMapping, SkuMappingsPage, SkuMappingProvider } from '@/lib/type
 interface UseSkuMappingsParams {
   provider?: SkuMappingProvider;
   isActive?: boolean;
+  search?: string;
   limit?: number;
   offset?: number;
 }
 
 export function useSkuMappings(params: UseSkuMappingsParams = {}) {
-  const { provider, isActive, limit = 100, offset = 0 } = params;
+  const { provider, isActive, search, limit = 100, offset = 0 } = params;
 
   const searchParams = new URLSearchParams();
   if (provider) searchParams.set('provider', provider);
   if (isActive !== undefined) searchParams.set('isActive', String(isActive));
+  if (search) searchParams.set('search', search);
   searchParams.set('limit', String(limit));
   searchParams.set('offset', String(offset));
 
   return useQuery({
-    queryKey: ['sku-mappings', { provider, isActive, limit, offset }],
+    queryKey: ['sku-mappings', { provider, isActive, search, limit, offset }],
     queryFn: () => apiClient.get<SkuMappingsPage<SkuMapping>>(`/sku-mappings?${searchParams.toString()}`),
   });
 }

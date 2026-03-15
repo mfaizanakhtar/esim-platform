@@ -1,8 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import type { SkuMapping } from '@/lib/types';
+import type { SkuMapping, CatalogItem } from '@/lib/types';
 import { useCatalog } from '@/hooks/useCatalog';
 
 const schema = z.object({
@@ -26,6 +26,15 @@ interface MappingFormProps {
   onSubmit: (values: FormValues & { providerConfig?: Record<string, unknown> }) => void;
   onCancel: () => void;
   isPending: boolean;
+}
+
+function catalogLabel(item: CatalogItem): string {
+  const parts = [item.dataAmount, item.validity].filter(Boolean).join(', ');
+  const base = item.productName + (parts ? ` (${parts})` : '');
+  if (item.netPrice) {
+    return `${base} — $${item.netPrice}${item.currency ? ` ${item.currency}` : ''}`;
+  }
+  return base;
 }
 
 export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingFormProps) {
@@ -62,14 +71,31 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
   const providerCatalogId = watch('providerCatalogId');
   const packageType = watch('packageType');
 
+  // Combobox state
+  const [comboQuery, setComboQuery] = useState('');
+  const [comboOpen, setComboOpen] = useState(false);
+  const comboBlurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Track previous provider so we can clear catalog state on provider change
   const previousProviderRef = useRef(provider);
 
   // Fetch catalog items for the selected provider
   const { data: catalogData } = useCatalog(
-    provider ? { provider, isActive: true, limit: 200 } : { limit: 0 },
+    provider ? { provider, isActive: true, limit: 500 } : { limit: 0 },
   );
   const catalogItems = catalogData?.items ?? [];
+
+  // Derive selected catalog item
+  const selectedCatalogItem = catalogItems.find((c) => c.id === providerCatalogId) ?? null;
+
+  // Filtered catalog for combobox
+  const filteredCatalog = catalogItems.filter(
+    (item) =>
+      !comboQuery ||
+      item.productName.toLowerCase().includes(comboQuery.toLowerCase()) ||
+      item.productCode.toLowerCase().includes(comboQuery.toLowerCase()) ||
+      (item.region ?? '').toLowerCase().includes(comboQuery.toLowerCase()),
+  );
 
   useEffect(() => {
     reset(
@@ -101,6 +127,8 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
       setValue('region', '');
       setValue('dataAmount', '');
       setValue('validity', '');
+      setComboQuery('');
+      setComboOpen(false);
     }
     previousProviderRef.current = provider;
   }, [provider, setValue]);
@@ -112,22 +140,25 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
       setValue('region', '');
       setValue('dataAmount', '');
       setValue('validity', '');
+      setComboQuery('');
       return;
     }
     const item = catalogItems.find((c) => c.id === id);
     if (!item) return;
-    // Always overwrite all derived fields — avoids stale values from previous selection
     setValue('name', item.productName ?? '');
     setValue('region', item.region ?? '');
     setValue('dataAmount', item.dataAmount ?? '');
     setValue('validity', item.validity ?? '');
+    // 4a: auto-derive packageType for FiRoam
+    if (provider === 'firoam') {
+      const derived = item.productCode?.includes('?') ? 'daypass' : 'fixed';
+      setValue('packageType', derived);
+    }
+    setComboQuery('');
+    setComboOpen(false);
   }
 
   function handleFormSubmit(values: FormValues) {
-    // Require catalog selection for:
-    //   - new mappings
-    //   - edits where the provider changed (stale catalog ID from old provider)
-    //   - edits where the mapping was already catalog-linked (keep it linked)
     const providerChanged = initial ? values.provider !== initial.provider : false;
     const requiresCatalogLink =
       !initial || providerChanged || Boolean(initial?.providerCatalogId);
@@ -158,6 +189,13 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
   // Legacy mapping: has providerSku but no catalog link
   const isLegacy = initial && !initial.providerCatalogId;
 
+  // Combobox display text: show selected label when closed, query when typing
+  const comboDisplayValue = comboOpen
+    ? comboQuery
+    : selectedCatalogItem
+      ? catalogLabel(selectedCatalogItem)
+      : '';
+
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
       <div className="space-y-1">
@@ -182,7 +220,7 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
         {errors.provider && <p className="text-xs text-red-600">{errors.provider.message}</p>}
       </div>
 
-      {/* Catalog product selection */}
+      {/* Catalog product selection — combobox */}
       <div className="space-y-1">
         <label className="text-sm font-medium">
           Catalog Product {!initial && '*'}
@@ -204,24 +242,63 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
         ) : catalogItems.length === 0 ? (
           <p className="text-sm text-amber-600">No catalog entries — sync catalog first</p>
         ) : (
-          <select
-            value={providerCatalogId ?? ''}
-            onChange={(e) => handleCatalogSelect(e.target.value)}
-            className="w-full border rounded-md px-3 py-2 text-sm"
-          >
-            <option value="">{isLegacy ? 'Keep existing / select to update' : 'Select catalog product…'}</option>
-            {catalogItems.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.productName}
-                {item.dataAmount || item.validity
-                  ? ` (${[item.dataAmount, item.validity].filter(Boolean).join(', ')})`
-                  : ''}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              type="text"
+              value={comboDisplayValue}
+              placeholder={isLegacy ? 'Keep existing / select to update' : 'Search catalog…'}
+              className="w-full border rounded-md px-3 py-2 text-sm"
+              onChange={(e) => {
+                setComboQuery(e.target.value);
+                setComboOpen(true);
+              }}
+              onFocus={() => setComboOpen(true)}
+              onBlur={() => {
+                comboBlurTimeout.current = setTimeout(() => setComboOpen(false), 150);
+              }}
+            />
+            {comboOpen && (
+              <ul className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto border rounded-md bg-white shadow-lg text-sm">
+                {filteredCatalog.length === 0 ? (
+                  <li className="px-3 py-2 text-muted-foreground">No results</li>
+                ) : (
+                  filteredCatalog.map((item) => (
+                    <li
+                      key={item.id}
+                      className={`px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors ${
+                        item.id === providerCatalogId ? 'bg-muted font-medium' : ''
+                      }`}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        if (comboBlurTimeout.current) clearTimeout(comboBlurTimeout.current);
+                        handleCatalogSelect(item.id);
+                      }}
+                    >
+                      {catalogLabel(item)}
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+          </div>
         )}
         {errors.providerCatalogId && (
           <p className="text-xs text-red-600">{errors.providerCatalogId.message}</p>
+        )}
+
+        {/* 4b: info row for selected catalog item */}
+        {selectedCatalogItem && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {selectedCatalogItem.netPrice && (
+              <>
+                Price: ${selectedCatalogItem.netPrice}
+                {selectedCatalogItem.currency ? ` ${selectedCatalogItem.currency}` : ''}
+                {'  ·  '}
+              </>
+            )}
+            {selectedCatalogItem.region && <>Region: {selectedCatalogItem.region}{'  ·  '}</>}
+            Type: {selectedCatalogItem.productCode?.includes('?') ? 'daypass' : 'fixed'}
+          </p>
         )}
       </div>
 
@@ -263,15 +340,26 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
         </div>
       </div>
 
+      {/* 4a: packageType — read-only badge for FiRoam with catalog selection, editable otherwise */}
       <div className="space-y-1">
         <label className="text-sm font-medium">Package Type</label>
-        <select
-          {...register('packageType')}
-          className="w-full border rounded-md px-3 py-2 text-sm"
-        >
-          <option value="fixed">Fixed</option>
-          <option value="daypass">Day Pass</option>
-        </select>
+        {provider === 'firoam' && providerCatalogId ? (
+          <>
+            <input type="hidden" {...register('packageType')} />
+            <div className="inline-flex items-center px-3 py-1.5 rounded-md text-sm border bg-muted text-muted-foreground">
+              {packageType === 'daypass' ? 'Day Pass' : 'Fixed'}
+              <span className="ml-2 text-xs opacity-60">(auto-derived)</span>
+            </div>
+          </>
+        ) : (
+          <select
+            {...register('packageType')}
+            className="w-full border rounded-md px-3 py-2 text-sm"
+          >
+            <option value="fixed">Fixed</option>
+            <option value="daypass">Day Pass</option>
+          </select>
+        )}
       </div>
 
       {packageType === 'daypass' && (
