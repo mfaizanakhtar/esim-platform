@@ -308,7 +308,10 @@ export default function adminRoutes(
     const body = request.body as Record<string, unknown>;
     const { shopifySku } = body;
     const providerCatalogId =
-      typeof body.providerCatalogId === 'string' ? body.providerCatalogId : null;
+      typeof body.providerCatalogId === 'string' ? body.providerCatalogId.trim() : null;
+    if (providerCatalogId === '') {
+      return reply.code(400).send({ error: 'providerCatalogId cannot be empty' });
+    }
 
     if (!shopifySku || typeof shopifySku !== 'string') {
       return reply.code(400).send({ error: 'shopifySku is required' });
@@ -411,14 +414,17 @@ export default function adminRoutes(
       body.providerCatalogId === null
         ? null
         : typeof body.providerCatalogId === 'string'
-          ? body.providerCatalogId
+          ? body.providerCatalogId.trim()
           : undefined;
+    if (providerCatalogId === '') {
+      return reply.code(400).send({ error: 'providerCatalogId cannot be empty' });
+    }
 
     let derivedProviderSku: string | undefined;
     let derivedName: string | undefined;
-    let derivedRegion: string | undefined;
-    let derivedDataAmount: string | undefined;
-    let derivedValidity: string | undefined;
+    let derivedRegion: string | null | undefined;
+    let derivedDataAmount: string | null | undefined;
+    let derivedValidity: string | null | undefined;
 
     if (providerCatalogId) {
       const entry = await providerSkuCatalog.findUnique({ where: { id: providerCatalogId } });
@@ -444,9 +450,9 @@ export default function adminRoutes(
       }
       // Auto-populate metadata only if not explicitly supplied in the request
       if (typeof body.name !== 'string') derivedName = entry.productName;
-      if (typeof body.region !== 'string') derivedRegion = entry.region ?? undefined;
-      if (typeof body.dataAmount !== 'string') derivedDataAmount = entry.dataAmount ?? undefined;
-      if (typeof body.validity !== 'string') derivedValidity = entry.validity ?? undefined;
+      if (typeof body.region !== 'string') derivedRegion = entry.region;
+      if (typeof body.dataAmount !== 'string') derivedDataAmount = entry.dataAmount;
+      if (typeof body.validity !== 'string') derivedValidity = entry.validity;
     }
 
     // Build update payload from only the fields that were provided

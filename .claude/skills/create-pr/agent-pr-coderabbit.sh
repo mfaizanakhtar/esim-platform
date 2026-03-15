@@ -71,8 +71,7 @@ except Exception:
   done
 
   if [ "$review_found" = "0" ]; then
-    echo "ℹ️  No CodeRabbit review found within timeout — proceeding to merge."
-    return 0
+    echo "ℹ️  No new CodeRabbit review found within timeout — checking existing unresolved threads before merging."
   fi
 
   # ── Fetch unresolved threads via GraphQL ────────────────────────────────────
