@@ -34,15 +34,20 @@ export class TgtProvider implements VendorProvider {
 
     if (config.providerCatalogId) {
       // Catalog-linked path: use productCode directly from catalog entry
-      const entry = await (
-        prisma as unknown as {
-          providerSkuCatalog: {
-            findUniqueOrThrow: (args: {
-              where: { id: string };
-            }) => Promise<{ productCode: string }>;
-          };
-        }
-      ).providerSkuCatalog.findUniqueOrThrow({ where: { id: config.providerCatalogId } });
+      let entry: { productCode: string };
+      try {
+        entry = await (
+          prisma as unknown as {
+            providerSkuCatalog: {
+              findUniqueOrThrow: (args: {
+                where: { id: string };
+              }) => Promise<{ productCode: string }>;
+            };
+          }
+        ).providerSkuCatalog.findUniqueOrThrow({ where: { id: config.providerCatalogId } });
+      } catch {
+        throw new MappingError(`Catalog entry not found: ${config.providerCatalogId}`);
+      }
       productCode = entry.productCode;
     } else {
       // Legacy path: providerSku is the productCode directly

@@ -108,11 +108,10 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
   function handleCatalogSelect(id: string) {
     setValue('providerCatalogId', id || undefined);
     if (!id) {
-      // Clear derived fields back to initial values (or empty) when deselected
-      setValue('name', initial?.name ?? '');
-      setValue('region', initial?.region ?? '');
-      setValue('dataAmount', initial?.dataAmount ?? '');
-      setValue('validity', initial?.validity ?? '');
+      setValue('name', '');
+      setValue('region', '');
+      setValue('dataAmount', '');
+      setValue('validity', '');
       return;
     }
     const item = catalogItems.find((c) => c.id === id);

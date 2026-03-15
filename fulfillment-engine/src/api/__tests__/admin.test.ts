@@ -1425,6 +1425,31 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(400);
       expect(res.json().error).toContain('Catalog entry not found');
     });
+
+    it('returns 400 when firoam catalog entry has empty skuId in rawPayload', async () => {
+      catalogFindUnique.mockResolvedValue(
+        makeCatalogItem({
+          id: 'cat-firoam-empty',
+          provider: 'firoam',
+          productCode: '826-0-3-1-G-D',
+          rawPayload: { skuId: '', priceid: 14094 },
+        }),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings',
+        headers: JSON_HEADERS,
+        payload: {
+          shopifySku: 'ESIM-US-5GB',
+          provider: 'firoam',
+          providerCatalogId: 'cat-firoam-empty',
+        },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain('missing skuId');
+    });
   });
 
   describe('PUT /sku-mappings/:id with providerCatalogId', () => {
@@ -1468,6 +1493,29 @@ describe('Admin Routes', () => {
           }),
         }),
       );
+    });
+
+    it('returns 400 when firoam catalog entry has empty skuId in rawPayload', async () => {
+      const existing = makeMapping({ provider: 'firoam' });
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(existing);
+      catalogFindUnique.mockResolvedValue(
+        makeCatalogItem({
+          id: 'cat-firoam-empty',
+          provider: 'firoam',
+          productCode: '826-0-3-1-G-D',
+          rawPayload: { skuId: null, priceid: 14094 },
+        }),
+      );
+
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/sku-mappings/map-001',
+        headers: JSON_HEADERS,
+        payload: { providerCatalogId: 'cat-firoam-empty' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain('missing skuId');
     });
 
     it('sets providerCatalogId to null when null is passed (unlink)', async () => {

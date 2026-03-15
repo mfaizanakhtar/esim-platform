@@ -343,7 +343,13 @@ export default function adminRoutes(
       // Derive providerSku from catalog rawPayload
       if (entry.provider === 'firoam') {
         const raw = (entry.rawPayload ?? {}) as { skuId?: unknown; priceid?: unknown };
-        providerSku = `${String(raw.skuId ?? '')}:${entry.productCode}:${String(raw.priceid ?? '')}`;
+        const rawSkuId = String(raw.skuId ?? '');
+        if (!rawSkuId) {
+          return reply.code(400).send({
+            error: `Catalog entry ${providerCatalogId} is missing skuId in rawPayload`,
+          });
+        }
+        providerSku = `${rawSkuId}:${entry.productCode}:${String(raw.priceid ?? '')}`;
       } else {
         providerSku = entry.productCode;
       }
@@ -428,7 +434,13 @@ export default function adminRoutes(
       // Derive providerSku from catalog rawPayload
       if (entry.provider === 'firoam') {
         const raw = (entry.rawPayload ?? {}) as { skuId?: unknown; priceid?: unknown };
-        derivedProviderSku = `${String(raw.skuId ?? '')}:${entry.productCode}:${String(raw.priceid ?? '')}`;
+        const rawSkuId = String(raw.skuId ?? '');
+        if (!rawSkuId) {
+          return reply.code(400).send({
+            error: `Catalog entry ${providerCatalogId} is missing skuId in rawPayload`,
+          });
+        }
+        derivedProviderSku = `${rawSkuId}:${entry.productCode}:${String(raw.priceid ?? '')}`;
       } else {
         derivedProviderSku = entry.productCode;
       }

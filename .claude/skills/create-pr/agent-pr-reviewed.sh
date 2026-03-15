@@ -182,143 +182,21 @@ for c in json.load(sys.stdin):
 wait_for_ci "$PR_NUMBER"
 
 # ── Wait for CodeRabbit review ────────────────────────────────────────────────
-# CodeRabbit posts as 'coderabbitai[bot]' (GitHub Apps bot login format).
-# We poll two endpoints:
-#   - /repos/{repo}/pulls/{pr}/comments   → inline review comments (file:line)
-#   - /repos/{repo}/issues/{pr}/comments  → PR-level summary comments
-CR_WAIT=15           # poll every 15s
-CR_MAX=12            # max 12 × 15s = 3 min
-CR_COUNT=0
-CR_FOUND=0
+REPO_OWNER=$(echo "$REPO" | cut -d/ -f1)
+REPO_NAME=$(echo "$REPO" | cut -d/ -f2)
 
-echo ""
-echo "🐰 Waiting for CodeRabbit review on PR #${PR_NUMBER} (up to $((CR_MAX * CR_WAIT))s)..."
+# shellcheck source=agent-pr-coderabbit.sh
+source "$(dirname "$0")/agent-pr-coderabbit.sh"
 
-while [ $CR_COUNT -lt $CR_MAX ]; do
-  sleep $CR_WAIT
-  CR_COUNT=$((CR_COUNT + 1))
+set +e
+wait_for_coderabbit "$PR_NUMBER" "$REPO_OWNER" "$REPO_NAME" "$PR_URL" "$BRANCH_NAME" "$COMMIT_MSG"
+CR_EXIT=$?
+set -e
 
-  # Fetch both inline + issue-level comments from CodeRabbit
-  INLINE_RAW=$(gh api \
-    "repos/${REPO}/pulls/${PR_NUMBER}/comments" \
-    --jq '[.[] | select(.user.login == "coderabbitai[bot]" or .user.login == "coderabbitai")]' 2>/dev/null || echo "[]")
-
-  SUMMARY_RAW=$(gh api \
-    "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-    --jq '[.[] | select(.user.login == "coderabbitai[bot]" or .user.login == "coderabbitai")]' 2>/dev/null || echo "[]")
-
-  INLINE_COUNT=$(echo "$INLINE_RAW" | python3 -c \
-    "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
-  SUMMARY_COUNT=$(echo "$SUMMARY_RAW" | python3 -c \
-    "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
-
-  echo "   [$(( CR_COUNT * CR_WAIT ))s] CodeRabbit comments — inline: ${INLINE_COUNT}, summary: ${SUMMARY_COUNT}"
-
-  TOTAL_CR=$(( INLINE_COUNT + SUMMARY_COUNT ))
-  if [ "$TOTAL_CR" -gt 0 ]; then
-    CR_FOUND=1
-    break
-  fi
-done
-
-# ── Parse & display CodeRabbit comments ──────────────────────────────────────
-if [ "$CR_FOUND" = "0" ]; then
-  echo "ℹ️  No CodeRabbit comments found within timeout — proceeding to merge."
-else
-  echo ""
-  echo "========================================================================"
-  echo "🐰 CODERABBIT REVIEW COMMENTS"
-  echo "========================================================================"
-
-  # Inline comments: show file path + line + body
-  if [ "$INLINE_COUNT" -gt 0 ]; then
-    echo ""
-    echo "── INLINE COMMENTS (file-level) ──────────────────────────────────────"
-    echo "$INLINE_RAW" | python3 -c "
-import sys, json
-comments = json.load(sys.stdin)
-for i, c in enumerate(comments, 1):
-    path = c.get('path', '(unknown file)')
-    line = c.get('line') or c.get('original_line') or c.get('position') or '?'
-    body = c.get('body', '').strip()
-    print(f'[{i}] {path}:{line}')
-    print(f'    {body}')
-    print()
-" 2>/dev/null || echo "(could not parse inline comments)"
-  fi
-
-  # Summary/PR-level comments: show full body
-  if [ "$SUMMARY_COUNT" -gt 0 ]; then
-    echo ""
-    echo "── SUMMARY COMMENTS (PR-level) ───────────────────────────────────────"
-    echo "$SUMMARY_RAW" | python3 -c "
-import sys, json
-comments = json.load(sys.stdin)
-for i, c in enumerate(comments, 1):
-    body = c.get('body', '').strip()
-    # Skip pure reaction/emoji-only comments or very short acknowledgements
-    if len(body) < 20:
-        continue
-    url = c.get('html_url', '')
-    print(f'[{i}] {url}')
-    print(body[:2000])  # cap at 2000 chars per comment
-    print()
-" 2>/dev/null || echo "(could not parse summary comments)"
-  fi
-
-  echo "========================================================================"
-  echo ""
-
-  # Determine if there are actionable issues (inline comments always are;
-  # summary comments are actionable if they contain code suggestions or issues)
-  ACTIONABLE=$(echo "$INLINE_RAW $SUMMARY_RAW" | python3 -c "
-import sys, json
-
-# Inline comments are always considered actionable
-try:
-    # We receive two JSON arrays concatenated with a space — parse each
-    raw = sys.stdin.read().strip()
-    # Split on '[ ... ] [' boundary
-    parts = raw.rsplit('] [', 1)
-    inline = json.loads(parts[0] + ']') if len(parts) == 2 else json.loads(raw)
-    summary = json.loads('[' + parts[1]) if len(parts) == 2 else []
-except Exception:
-    inline = []
-    summary = []
-
-actionable = len(inline)
-
-# Summary comments are actionable if they contain issue/suggestion keywords
-keywords = ['issue', 'bug', 'error', 'fix', 'incorrect', 'missing', 'should', 'must', 'nitpick', 'suggestion', 'consider', 'change', 'remove', 'add', 'typo']
-for c in summary:
-    body = c.get('body', '').lower()
-    if any(k in body for k in keywords):
-        actionable += 1
-
-print(actionable)
-" 2>/dev/null || echo "0")
-
-  if [ "$ACTIONABLE" -gt 0 ]; then
-    echo "⚠️  CodeRabbit found ${ACTIONABLE} actionable issue(s)."
-    echo ""
-    echo "════════════════════════════════════════════════════════════════════════"
-    echo "  AGENT ACTION REQUIRED"
-    echo "════════════════════════════════════════════════════════════════════════"
-    echo "  1. Read the comments printed above."
-    echo "  2. Edit the relevant source files to address the issues."
-    echo "  3. Run the following commands to commit, push, and merge:"
-    echo ""
-    echo "     git add -A"
-    echo "     git commit -m \"review: address CodeRabbit feedback\""
-    echo "     git push origin ${BRANCH_NAME}"
-    echo "     ./.claude/skills/create-pr/agent-pr-merge.sh ${PR_NUMBER} \"${COMMIT_MSG}\""
-    echo ""
-    echo "  PR URL: ${PR_URL}"
-    echo "════════════════════════════════════════════════════════════════════════"
-    exit 2
-  else
-    echo "✅ No actionable CodeRabbit issues — proceeding to merge."
-  fi
+if [ "$CR_EXIT" = "2" ]; then
+  exit 2
+elif [ "$CR_EXIT" != "0" ]; then
+  exit "$CR_EXIT"
 fi
 
 # ── Merge ─────────────────────────────────────────────────────────────────────

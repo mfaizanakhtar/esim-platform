@@ -195,6 +195,20 @@ describe('TgtProvider', () => {
     expect(result.pending).toBe(true);
   });
 
+  it('throws MappingError when catalog entry is not found (findUniqueOrThrow rejects)', async () => {
+    vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
+    mockFindUniqueOrThrow.mockRejectedValue(new Error('No ProviderSkuCatalog found'));
+
+    const { MappingError: ME } = await import('~/utils/errors');
+    const catalogConfig: ProviderMappingConfig = {
+      providerSku: 'ignored',
+      providerCatalogId: 'cat-nonexistent',
+    };
+
+    const provider = new TgtProvider();
+    await expect(provider.provision(catalogConfig, ctx)).rejects.toThrow(ME);
+  });
+
   it('throws MappingError when catalog entry has empty productCode', async () => {
     vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
     mockFindUniqueOrThrow.mockResolvedValue({ productCode: '' });
