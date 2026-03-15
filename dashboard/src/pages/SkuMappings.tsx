@@ -33,6 +33,9 @@ export function SkuMappings() {
   const debouncedSearch = useDebounce(search, 300);
   const isInitialMount = useRef(true);
 
+  const provider = (searchParams.get('provider') ?? '') as '' | 'firoam' | 'tgt';
+  const status = (searchParams.get('status') ?? '') as '' | 'active' | 'inactive';
+
   // Keep input in sync when URL changes (e.g. Back/Forward navigation)
   useEffect(() => {
     setSearch(urlSearch);
@@ -70,9 +73,21 @@ export function SkuMappings() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
 
+  function setFilter(key: string, value: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      next.delete('page');
+      return next;
+    });
+  }
+
   const { data, isLoading } = useSkuMappings({
     limit: PAGE_SIZE,
     offset: page * PAGE_SIZE,
+    provider: provider || undefined,
+    isActive: status === 'active' ? true : status === 'inactive' ? false : undefined,
     search: debouncedSearch || undefined,
   });
   const createMutation = useCreateSkuMapping();
@@ -110,6 +125,24 @@ export function SkuMappings() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">SKU Mappings</h1>
         <div className="flex items-center gap-3 ml-auto">
+          <select
+            value={provider}
+            onChange={(e) => setFilter('provider', e.target.value)}
+            className="border rounded-md px-3 py-1.5 text-sm"
+          >
+            <option value="">All Providers</option>
+            <option value="firoam">FiRoam</option>
+            <option value="tgt">TGT</option>
+          </select>
+          <select
+            value={status}
+            onChange={(e) => setFilter('status', e.target.value)}
+            className="border rounded-md px-3 py-1.5 text-sm"
+          >
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
