@@ -8,6 +8,7 @@ import FiRoamClient from '~/vendor/firoamClient';
 import type { FiRoamOrderData } from '~/vendor/firoamSchemas';
 import { logger } from '~/utils/logger';
 import { MappingError, VendorError } from '~/utils/errors';
+import prisma from '~/db/prisma';
 
 /**
  * FiRoam vendor implementation of VendorProvider.
@@ -37,20 +38,48 @@ export class FiRoamProvider implements VendorProvider {
     ctx: ProvisionContext,
   ): Promise<EsimProvisionResult> {
     //
-    // 1. Parse providerSku
-    //    New format:    "skuId:apiCode:priceId"   e.g. "120:826-0-?-1-G-D:14094"
-    //    Legacy format: "skuId:apiCode"           e.g. "156:14791"
+    // 1. Resolve skuId, apiCode, storedPriceId — either from catalog or legacy colon-string
     //
-    const parts = config.providerSku.split(':');
-    if (parts.length < 2) {
-      throw new MappingError(
-        `Invalid providerSku format: ${config.providerSku}. Expected "skuId:apiCode:priceId" or "skuId:apiCode".`,
-      );
-    }
+    let skuId: string;
+    let apiCode: string;
+    let storedPriceId: string | null;
 
-    const skuId = parts[0];
-    const apiCode = parts[1];
-    const storedPriceId = parts[2] ?? null;
+    if (config.providerCatalogId) {
+      // Catalog-linked path: look up the catalog entry for authoritative fields
+      const entry = await (
+        prisma as unknown as {
+          providerSkuCatalog: {
+            findUniqueOrThrow: (args: {
+              where: { id: string };
+            }) => Promise<{ productCode: string; rawPayload: unknown }>;
+          };
+        }
+      ).providerSkuCatalog.findUniqueOrThrow({ where: { id: config.providerCatalogId } });
+
+      const raw = entry.rawPayload as { skuId?: unknown; priceid?: unknown };
+      skuId = String(raw.skuId ?? '');
+      apiCode = entry.productCode; // may contain '?' for daypass
+      storedPriceId = raw.priceid != null ? String(raw.priceid) : null;
+
+      if (!skuId) {
+        throw new MappingError(
+          `Catalog entry ${config.providerCatalogId} is missing skuId in rawPayload`,
+        );
+      }
+    } else {
+      // Legacy path: parse colon-separated providerSku
+      // New format:    "skuId:apiCode:priceId"   e.g. "120:826-0-?-1-G-D:14094"
+      // Legacy format: "skuId:apiCode"           e.g. "156:14791"
+      const parts = config.providerSku.split(':');
+      if (parts.length < 2) {
+        throw new MappingError(
+          `Invalid providerSku format: ${config.providerSku}. Expected "skuId:apiCode:priceId" or "skuId:apiCode".`,
+        );
+      }
+      skuId = parts[0];
+      apiCode = parts[1];
+      storedPriceId = parts[2] ?? null;
+    }
 
     //
     // 2. Build base order payload

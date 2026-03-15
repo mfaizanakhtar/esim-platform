@@ -39,6 +39,12 @@ export interface ProviderMappingConfig {
    * - Airalo: package slug (e.g. `"airalo-europe-5gb"`)
    */
   providerSku: string;
+  /**
+   * ID of the linked ProviderSkuCatalog row.
+   * When set, provisioning derives API fields from the catalog entry instead of parsing providerSku.
+   * Null/undefined for legacy mappings — those fall back to colon-string parsing.
+   */
+  providerCatalogId?: string | null;
   /** Vendor-specific structured extras stored as JSON in the DB. */
   providerConfig?: Record<string, unknown> | null;
   /** `'fixed'` | `'daypass'` — FiRoam concept; may be ignored by other vendors. */

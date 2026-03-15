@@ -55,6 +55,7 @@ export function providerSkuMappingFactory(
     validity: faker.helpers.arrayElement(['7 days', '14 days', '30 days']),
     packageType: 'fixed',
     daysCount: null,
+    providerCatalogId: null,
     createdAt: faker.date.recent({ days: 30 }),
     updatedAt: faker.date.recent({ days: 7 }),
     ...overrides,

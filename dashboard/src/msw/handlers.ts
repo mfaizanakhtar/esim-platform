@@ -41,6 +41,7 @@ const mockMapping = {
   shopifySku: 'ESIM-US-5GB',
   provider: 'firoam',
   providerSku: '123:abc:price1',
+  providerCatalogId: null,
   providerConfig: null,
   name: 'US 5GB 30 Days',
   region: 'US',

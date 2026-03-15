@@ -41,6 +41,7 @@ vi.mock('~/db/prisma', () => ({
     },
     providerSkuCatalog: {
       findMany: vi.fn(),
+      findUnique: vi.fn(),
       count: vi.fn(),
       upsert: vi.fn(),
     },
@@ -165,6 +166,7 @@ function makeMapping(overrides: Partial<ProviderSkuMapping> = {}): ProviderSkuMa
     packageType: 'fixed',
     daysCount: null,
     providerConfig: null,
+    providerCatalogId: null,
     isActive: true,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
@@ -1320,6 +1322,196 @@ describe('Admin Routes', () => {
       expect(res.json()).toMatchObject({ ok: true, processed: 1 });
       // Only one page fetched despite maxPages=5
       expect(adminMocks.mockTgtListProducts).toHaveBeenCalledTimes(1);
+    });
+
+    it('increments pageNum and fetches second page when first page is full and total not reached', async () => {
+      // Page 1: products.length (1) === pageSize (1), so left condition is FALSE
+      // processed (1) < total (2), so right condition is also FALSE → no break → pageNum += 1
+      // Page 2: processed (2) >= total (2) → break
+      adminMocks.mockTgtListProducts
+        .mockResolvedValueOnce({
+          total: 2,
+          products: [
+            {
+              productCode: 'P1-001',
+              productName: 'Product 1',
+              productType: 'DATA_PACK',
+              netPrice: 1.0,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          total: 2,
+          products: [
+            {
+              productCode: 'P2-001',
+              productName: 'Product 2',
+              productType: 'DATA_PACK',
+              netPrice: 2.0,
+            },
+          ],
+        });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'tgt', pageSize: 1, maxPages: 5, lang: 'en' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(adminMocks.mockTgtListProducts).toHaveBeenCalledTimes(2);
+      expect(res.json()).toMatchObject({ ok: true, processed: 2, total: 2 });
+    });
+  });
+
+  // ── Catalog-linked SKU mapping flows ──────────────────────────────────────
+
+  describe('POST /sku-mappings with providerCatalogId', () => {
+    const catalogFindUnique = (
+      prisma as unknown as { providerSkuCatalog: { findUnique: ReturnType<typeof vi.fn> } }
+    ).providerSkuCatalog.findUnique;
+
+    it('auto-derives firoam providerSku from catalog rawPayload (skuId:productCode:priceid)', async () => {
+      catalogFindUnique.mockResolvedValue(
+        makeCatalogItem({
+          id: 'cat-firoam-001',
+          provider: 'firoam',
+          productCode: '826-0-3-1-G-D',
+          rawPayload: { skuId: 120, priceid: 14094 },
+        }),
+      );
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.create).mockResolvedValue(
+        makeMapping({
+          providerCatalogId: 'cat-firoam-001',
+          providerSku: '120:826-0-3-1-G-D:14094',
+        }),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings',
+        headers: JSON_HEADERS,
+        payload: {
+          shopifySku: 'ESIM-US-5GB',
+          provider: 'firoam',
+          providerCatalogId: 'cat-firoam-001',
+        },
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(vi.mocked(prisma.providerSkuMapping.create)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            providerCatalogId: 'cat-firoam-001',
+            providerSku: '120:826-0-3-1-G-D:14094',
+          }),
+        }),
+      );
+    });
+
+    it('returns 400 when catalog entry not found', async () => {
+      catalogFindUnique.mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings',
+        headers: JSON_HEADERS,
+        payload: { shopifySku: 'ESIM-US-5GB', provider: 'firoam', providerCatalogId: 'no-such-id' },
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toContain('Catalog entry not found');
+    });
+  });
+
+  describe('PUT /sku-mappings/:id with providerCatalogId', () => {
+    const catalogFindUnique = (
+      prisma as unknown as { providerSkuCatalog: { findUnique: ReturnType<typeof vi.fn> } }
+    ).providerSkuCatalog.findUnique;
+
+    it('auto-populates derived validity and other metadata when not explicitly supplied', async () => {
+      const existing = makeMapping();
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(existing);
+      catalogFindUnique.mockResolvedValue(
+        makeCatalogItem({
+          id: 'cat-tgt-001',
+          provider: 'tgt',
+          productCode: 'A-001',
+          productName: 'Israel 3GB',
+          region: 'Middle East',
+          dataAmount: '3GB',
+          validity: '180 days',
+        }),
+      );
+      vi.mocked(prisma.providerSkuMapping.update).mockResolvedValue(
+        makeMapping({ providerCatalogId: 'cat-tgt-001', name: 'Israel 3GB', validity: '180 days' }),
+      );
+
+      await app.inject({
+        method: 'PUT',
+        url: '/sku-mappings/map-001',
+        headers: JSON_HEADERS,
+        // No name/region/dataAmount/validity in payload → derived from catalog
+        payload: { providerCatalogId: 'cat-tgt-001' },
+      });
+
+      expect(vi.mocked(prisma.providerSkuMapping.update)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            providerCatalogId: 'cat-tgt-001',
+            name: 'Israel 3GB',
+            validity: '180 days',
+          }),
+        }),
+      );
+    });
+
+    it('sets providerCatalogId to null when null is passed (unlink)', async () => {
+      const existing = makeMapping({ providerCatalogId: 'cat-old-001' });
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(existing);
+      vi.mocked(prisma.providerSkuMapping.update).mockResolvedValue(
+        makeMapping({ providerCatalogId: null }),
+      );
+
+      await app.inject({
+        method: 'PUT',
+        url: '/sku-mappings/map-001',
+        headers: JSON_HEADERS,
+        payload: { providerCatalogId: null },
+      });
+
+      expect(vi.mocked(prisma.providerSkuMapping.update)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ providerCatalogId: null }),
+        }),
+      );
+    });
+  });
+
+  describe('GET /provider-catalog with search', () => {
+    it('applies OR search filter across productCode, productName, and region', async () => {
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.count).mockResolvedValue(0);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/provider-catalog?search=israel',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(vi.mocked(prismaCatalog.findMany)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: expect.arrayContaining([
+              expect.objectContaining({ productName: expect.anything() }),
+            ]),
+          }),
+        }),
+      );
     });
   });
 });

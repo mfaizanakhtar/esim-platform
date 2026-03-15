@@ -5,7 +5,8 @@ import type { SkuMapping, SkuMappingsPage, SkuMappingProvider, SkuMappingPackage
 interface CreateSkuMappingInput {
   shopifySku: string;
   provider: SkuMappingProvider;
-  providerSku: string;
+  providerCatalogId?: string;
+  providerSku?: string;
   name?: string;
   region?: string;
   dataAmount?: string;

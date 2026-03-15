@@ -51,7 +51,7 @@ export default async function buildServer() {
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   });
 
   // Configure rate limiting to prevent abuse
