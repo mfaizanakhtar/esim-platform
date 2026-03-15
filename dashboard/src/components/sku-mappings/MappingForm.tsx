@@ -70,6 +70,7 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
 
   const provider = watch('provider') as 'firoam' | 'tgt' | undefined;
   const providerCatalogId = watch('providerCatalogId');
+  const packageType = watch('packageType');
 
   // Combobox state
   const [comboQuery, setComboQuery] = useState('');
@@ -211,7 +212,6 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
       <input type="hidden" {...register('dataAmount')} />
       <input type="hidden" {...register('validity')} />
       <input type="hidden" {...register('packageType')} />
-      <input type="hidden" {...register('daysCount', { valueAsNumber: true })} />
 
       <div className="space-y-1">
         <label className="text-sm font-medium">Shopify SKU *</label>
@@ -364,6 +364,18 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
           </div>
         )}
       </div>
+
+      {packageType === 'daypass' && (
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Days Count</label>
+          <input
+            {...register('daysCount', { valueAsNumber: true })}
+            type="number"
+            className="w-full border rounded-md px-3 py-2 text-sm"
+            placeholder="7"
+          />
+        </div>
+      )}
 
       <div className="space-y-1">
         <label className="text-sm font-medium">Provider Config (JSON)</label>
