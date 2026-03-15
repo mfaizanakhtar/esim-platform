@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
+import { Pagination } from '@/components/Pagination';
 import { RefreshCw } from 'lucide-react';
 
 type Provider = 'firoam' | 'tgt';
+
+const PAGE_SIZE = 25;
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -57,9 +60,20 @@ interface CatalogTabProps {
 
 function CatalogTab({ provider }: CatalogTabProps) {
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
   const debouncedSearch = useDebounce(search, 300);
 
-  const { data, isLoading } = useCatalog({ provider, search: debouncedSearch || undefined });
+  // Reset to page 0 whenever the search term changes
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch]);
+
+  const { data, isLoading } = useCatalog({
+    provider,
+    search: debouncedSearch || undefined,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  });
 
   return (
     <div className="space-y-4">
@@ -122,6 +136,16 @@ function CatalogTab({ provider }: CatalogTabProps) {
             )}
           </tbody>
         </table>
+        {data && (
+          <div className="border-t px-4">
+            <Pagination
+              total={data.total}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onChange={setPage}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
