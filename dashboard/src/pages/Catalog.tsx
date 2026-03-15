@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
+import { Pagination } from '@/components/Pagination';
 import { RefreshCw } from 'lucide-react';
 
 type Provider = 'firoam' | 'tgt';
+
+const PAGE_SIZE = 25;
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -56,10 +60,39 @@ interface CatalogTabProps {
 }
 
 function CatalogTab({ provider }: CatalogTabProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
+  const isInitialMount = useRef(true);
 
-  const { data, isLoading } = useCatalog({ provider, search: debouncedSearch || undefined });
+  const page = Number(searchParams.get('page') ?? 0);
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams((prev) => {
+        if (p === 0) prev.delete('page');
+        else prev.set('page', String(p));
+        return prev;
+      });
+    },
+    [setSearchParams],
+  );
+
+  // Reset to page 0 when search changes, but not on initial mount
+  // (preserves bookmarked ?page=N when navigating back)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    setPage(0);
+  }, [debouncedSearch, setPage]);
+
+  const { data, isLoading } = useCatalog({
+    provider,
+    search: debouncedSearch || undefined,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  });
 
   return (
     <div className="space-y-4">
@@ -122,6 +155,16 @@ function CatalogTab({ provider }: CatalogTabProps) {
             )}
           </tbody>
         </table>
+        {data && (
+          <div className="border-t px-4">
+            <Pagination
+              total={data.total}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onChange={setPage}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

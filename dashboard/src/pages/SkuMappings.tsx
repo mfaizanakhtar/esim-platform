@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useSkuMappings } from '@/hooks/useSkuMappings';
 import {
   useCreateSkuMapping,
@@ -7,15 +8,31 @@ import {
   useDeleteSkuMapping,
 } from '@/hooks/useSkuMappingMutations';
 import { MappingForm } from '@/components/sku-mappings/MappingForm';
+import { Pagination } from '@/components/Pagination';
 import type { SkuMapping } from '@/lib/types';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
+const PAGE_SIZE = 25;
+
 export function SkuMappings() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<SkuMapping | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  const { data, isLoading } = useSkuMappings();
+  const page = Number(searchParams.get('page') ?? 0);
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams((prev) => {
+        if (p === 0) prev.delete('page');
+        else prev.set('page', String(p));
+        return prev;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const { data, isLoading } = useSkuMappings({ limit: PAGE_SIZE, offset: page * PAGE_SIZE });
   const createMutation = useCreateSkuMapping();
   const updateMutation = useUpdateSkuMapping();
   const toggleMutation = useToggleSkuMapping();
@@ -137,6 +154,16 @@ export function SkuMappings() {
             )}
           </tbody>
         </table>
+        {data && (
+          <div className="border-t px-4">
+            <Pagination
+              total={data.total}
+              page={page}
+              pageSize={PAGE_SIZE}
+              onChange={setPage}
+            />
+          </div>
+        )}
       </div>
 
       {/* Sheet (slide-in form) */}
@@ -146,7 +173,7 @@ export function SkuMappings() {
             className="flex-1 bg-black/40"
             onClick={() => setSheetOpen(false)}
           />
-          <div className="w-full max-w-md bg-background shadow-xl p-6 overflow-y-auto">
+          <div className="w-full max-w-md bg-white shadow-xl p-6 overflow-y-auto">
             <h2 className="text-lg font-semibold mb-4">
               {editing ? 'Edit Mapping' : 'Create Mapping'}
             </h2>
@@ -164,7 +191,7 @@ export function SkuMappings() {
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirm(null)} />
-          <div className="relative bg-background rounded-lg shadow-xl p-6 w-full max-w-sm space-y-4">
+          <div className="relative bg-white rounded-lg shadow-xl p-6 w-full max-w-sm space-y-4">
             <h2 className="text-lg font-semibold">Deactivate Mapping?</h2>
             <p className="text-sm text-muted-foreground">
               This will set the mapping to inactive. It can be re-activated at any time.
