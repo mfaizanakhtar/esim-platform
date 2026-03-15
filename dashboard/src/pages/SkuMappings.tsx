@@ -33,8 +33,13 @@ export function SkuMappings() {
   const debouncedSearch = useDebounce(search, 300);
   const isInitialMount = useRef(true);
 
-  const provider = (searchParams.get('provider') ?? '') as '' | 'firoam' | 'tgt';
-  const status = (searchParams.get('status') ?? '') as '' | 'active' | 'inactive';
+  const providerParam = searchParams.get('provider');
+  const provider: '' | 'firoam' | 'tgt' =
+    providerParam === 'firoam' || providerParam === 'tgt' ? providerParam : '';
+
+  const statusParam = searchParams.get('status');
+  const status: '' | 'active' | 'inactive' =
+    statusParam === 'active' || statusParam === 'inactive' ? statusParam : '';
 
   // Keep input in sync when URL changes (e.g. Back/Forward navigation)
   useEffect(() => {
@@ -126,6 +131,7 @@ export function SkuMappings() {
         <h1 className="text-2xl font-bold">SKU Mappings</h1>
         <div className="flex items-center gap-3 ml-auto">
           <select
+            aria-label="Filter by provider"
             value={provider}
             onChange={(e) => setFilter('provider', e.target.value)}
             className="border rounded-md px-3 py-1.5 text-sm"
@@ -135,6 +141,7 @@ export function SkuMappings() {
             <option value="tgt">TGT</option>
           </select>
           <select
+            aria-label="Filter by status"
             value={status}
             onChange={(e) => setFilter('status', e.target.value)}
             className="border rounded-md px-3 py-1.5 text-sm"
