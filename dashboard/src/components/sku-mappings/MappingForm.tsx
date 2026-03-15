@@ -357,7 +357,9 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
               {[
                 selectedItem.productName ? `Name: ${selectedItem.productName}` : null,
                 selectedItem.dataAmount ?? null,
-                packageType === 'daypass' && daysCount ? `${daysCount} days` : (selectedItem.validity ?? null),
+                packageType === 'daypass'
+                  ? (daysCount != null ? `${daysCount} days` : null)
+                  : (selectedItem.validity ?? null),
               ]
                 .filter(Boolean)
                 .join('  ·  ')}
