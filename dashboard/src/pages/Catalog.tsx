@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
 import { Pagination } from '@/components/Pagination';
@@ -63,6 +63,7 @@ function CatalogTab({ provider }: CatalogTabProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
+  const isInitialMount = useRef(true);
 
   const page = Number(searchParams.get('page') ?? 0);
   const setPage = useCallback(
@@ -76,8 +77,13 @@ function CatalogTab({ provider }: CatalogTabProps) {
     [setSearchParams],
   );
 
-  // Reset to page 0 whenever the search term changes
+  // Reset to page 0 when search changes, but not on initial mount
+  // (preserves bookmarked ?page=N when navigating back)
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     setPage(0);
   }, [debouncedSearch, setPage]);
 
