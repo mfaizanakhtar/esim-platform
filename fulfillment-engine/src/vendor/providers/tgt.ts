@@ -50,7 +50,9 @@ export class TgtProvider implements VendorProvider {
     }
 
     if (!productCode || typeof productCode !== 'string') {
-      throw new MappingError('Invalid TGT providerSku: expected productCode string');
+      throw new MappingError(
+        'Invalid TGT productCode: expected non-empty string from mapping/catalog',
+      );
     }
 
     const providerConfig = (config.providerConfig ?? {}) as Record<string, unknown>;

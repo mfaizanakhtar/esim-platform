@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -62,6 +62,9 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
   const providerCatalogId = watch('providerCatalogId');
   const packageType = watch('packageType');
 
+  // Track previous provider so we can clear catalog state on provider change
+  const previousProviderRef = useRef(provider);
+
   // Fetch catalog items for the selected provider
   const { data: catalogData } = useCatalog(
     provider ? { provider, isActive: true, limit: 200 } : { limit: 0 },
@@ -90,21 +93,47 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
     );
   }, [initial, reset]);
 
+  // Clear catalog selection and derived fields whenever the provider changes
+  useEffect(() => {
+    if (previousProviderRef.current && previousProviderRef.current !== provider) {
+      setValue('providerCatalogId', undefined);
+      setValue('name', '');
+      setValue('region', '');
+      setValue('dataAmount', '');
+      setValue('validity', '');
+    }
+    previousProviderRef.current = provider;
+  }, [provider, setValue]);
+
   function handleCatalogSelect(id: string) {
     setValue('providerCatalogId', id || undefined);
-    if (!id) return;
+    if (!id) {
+      // Clear derived fields back to initial values (or empty) when deselected
+      setValue('name', initial?.name ?? '');
+      setValue('region', initial?.region ?? '');
+      setValue('dataAmount', initial?.dataAmount ?? '');
+      setValue('validity', initial?.validity ?? '');
+      return;
+    }
     const item = catalogItems.find((c) => c.id === id);
     if (!item) return;
-    // Auto-fill metadata from catalog entry
-    setValue('name', item.productName);
-    if (item.region) setValue('region', item.region);
-    if (item.dataAmount) setValue('dataAmount', item.dataAmount);
-    if (item.validity) setValue('validity', item.validity);
+    // Always overwrite all derived fields — avoids stale values from previous selection
+    setValue('name', item.productName ?? '');
+    setValue('region', item.region ?? '');
+    setValue('dataAmount', item.dataAmount ?? '');
+    setValue('validity', item.validity ?? '');
   }
 
   function handleFormSubmit(values: FormValues) {
-    // Require catalog selection for new mappings
-    if (!initial && !values.providerCatalogId) {
+    // Require catalog selection for:
+    //   - new mappings
+    //   - edits where the provider changed (stale catalog ID from old provider)
+    //   - edits where the mapping was already catalog-linked (keep it linked)
+    const providerChanged = initial ? values.provider !== initial.provider : false;
+    const requiresCatalogLink =
+      !initial || providerChanged || Boolean(initial?.providerCatalogId);
+
+    if (requiresCatalogLink && !values.providerCatalogId) {
       setError('providerCatalogId', { message: 'Select a catalog product' });
       return;
     }
@@ -115,9 +144,11 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
       try {
         parsed = JSON.parse(values.providerConfigJson);
       } catch {
+        setError('providerConfigJson', { message: 'Enter a valid JSON object' });
         return;
       }
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        setError('providerConfigJson', { message: 'Provider config must be a JSON object' });
         return;
       }
       providerConfig = parsed as Record<string, unknown>;
@@ -263,6 +294,9 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
           className="w-full border rounded-md px-3 py-2 text-sm font-mono h-24"
           placeholder='{"key": "value"}'
         />
+        {errors.providerConfigJson && (
+          <p className="text-xs text-red-600">{errors.providerConfigJson.message}</p>
+        )}
       </div>
 
       <div className="flex items-center gap-2">

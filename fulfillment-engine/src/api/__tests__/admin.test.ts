@@ -1433,7 +1433,8 @@ describe('Admin Routes', () => {
     ).providerSkuCatalog.findUnique;
 
     it('auto-populates derived validity and other metadata when not explicitly supplied', async () => {
-      const existing = makeMapping();
+      // existing mapping is 'tgt' so it matches the catalog entry provider
+      const existing = makeMapping({ provider: 'tgt' });
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(existing);
       catalogFindUnique.mockResolvedValue(
         makeCatalogItem({

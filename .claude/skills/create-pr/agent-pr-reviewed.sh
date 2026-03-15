@@ -182,7 +182,7 @@ for c in json.load(sys.stdin):
 wait_for_ci "$PR_NUMBER"
 
 # ── Wait for CodeRabbit review ────────────────────────────────────────────────
-# CodeRabbit posts as the 'coderabbitai' bot.
+# CodeRabbit posts as 'coderabbitai[bot]' (GitHub Apps bot login format).
 # We poll two endpoints:
 #   - /repos/{repo}/pulls/{pr}/comments   → inline review comments (file:line)
 #   - /repos/{repo}/issues/{pr}/comments  → PR-level summary comments
@@ -201,11 +201,11 @@ while [ $CR_COUNT -lt $CR_MAX ]; do
   # Fetch both inline + issue-level comments from CodeRabbit
   INLINE_RAW=$(gh api \
     "repos/${REPO}/pulls/${PR_NUMBER}/comments" \
-    --jq '[.[] | select(.user.login == "coderabbitai")]' 2>/dev/null || echo "[]")
+    --jq '[.[] | select(.user.login == "coderabbitai[bot]" or .user.login == "coderabbitai")]' 2>/dev/null || echo "[]")
 
   SUMMARY_RAW=$(gh api \
     "repos/${REPO}/issues/${PR_NUMBER}/comments" \
-    --jq '[.[] | select(.user.login == "coderabbitai")]' 2>/dev/null || echo "[]")
+    --jq '[.[] | select(.user.login == "coderabbitai[bot]" or .user.login == "coderabbitai")]' 2>/dev/null || echo "[]")
 
   INLINE_COUNT=$(echo "$INLINE_RAW" | python3 -c \
     "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")

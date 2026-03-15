@@ -331,6 +331,11 @@ export default function adminRoutes(
     if (providerCatalogId) {
       const entry = await providerSkuCatalog.findUnique({ where: { id: providerCatalogId } });
       if (!entry) return reply.code(400).send({ error: 'Catalog entry not found' });
+      if (entry.provider !== provider) {
+        return reply.code(400).send({
+          error: `Catalog entry provider '${entry.provider}' does not match request provider '${provider}'`,
+        });
+      }
       if (!name) name = entry.productName;
       if (!region) region = entry.region;
       if (!dataAmount) dataAmount = entry.dataAmount;
@@ -413,6 +418,13 @@ export default function adminRoutes(
     if (providerCatalogId) {
       const entry = await providerSkuCatalog.findUnique({ where: { id: providerCatalogId } });
       if (!entry) return reply.code(400).send({ error: 'Catalog entry not found' });
+      const effectiveProvider =
+        typeof body.provider === 'string' ? body.provider : existing.provider;
+      if (entry.provider !== effectiveProvider) {
+        return reply.code(400).send({
+          error: `Catalog entry provider '${entry.provider}' does not match mapping provider '${effectiveProvider}'`,
+        });
+      }
       // Derive providerSku from catalog rawPayload
       if (entry.provider === 'firoam') {
         const raw = (entry.rawPayload ?? {}) as { skuId?: unknown; priceid?: unknown };
