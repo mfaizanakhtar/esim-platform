@@ -708,6 +708,15 @@ export default function adminRoutes(
     while (pageNum <= maxPages) {
       const result = await client.listProducts({ pageNum, pageSize, lang });
       total = result.total;
+      request.log.info(
+        {
+          tgtPage: pageNum,
+          fetched: result.products.length,
+          total: result.total,
+          sample: result.products[0] ?? null,
+        },
+        'TGT catalog page',
+      );
 
       for (const product of result.products) {
         const dataAmount =
