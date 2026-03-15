@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 # =============================================================================
-# agent-pr-coderabbit.sh — Shared helper: wait for CodeRabbit review and
-#                           check for unresolved threads via GraphQL.
+# agent-pr-coderabbit.sh — Shared helper: fetch + display unresolved CodeRabbit
+#                           threads via GraphQL when the CodeRabbit CI check fails.
 #
 # Source this file and call:
 #   wait_for_coderabbit PR_NUMBER REPO_OWNER REPO_NAME PR_URL BRANCH_NAME COMMIT_MSG
 #
 # Returns:
-#   0 — no unresolved CodeRabbit threads (proceed to merge)
-#   2 — unresolved threads found; agent must fix & re-push
+#   0 — no unresolved CodeRabbit threads
+#   2 — unresolved threads found; prints them + fix-loop instructions
 #
-# Caller must handle exit code 2 explicitly (set +e around the call).
+# Design: CodeRabbit runs as a CI check ("CodeRabbit" in gh pr checks).
+# The callers wait for all CI checks to pass; when CodeRabbit's check fails
+# they call this function to surface the specific unresolved threads.
 #
-# NOTE: Uses `gh api graphql --input -` (raw JSON body) instead of
-#       `-f query='...'` because gh v2.86+ strips `$` signs from the
-#       query string when using -f, breaking GraphQL variable definitions.
+# NOTE: Uses `gh api graphql --input -` (raw JSON body) — gh v2.86+ strips
+#       `$` signs from query strings passed via -f query='...', breaking
+#       GraphQL variable definitions.
 # =============================================================================
 
 wait_for_coderabbit() {
@@ -25,66 +27,12 @@ wait_for_coderabbit() {
   local branch_name="$5"
   local commit_msg="$6"
 
-  local cr_wait=15
-  local cr_max=20   # 20 × 15s = 5 min max
-  local cr_count=0
-  local review_found=0
-
-  # Record start epoch so we only consider reviews submitted after this push
-  local start_time
-  start_time=$(date -u +%s)
-
   echo ""
-  echo "🐰 Waiting for CodeRabbit review on PR #${pr_number} (up to $((cr_max * cr_wait))s)..."
+  echo "🐰 Fetching unresolved CodeRabbit review threads..."
 
-  while [ $cr_count -lt $cr_max ]; do
-    sleep $cr_wait
-    cr_count=$((cr_count + 1))
-
-    local reviews
-    reviews=$(gh api "repos/${repo_owner}/${repo_name}/pulls/${pr_number}/reviews" 2>/dev/null || echo "[]")
-
-    review_found=$(echo "$reviews" | python3 -c "
-import sys, json, datetime
-try:
-    reviews = json.load(sys.stdin)
-    start = $start_time
-    for r in reviews:
-        login = r.get('user', {}).get('login', '')
-        if not login.startswith('coderabbitai'):
-            continue
-        submitted = r.get('submitted_at', '')
-        try:
-            dt = datetime.datetime.strptime(submitted, '%Y-%m-%dT%H:%M:%SZ')
-            ts = int(dt.timestamp())
-            if ts >= start:
-                print('1')
-                sys.exit(0)
-        except Exception:
-            pass
-    print('0')
-except Exception:
-    print('0')
-" 2>/dev/null || echo "0")
-
-    echo "   [$(( cr_count * cr_wait ))s] CodeRabbit review found: ${review_found}"
-
-    if [ "$review_found" = "1" ]; then
-      echo "   Waiting 10s for review threads to settle..."
-      sleep 10
-      break
-    fi
-  done
-
-  if [ "$review_found" = "0" ]; then
-    echo "ℹ️  No new CodeRabbit review found within timeout — checking existing unresolved threads before merging."
-  fi
-
-  # ── Fetch unresolved threads via GraphQL (--input approach avoids $ stripping) ──
-  echo "   Fetching unresolved review threads..."
-
-  # The query string — kept in single quotes so bash never expands $ signs.
-  # python3 serialises it to valid JSON for the request body.
+  # The query string is kept as a bash variable (single-quoted assignment so
+  # $ signs are never touched by bash), then passed as sys.argv[1] to python3
+  # so json.dumps receives the literal $ characters.
   local gql_query
   gql_query='query($owner: String!, $name: String!, $pr: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $pr) { reviewThreads(first: 100) { nodes { id isResolved comments(first: 1) { nodes { author { login } body } } } } } } }'
 
@@ -111,7 +59,6 @@ print(json.dumps({'query': query, 'variables': {'owner': owner, 'name': name, 'p
       continue
     fi
 
-    # Check for errors in the GraphQL response
     local has_errors
     has_errors=$(echo "$graphql_result" | python3 -c "
 import sys, json
@@ -123,7 +70,7 @@ try:
         print('error')
     else:
         print('ok')
-except Exception as e:
+except Exception:
     print('error')
 " 2>/dev/null || echo "error")
 
@@ -165,7 +112,7 @@ except Exception:
 " 2>/dev/null || echo "0")
 
   if [ "$unresolved_count" = "0" ]; then
-    echo "✅ No unresolved CodeRabbit threads — proceeding to merge."
+    echo "✅ No unresolved CodeRabbit threads."
     return 0
   fi
 
