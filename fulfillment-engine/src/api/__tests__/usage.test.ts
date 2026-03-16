@@ -11,6 +11,7 @@ type QueryEsimOrderParams = {
   pageSize?: number;
 };
 const mockQueryEsimOrder = vi.fn<(params: QueryEsimOrderParams) => unknown>();
+const mockGetUsage = vi.fn<(orderNo: string) => unknown>();
 
 // ── Mocks hoisted before imports ─────────────────────────────────────────────
 vi.mock('~/db/prisma', () => ({
@@ -25,6 +26,14 @@ vi.mock('~/vendor/firoamClient', () => ({
   default: class MockFiRoamClient {
     queryEsimOrder(params: QueryEsimOrderParams) {
       return mockQueryEsimOrder(params);
+    }
+  },
+}));
+
+vi.mock('~/vendor/tgtClient', () => ({
+  default: class MockTgtClient {
+    getUsage(orderNo: string) {
+      return mockGetUsage(orderNo);
     }
   },
 }));
@@ -62,8 +71,8 @@ function makeDelivery(overrides: Partial<EsimDelivery>): EsimDelivery {
 const ICCID = '8901000000000000001';
 
 /** Encode a delivery payload the same way usage.ts expects after decrypt + JSON.parse */
-function makePayload(iccid: string): string {
-  return `enc:${JSON.stringify({ iccid, lpa: 'LPA:1$test$code', activationCode: 'code' })}`;
+function makePayload(iccid: string, extra: Record<string, unknown> = {}): string {
+  return `enc:${JSON.stringify({ iccid, lpa: 'LPA:1$test$code', activationCode: 'code', ...extra })}`;
 }
 
 /** Build a successful queryEsimOrder response with the given ICCID in packages */
@@ -107,10 +116,14 @@ describe('GET /api/esim/:iccid/usage', () => {
 
   beforeEach(async () => {
     mockQueryEsimOrder.mockReset();
+    mockGetUsage.mockReset();
     vi.clearAllMocks();
 
     // Default decrypt: strip our "enc:" prefix so JSON.parse works
     vi.mocked(decrypt).mockImplementation((val: string) => val.replace('enc:', ''));
+
+    // Default TGT mock: return no usage (so fallback tests don't error unexpectedly)
+    mockGetUsage.mockResolvedValue({ usage: null });
 
     app = Fastify({ logger: false });
     app.register(usageRoutes);
@@ -150,32 +163,79 @@ describe('GET /api/esim/:iccid/usage', () => {
     expect(res.json()).toMatchObject({ error: 'ICCID not found' });
   });
 
-  it('returns 404 when ICCID not found in FiRoam order packages', async () => {
+  it('falls back to TGT when ICCID not found in FiRoam order packages', async () => {
     vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
       makeDelivery({
         id: 'del-1',
-        vendorReferenceId: 'EP-001',
+        vendorReferenceId: 'TGT-001',
         payloadEncrypted: makePayload(ICCID),
         orderName: '#1001',
         customerEmail: 'a@b.com',
       }),
     ]);
-    // FiRoam returns a different ICCID in the package
+    // FiRoam returns a different ICCID → triggers TGT fallback
     mockQueryEsimOrder.mockResolvedValue(makeUsageResponse('0000000000000000000'));
+    mockGetUsage.mockResolvedValue({
+      usage: { dataTotal: '5 GB', dataUsage: '1 GB', dataResidual: '4 GB', refuelingTotal: null },
+    });
 
     const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
 
-    expect(res.statusCode).toBe(404);
-    expect(res.json()).toMatchObject({ error: 'Package not found' });
+    expect(res.statusCode).toBe(200);
+    expect(mockQueryEsimOrder).toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ provider: 'tgt', iccid: ICCID });
+    expect(mockGetUsage).toHaveBeenCalledWith('TGT-001');
   });
 
-  // ── 500 cases ───────────────────────────────────────────────────────────────
-
-  it('returns 500 when FiRoam returns success: false', async () => {
+  it('falls back to TGT when FiRoam returns success: false', async () => {
     vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
       makeDelivery({
         id: 'del-1',
-        vendorReferenceId: 'EP-001',
+        vendorReferenceId: 'TGT-001',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#1001',
+        customerEmail: 'a@b.com',
+      }),
+    ]);
+    mockQueryEsimOrder.mockResolvedValue({ success: false, error: 'Order not found' });
+    mockGetUsage.mockResolvedValue({
+      usage: { dataTotal: '3 GB', dataUsage: '0 GB', dataResidual: '3 GB', refuelingTotal: null },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockQueryEsimOrder).toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ provider: 'tgt' });
+  });
+
+  it('falls back to TGT when FiRoam returns empty orders array', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({
+        id: 'del-1',
+        vendorReferenceId: 'TGT-001',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#1001',
+        customerEmail: 'a@b.com',
+      }),
+    ]);
+    mockQueryEsimOrder.mockResolvedValue({ success: true, orders: [] });
+    mockGetUsage.mockResolvedValue({
+      usage: { dataTotal: '3 GB', dataUsage: '0 GB', dataResidual: '3 GB', refuelingTotal: null },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockQueryEsimOrder).toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ provider: 'tgt' });
+  });
+
+  it('returns 404 when FiRoam finds nothing and no vendorReferenceId for TGT', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({
+        id: 'del-1',
+        vendorReferenceId: null,
         payloadEncrypted: makePayload(ICCID),
         orderName: '#1001',
         customerEmail: 'a@b.com',
@@ -185,26 +245,56 @@ describe('GET /api/esim/:iccid/usage', () => {
 
     const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
 
-    expect(res.statusCode).toBe(500);
-    expect(res.json()).toMatchObject({ error: 'Failed to fetch usage data' });
+    expect(res.statusCode).toBe(404);
   });
 
-  it('returns 500 when FiRoam returns empty orders array', async () => {
+  // ── TGT explicit provider ────────────────────────────────────────────────────
+
+  it('skips FiRoam entirely when payload.provider is tgt', async () => {
     vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
       makeDelivery({
         id: 'del-1',
-        vendorReferenceId: 'EP-001',
-        payloadEncrypted: makePayload(ICCID),
+        vendorReferenceId: 'TGT-123',
+        payloadEncrypted: makePayload(ICCID, { provider: 'tgt' }),
         orderName: '#1001',
         customerEmail: 'a@b.com',
       }),
     ]);
-    mockQueryEsimOrder.mockResolvedValue({ success: true, orders: [] });
+    mockGetUsage.mockResolvedValue({
+      usage: { dataTotal: '5 GB', dataUsage: '2 GB', dataResidual: '3 GB', refuelingTotal: null },
+    });
 
     const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
 
-    expect(res.statusCode).toBe(500);
-    expect(res.json()).toMatchObject({ error: 'Failed to fetch usage data' });
+    expect(res.statusCode).toBe(200);
+    expect(mockQueryEsimOrder).not.toHaveBeenCalled();
+    expect(mockGetUsage).toHaveBeenCalledWith('TGT-123');
+    const body = res.json();
+    expect(body.provider).toBe('tgt');
+    expect(body.iccid).toBe(ICCID);
+    expect(body.orderNum).toBe('#1001');
+    expect(body.vendorOrderNo).toBe('TGT-123');
+    expect(body.usage.dataTotal).toBe('5 GB');
+    expect(body.usage.dataUsage).toBe('2 GB');
+    expect(body.usage.dataResidual).toBe('3 GB');
+  });
+
+  it('returns 404 when TGT returns no usage data', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({
+        id: 'del-1',
+        vendorReferenceId: 'TGT-123',
+        payloadEncrypted: makePayload(ICCID, { provider: 'tgt' }),
+        orderName: '#1001',
+        customerEmail: 'a@b.com',
+      }),
+    ]);
+    mockGetUsage.mockResolvedValue({ usage: null });
+
+    const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: 'Usage not found' });
   });
 
   // ── 200 success cases ───────────────────────────────────────────────────────
@@ -228,6 +318,7 @@ describe('GET /api/esim/:iccid/usage', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.iccid).toBe(ICCID);
+    expect(body.provider).toBe('firoam');
     expect(body.region).toBe('Turkey');
     expect(body.orderNum).toBe('#1001');
     expect(body.usage.total).toBe(5);
