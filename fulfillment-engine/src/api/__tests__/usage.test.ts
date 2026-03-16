@@ -182,6 +182,7 @@ describe('GET /api/esim/:iccid/usage', () => {
     const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
 
     expect(res.statusCode).toBe(200);
+    expect(mockQueryEsimOrder).toHaveBeenCalled();
     expect(res.json()).toMatchObject({ provider: 'tgt', iccid: ICCID });
     expect(mockGetUsage).toHaveBeenCalledWith('TGT-001');
   });
@@ -204,6 +205,7 @@ describe('GET /api/esim/:iccid/usage', () => {
     const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
 
     expect(res.statusCode).toBe(200);
+    expect(mockQueryEsimOrder).toHaveBeenCalled();
     expect(res.json()).toMatchObject({ provider: 'tgt' });
   });
 
@@ -225,6 +227,7 @@ describe('GET /api/esim/:iccid/usage', () => {
     const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
 
     expect(res.statusCode).toBe(200);
+    expect(mockQueryEsimOrder).toHaveBeenCalled();
     expect(res.json()).toMatchObject({ provider: 'tgt' });
   });
 

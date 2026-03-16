@@ -1,8 +1,22 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
+import { z } from 'zod';
 import prisma from '~/db/prisma';
 import FiRoamClient from '~/vendor/firoamClient';
 import TgtClient from '~/vendor/tgtClient';
 import { decrypt } from '~/utils/crypto';
+
+/**
+ * Schema for the JSON stored in EsimDelivery.payloadEncrypted.
+ * This is our own data written by finalizeDelivery/provisionEsim, but we
+ * validate defensively to avoid runtime errors on old or malformed rows.
+ */
+const StoredPayloadSchema = z.object({
+  vendorId: z.string().optional(),
+  lpa: z.string().optional(),
+  activationCode: z.string().optional(),
+  iccid: z.string().optional(),
+  provider: z.string().optional(),
+});
 
 /**
  * Usage tracking API routes
@@ -40,13 +54,7 @@ export default function usageRoutes(
           },
         });
 
-        type StoredPayload = {
-          vendorId?: string;
-          lpa?: string;
-          activationCode?: string;
-          iccid?: string;
-          provider?: string;
-        };
+        type StoredPayload = z.infer<typeof StoredPayloadSchema>;
 
         let matchingDelivery: (typeof deliveries)[number] | null = null;
         let storedPayload: StoredPayload | null = null;
@@ -55,7 +63,9 @@ export default function usageRoutes(
           if (delivery.payloadEncrypted) {
             try {
               const decrypted = decrypt(delivery.payloadEncrypted);
-              const payload = JSON.parse(decrypted) as StoredPayload;
+              const result = StoredPayloadSchema.safeParse(JSON.parse(decrypted));
+              if (!result.success) continue;
+              const payload = result.data;
               if (payload.iccid === iccid) {
                 matchingDelivery = delivery;
                 storedPayload = payload;
@@ -74,6 +84,10 @@ export default function usageRoutes(
             message: 'No delivery record found for this ICCID',
           });
         }
+
+        // NOTE: Vendor API calls below are intentionally synchronous and read-only.
+        // The "no vendor calls in HTTP handlers" rule applies to provisioning (write) operations.
+        // Usage queries are read-only lookups that must return a real-time response.
 
         // If the payload explicitly marks this as TGT, skip FiRoam entirely
         if (storedPayload?.provider === 'tgt') {
