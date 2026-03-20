@@ -426,17 +426,17 @@ async function handleTgtUsage(
   delivery: DeliveryRow,
   iccid: string,
 ) {
+  if (!delivery.vendorReferenceId) {
+    return reply.code(404).send({
+      error: 'Usage not found',
+      message: 'No vendor order reference available for TGT usage lookup',
+    });
+  }
   const data = await fetchTgtUsageData(delivery, iccid);
   if (!data) {
     return reply.code(404).send({
       error: 'Usage not found',
       message: 'TGT returned no usage data for this order',
-    });
-  }
-  if (!delivery.vendorReferenceId) {
-    return reply.code(404).send({
-      error: 'Usage not found',
-      message: 'No vendor order reference available for TGT usage lookup',
     });
   }
   reply.header('Cache-Control', 'public, max-age=300, s-maxage=300');
