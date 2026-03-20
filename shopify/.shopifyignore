@@ -1,0 +1,16 @@
+# Files and directories to exclude from theme push/pull
+
+# macOS metadata
+.DS_Store
+
+# Editor directories
+.vscode/
+.idea/
+
+# Git files
+.git/
+.gitignore
+
+# Local env files
+.env
+.env.*

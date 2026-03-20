@@ -7,6 +7,9 @@
     "dev:stop": "./.claude/skills/dev/dev.sh --stop",
     "test:all": "pnpm -r test -- --run",
     "build:all": "pnpm -r build",
-    "verify:all": "pnpm -r verify"
+    "verify:all": "pnpm -r verify",
+    "theme:pull": "shopify theme pull --path=shopify",
+    "theme:push": "shopify theme push --path=shopify --allow-live --nodelete",
+    "theme:dev": "shopify theme dev --path=shopify"
   }
 }
