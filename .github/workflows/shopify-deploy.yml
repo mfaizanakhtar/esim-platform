@@ -22,13 +22,27 @@ jobs:
       - name: Install Shopify CLI
         run: npm install -g @shopify/cli @shopify/theme
 
+      - name: Get Shopify access token (client credentials)
+        id: get_token
+        env:
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          SHOPIFY_SHOP_DOMAIN: ${{ secrets.SHOPIFY_SHOP_DOMAIN }}
+        run: |
+          TOKEN=$(curl -s -X POST \
+            "https://${SHOPIFY_SHOP_DOMAIN}/admin/oauth/access_token" \
+            -H "Content-Type: application/json" \
+            -d "{\"client_id\":\"${SHOPIFY_CLIENT_ID}\",\"client_secret\":\"${SHOPIFY_CLIENT_SECRET}\",\"grant_type\":\"client_credentials\"}" \
+            | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
+
       - name: Push theme
         working-directory: shopify
         env:
-          SHOPIFY_CLI_THEME_TOKEN: ${{ secrets.SHOPIFY_CLI_THEME_TOKEN }}
+          SHOPIFY_CLI_THEME_TOKEN: ${{ steps.get_token.outputs.token }}
         run: |
           shopify theme push \
-            --store="${{ secrets.SHOPIFY_FLAG_STORE }}" \
+            --store="${{ secrets.SHOPIFY_SHOP_DOMAIN }}" \
             --theme="${{ secrets.SHOPIFY_FLAG_THEME_ID }}" \
             --allow-live \
             --nodelete
