@@ -44,6 +44,7 @@ export async function handleProvision(data: ProvisionJobData) {
     'Processing delivery',
   );
 
+  let resolvedProvider: string | undefined;
   try {
     let esimResult: EsimProvisionResult;
     let mappingInfo: {
@@ -57,6 +58,7 @@ export async function handleProvision(data: ProvisionJobData) {
       // Legacy path: raw vendor payload included directly in job data.
       // Deprecated — prefer SKU mappings with the provider registry.
       logger.info('Using legacy direct orderPayload path');
+      resolvedProvider = 'firoam';
       esimResult = await provisionViaDirectPayload(data.orderPayload);
     } else {
       // Primary path: resolve SKU mapping → dispatch to the correct vendor provider.
@@ -67,6 +69,7 @@ export async function handleProvision(data: ProvisionJobData) {
       if (!mapping) throw new MappingError(`No provider mapping found for SKU: ${sku}`);
       if (!mapping.isActive) throw new MappingError(`SKU mapping is inactive: ${sku}`);
 
+      resolvedProvider = mapping.provider;
       mappingInfo = {
         name: mapping.name || undefined,
         region: mapping.region || undefined,
@@ -108,6 +111,7 @@ export async function handleProvision(data: ProvisionJobData) {
           vendorReferenceId: esimResult.vendorOrderId,
           status,
           lastError: null,
+          ...(resolvedProvider ? { provider: resolvedProvider } : {}),
         },
       });
 
@@ -146,8 +150,8 @@ export async function handleProvision(data: ProvisionJobData) {
     );
 
     // Encrypt the canonical payload for at-rest storage
-    const crypto = await import('../../utils/crypto');
-    const payloadEncrypted = await crypto.encrypt(
+    const { encrypt, hashIccid } = await import('../../utils/crypto');
+    const payloadEncrypted = await encrypt(
       JSON.stringify({
         vendorId: esimResult.vendorOrderId,
         lpa: esimResult.lpa,
@@ -156,12 +160,15 @@ export async function handleProvision(data: ProvisionJobData) {
       }),
     );
 
+    const normalizedIccid = esimResult.iccid?.trim();
     await prisma.esimDelivery.update({
       where: { id: deliveryId },
       data: {
         vendorReferenceId: esimResult.vendorOrderId,
         payloadEncrypted,
         status: 'delivered',
+        iccidHash: normalizedIccid ? hashIccid(normalizedIccid) : null,
+        ...(resolvedProvider ? { provider: resolvedProvider } : {}),
       },
     });
 
@@ -213,7 +220,11 @@ export async function handleProvision(data: ProvisionJobData) {
     logger.error({ error: msg }, 'Provision failed');
     await prisma.esimDelivery.update({
       where: { id: deliveryId },
-      data: { lastError: msg, status: 'failed' },
+      data: {
+        lastError: msg,
+        status: 'failed',
+        ...(resolvedProvider ? { provider: resolvedProvider } : {}),
+      },
     });
     throw err;
   }

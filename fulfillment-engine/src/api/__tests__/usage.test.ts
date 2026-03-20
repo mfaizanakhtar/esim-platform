@@ -18,6 +18,7 @@ vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
     },
   },
 }));
@@ -41,6 +42,7 @@ vi.mock('~/vendor/tgtClient', () => ({
 vi.mock('~/utils/crypto', () => ({
   decrypt: vi.fn(),
   encrypt: vi.fn(),
+  hashIccid: vi.fn((iccid: string) => `hash:${iccid}`),
 }));
 
 import prisma from '~/db/prisma';
@@ -58,6 +60,8 @@ function makeDelivery(overrides: Partial<EsimDelivery>): EsimDelivery {
     variantId: 'var-1',
     customerEmail: null,
     vendorReferenceId: null,
+    provider: null,
+    iccidHash: null,
     payloadEncrypted: null,
     status: 'delivered',
     lastError: null,
@@ -124,6 +128,9 @@ describe('GET /api/esim/:iccid/usage', () => {
 
     // Default TGT mock: return no usage (so fallback tests don't error unexpectedly)
     mockGetUsage.mockResolvedValue({ usage: null });
+
+    // Hash lookup returns null by default → tests fall through to legacy findMany scan
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(null);
 
     app = Fastify({ logger: false });
     app.register(usageRoutes);
@@ -387,6 +394,47 @@ describe('GET /api/esim/:iccid/usage', () => {
     expect(res.json().iccid).toBe(ICCID);
   });
 
+  it('uses delivery.provider directly for tgt without FiRoam fallback', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({
+        id: 'del-tgt',
+        provider: 'tgt',
+        vendorReferenceId: 'TGT-DIRECT',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#2001',
+      }),
+    ]);
+    mockGetUsage.mockResolvedValue({
+      usage: { dataTotal: '10 GB', dataUsage: '3 GB', dataResidual: '7 GB', refuelingTotal: null },
+    });
+
+    const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockQueryEsimOrder).not.toHaveBeenCalled();
+    expect(mockGetUsage).toHaveBeenCalledWith('TGT-DIRECT');
+    expect(res.json()).toMatchObject({ provider: 'tgt', iccid: ICCID });
+  });
+
+  it('uses delivery.provider directly for firoam without TGT fallback', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({
+        id: 'del-fi',
+        provider: 'firoam',
+        vendorReferenceId: 'EP-DIRECT',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#2002',
+      }),
+    ]);
+    mockQueryEsimOrder.mockResolvedValue(makeUsageResponse(ICCID));
+
+    const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockGetUsage).not.toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ provider: 'firoam', iccid: ICCID });
+  });
+
   it('skips deliveries where JSON.parse fails (bad decrypt output) and continues', async () => {
     vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
       makeDelivery({
@@ -413,5 +461,133 @@ describe('GET /api/esim/:iccid/usage', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json().iccid).toBe(ICCID);
+  });
+});
+
+// ── GET /api/esim/usage?q= search endpoint ────────────────────────────────────
+
+describe('GET /api/esim/usage?q=', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    mockQueryEsimOrder.mockReset();
+    mockGetUsage.mockReset();
+    vi.clearAllMocks();
+
+    vi.mocked(decrypt).mockImplementation((val: string) => val.replace('enc:', ''));
+    mockGetUsage.mockResolvedValue({ usage: null });
+
+    app = Fastify({ logger: false });
+    app.register(usageRoutes);
+    await app.ready();
+  });
+
+  afterEach(async () => {
+    vi.resetAllMocks();
+    await app.close();
+  });
+
+  it('returns 400 when q is missing', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/esim/usage' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('searches by ICCID when q has no @ and is not numeric', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({
+        id: 'del-1',
+        provider: 'firoam',
+        vendorReferenceId: 'EP-001',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#1001',
+      }),
+    ]);
+    mockQueryEsimOrder.mockResolvedValue(makeUsageResponse(ICCID));
+
+    const res = await app.inject({ method: 'GET', url: `/api/esim/usage?q=${ICCID}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ provider: 'firoam', iccid: ICCID });
+  });
+
+  it('searches by order number when q matches #NNN or NNN', async () => {
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(
+      makeDelivery({
+        id: 'del-order',
+        provider: 'tgt',
+        vendorReferenceId: 'TGT-999',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#1001',
+      }),
+    );
+    mockGetUsage.mockResolvedValue({
+      usage: { dataTotal: '5 GB', dataUsage: '1 GB', dataResidual: '4 GB', refuelingTotal: null },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=%231001' });
+
+    expect(res.statusCode).toBe(200);
+    expect(vi.mocked(prisma.esimDelivery.findFirst)).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ orderName: '#1001' }) }),
+    );
+    expect(res.json()).toMatchObject({ provider: 'tgt' });
+  });
+
+  it('normalises bare order number (no #) when q is numeric', async () => {
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(
+      makeDelivery({
+        id: 'del-order2',
+        provider: 'firoam',
+        vendorReferenceId: 'EP-002',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#2002',
+      }),
+    );
+    mockQueryEsimOrder.mockResolvedValue(makeUsageResponse(ICCID));
+
+    const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=2002' });
+
+    expect(res.statusCode).toBe(200);
+    expect(vi.mocked(prisma.esimDelivery.findFirst)).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ orderName: '#2002' }) }),
+    );
+  });
+
+  it('returns 404 when order not found', async () => {
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(null);
+
+    const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=9999' });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('searches by email and returns results array', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({
+        id: 'del-a',
+        provider: 'firoam',
+        vendorReferenceId: 'EP-A',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#3001',
+        customerEmail: 'user@test.com',
+      }),
+    ]);
+    mockQueryEsimOrder.mockResolvedValue(makeUsageResponse(ICCID));
+
+    const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=user%40test.com' });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('results');
+    expect(Array.isArray(body.results)).toBe(true);
+    expect(body.results[0]).toMatchObject({ provider: 'firoam' });
+  });
+
+  it('returns 404 for email with no delivered eSIMs', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=nobody%40test.com' });
+
+    expect(res.statusCode).toBe(404);
   });
 });

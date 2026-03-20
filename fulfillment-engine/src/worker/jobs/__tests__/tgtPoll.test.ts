@@ -50,6 +50,8 @@ describe('handleTgtPoll', () => {
       variantId: 'var-1',
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
+      provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'polling',
       lastError: null,
@@ -73,7 +75,9 @@ describe('handleTgtPoll', () => {
     });
 
     expect(result.reason).toBe('resolved');
-    expect(vi.mocked(finalizeDelivery)).toHaveBeenCalled();
+    expect(vi.mocked(finalizeDelivery)).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'tgt' }),
+    );
   });
 
   it('requeues when not ready and attempts remain', async () => {
@@ -86,6 +90,8 @@ describe('handleTgtPoll', () => {
       variantId: 'var-1',
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
+      provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'polling',
       lastError: null,
@@ -119,6 +125,8 @@ describe('handleTgtPoll', () => {
       variantId: 'var-1',
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
+      provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'polling',
       lastError: null,
@@ -170,6 +178,8 @@ describe('handleTgtPoll', () => {
       variantId: 'var-1',
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
+      provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'delivered',
       lastError: null,
@@ -198,6 +208,8 @@ describe('handleTgtPoll', () => {
       variantId: 'var-1',
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
+      provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'polling',
       lastError: null,

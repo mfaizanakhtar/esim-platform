@@ -33,6 +33,7 @@ export async function handleTgtPoll(data: TgtPollJobData) {
       lpa: resolved.lpa,
       activationCode: resolved.activationCode || '',
       iccid: resolved.iccid || '',
+      provider: 'tgt',
     });
     return { ok: true, reason: 'resolved' };
   }

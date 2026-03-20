@@ -24,6 +24,8 @@ export function esimDeliveryFactory(overrides: Partial<EsimDelivery> = {}): Esim
     variantId: faker.string.numeric(8),
     customerEmail: faker.internet.email(),
     vendorReferenceId: null,
+    provider: null,
+    iccidHash: null,
     payloadEncrypted: null,
     status: 'pending',
     lastError: null,

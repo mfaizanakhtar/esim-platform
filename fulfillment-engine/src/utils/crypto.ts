@@ -27,6 +27,15 @@ export function encrypt(text: string) {
   return Buffer.concat([iv, tag, encrypted]).toString('base64');
 }
 
+/**
+ * Compute a deterministic HMAC-SHA256 hash of an ICCID for indexed lookup.
+ * Uses ENCRYPTION_KEY as the HMAC secret so the hash is not reversible without the key.
+ */
+export function hashIccid(iccid: string): string {
+  const key = getKey();
+  return crypto.createHmac('sha256', key).update(iccid).digest('hex');
+}
+
 export function decrypt(data: string) {
   const buf = Buffer.from(data, 'base64');
   const iv = buf.slice(0, 12);

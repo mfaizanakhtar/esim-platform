@@ -15,6 +15,12 @@ const createMockMapping = (overrides: Parameters<typeof providerSkuMappingFactor
     ...overrides,
   });
 
+vi.mock('~/utils/crypto', () => ({
+  encrypt: vi.fn(() => 'encrypted-payload'),
+  decrypt: vi.fn(),
+  hashIccid: vi.fn(() => 'hashed-iccid'),
+}));
+
 // Mock all dependencies BEFORE importing the module under test
 vi.mock('~/db/prisma', () => ({
   default: {

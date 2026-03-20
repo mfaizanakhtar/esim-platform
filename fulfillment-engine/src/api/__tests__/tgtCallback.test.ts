@@ -75,6 +75,8 @@ describe('TGT callback route', () => {
       variantId: 'var-1',
       customerEmail: 'test@example.com',
       vendorReferenceId: 'SE2',
+      provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'pending',
       lastError: null,
@@ -118,6 +120,7 @@ describe('TGT callback route', () => {
       lpa: 'LPA:1$esiminfra.toprsp.com$ACT123',
       activationCode: 'ACT123',
       iccid: '8999',
+      provider: 'tgt',
     });
   });
 
@@ -208,6 +211,8 @@ describe('TGT callback route', () => {
       variantId: 'var-dup',
       customerEmail: 'dup@example.com',
       vendorReferenceId: 'SE-DUP',
+      provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'awaiting_callback',
       lastError: null,
