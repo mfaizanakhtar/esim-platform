@@ -60,6 +60,7 @@ describe('finalizeDelivery', () => {
       variantId: 'var-1',
       customerEmail: 'user@example.com',
       vendorReferenceId: 'ref-1',
+      provider: null,
       payloadEncrypted: null,
       status: 'pending',
       lastError: null,
@@ -82,6 +83,41 @@ describe('finalizeDelivery', () => {
     expect(vi.mocked(sendDeliveryEmail)).toHaveBeenCalled();
     expect(vi.mocked(recordDeliveryAttempt)).toHaveBeenCalled();
     expect(vi.mocked(getShopifyClient)).toHaveBeenCalled();
+  });
+
+  it('stores provider in updateMany when provided', async () => {
+    vi.mocked(prisma.esimDelivery.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue({
+      id: 'd-tgt',
+      shop: 'test.myshopify.com',
+      orderId: '999',
+      orderName: '#9001',
+      lineItemId: 'line-tgt',
+      variantId: 'var-tgt',
+      customerEmail: null,
+      vendorReferenceId: 'TGT-001',
+      provider: null,
+      payloadEncrypted: null,
+      status: 'polling',
+      lastError: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await finalizeDelivery({
+      deliveryId: 'd-tgt',
+      vendorOrderId: 'TGT-001',
+      lpa: 'LPA:1$host$ACT',
+      activationCode: 'ACT',
+      iccid: '8999',
+      provider: 'tgt',
+    });
+
+    expect(vi.mocked(prisma.esimDelivery.updateMany)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ provider: 'tgt' }),
+      }),
+    );
   });
 
   it('handles missing delivery after updateMany without throwing', async () => {
@@ -111,6 +147,7 @@ describe('finalizeDelivery', () => {
       variantId: 'var-2',
       customerEmail: 'user@example.com',
       vendorReferenceId: 'ref-2',
+      provider: null,
       payloadEncrypted: null,
       status: 'pending',
       lastError: null,
@@ -141,6 +178,7 @@ describe('finalizeDelivery', () => {
       variantId: 'var-3',
       customerEmail: null,
       vendorReferenceId: 'ref-3',
+      provider: null,
       payloadEncrypted: null,
       status: 'pending',
       lastError: null,
@@ -175,6 +213,7 @@ describe('finalizeDelivery', () => {
       variantId: 'var-1',
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
+      provider: null,
       payloadEncrypted: 'encrypted',
       status: 'pending',
       lastError: null,
@@ -196,6 +235,7 @@ describe('finalizeDelivery', () => {
       variantId: 'var-1',
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
+      provider: null,
       payloadEncrypted: 'encrypted',
       status: 'pending',
       lastError: null,

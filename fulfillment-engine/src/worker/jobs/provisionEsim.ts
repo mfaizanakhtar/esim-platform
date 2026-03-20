@@ -46,6 +46,7 @@ export async function handleProvision(data: ProvisionJobData) {
 
   try {
     let esimResult: EsimProvisionResult;
+    let resolvedProvider: string | undefined;
     let mappingInfo: {
       name?: string;
       region?: string;
@@ -58,6 +59,7 @@ export async function handleProvision(data: ProvisionJobData) {
       // Deprecated — prefer SKU mappings with the provider registry.
       logger.info('Using legacy direct orderPayload path');
       esimResult = await provisionViaDirectPayload(data.orderPayload);
+      resolvedProvider = 'firoam';
     } else {
       // Primary path: resolve SKU mapping → dispatch to the correct vendor provider.
       const sku = data.sku;
@@ -67,6 +69,7 @@ export async function handleProvision(data: ProvisionJobData) {
       if (!mapping) throw new MappingError(`No provider mapping found for SKU: ${sku}`);
       if (!mapping.isActive) throw new MappingError(`SKU mapping is inactive: ${sku}`);
 
+      resolvedProvider = mapping.provider;
       mappingInfo = {
         name: mapping.name || undefined,
         region: mapping.region || undefined,
@@ -108,6 +111,7 @@ export async function handleProvision(data: ProvisionJobData) {
           vendorReferenceId: esimResult.vendorOrderId,
           status,
           lastError: null,
+          ...(resolvedProvider ? { provider: resolvedProvider } : {}),
         },
       });
 
@@ -162,6 +166,7 @@ export async function handleProvision(data: ProvisionJobData) {
         vendorReferenceId: esimResult.vendorOrderId,
         payloadEncrypted,
         status: 'delivered',
+        ...(resolvedProvider ? { provider: resolvedProvider } : {}),
       },
     });
 

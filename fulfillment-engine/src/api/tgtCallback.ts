@@ -62,6 +62,7 @@ export default function tgtCallbackRoutes(
         lpa: orderInfo.qrCode,
         activationCode,
         iccid: orderInfo.iccid || '',
+        provider: 'tgt',
       });
     }
 

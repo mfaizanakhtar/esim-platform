@@ -17,6 +17,7 @@ interface FinalizeArgs {
   lpa: string;
   activationCode: string;
   iccid: string;
+  provider?: string;
   metadata?: DeliveryMetadata;
 }
 
@@ -54,6 +55,7 @@ export async function finalizeDelivery(
       payloadEncrypted,
       status: 'delivered',
       lastError: null,
+      ...(args.provider ? { provider: args.provider } : {}),
     },
   });
 

@@ -17,6 +17,7 @@ model EsimDelivery {
   variantId         String
   customerEmail     String?
   vendorReferenceId String?
+  provider          String?   // 'firoam' | 'tgt' — set at provision time
   payloadEncrypted  String?
   status            String            @default("pending")
   lastError         String?
