@@ -150,8 +150,8 @@ export async function handleProvision(data: ProvisionJobData) {
     );
 
     // Encrypt the canonical payload for at-rest storage
-    const crypto = await import('../../utils/crypto');
-    const payloadEncrypted = await crypto.encrypt(
+    const { encrypt, hashIccid } = await import('../../utils/crypto');
+    const payloadEncrypted = await encrypt(
       JSON.stringify({
         vendorId: esimResult.vendorOrderId,
         lpa: esimResult.lpa,
@@ -160,14 +160,14 @@ export async function handleProvision(data: ProvisionJobData) {
       }),
     );
 
-    const { hashIccid } = await import('../../utils/crypto');
+    const normalizedIccid = esimResult.iccid?.trim();
     await prisma.esimDelivery.update({
       where: { id: deliveryId },
       data: {
         vendorReferenceId: esimResult.vendorOrderId,
         payloadEncrypted,
         status: 'delivered',
-        iccidHash: hashIccid(esimResult.iccid),
+        iccidHash: normalizedIccid ? hashIccid(normalizedIccid) : null,
         ...(resolvedProvider ? { provider: resolvedProvider } : {}),
       },
     });
