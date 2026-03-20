@@ -16,14 +16,27 @@ dotenv.config();
 const { SHOPIFY_SHOP_DOMAIN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET } = process.env;
 
 if (!SHOPIFY_SHOP_DOMAIN || !SHOPIFY_CLIENT_ID || !SHOPIFY_CLIENT_SECRET) {
-  console.error('Missing required env vars: SHOPIFY_SHOP_DOMAIN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET');
+  console.error(
+    'Missing required env vars: SHOPIFY_SHOP_DOMAIN, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET',
+  );
   process.exit(1);
 }
 
-const res = await axios.post<{ access_token: string; scope: string }>(
-  `https://${SHOPIFY_SHOP_DOMAIN}/admin/oauth/access_token`,
-  { client_id: SHOPIFY_CLIENT_ID, client_secret: SHOPIFY_CLIENT_SECRET, grant_type: 'client_credentials' },
-);
+async function main() {
+  const res = await axios.post<{ access_token: string; scope: string }>(
+    `https://${SHOPIFY_SHOP_DOMAIN}/admin/oauth/access_token`,
+    {
+      client_id: SHOPIFY_CLIENT_ID,
+      client_secret: SHOPIFY_CLIENT_SECRET,
+      grant_type: 'client_credentials',
+    },
+  );
 
-console.log('\nSHOPIFY_CLI_THEME_TOKEN=' + res.data.access_token);
-console.log('Scopes: ' + res.data.scope + '\n');
+  console.log('\nSHOPIFY_CLI_THEME_TOKEN=' + res.data.access_token);
+  console.log('Scopes: ' + res.data.scope + '\n');
+}
+
+main().catch((err: unknown) => {
+  console.error(err);
+  process.exit(1);
+});
