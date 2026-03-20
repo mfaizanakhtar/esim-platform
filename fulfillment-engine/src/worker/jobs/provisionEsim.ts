@@ -44,9 +44,9 @@ export async function handleProvision(data: ProvisionJobData) {
     'Processing delivery',
   );
 
+  let resolvedProvider: string | undefined;
   try {
     let esimResult: EsimProvisionResult;
-    let resolvedProvider: string | undefined;
     let mappingInfo: {
       name?: string;
       region?: string;
@@ -58,8 +58,8 @@ export async function handleProvision(data: ProvisionJobData) {
       // Legacy path: raw vendor payload included directly in job data.
       // Deprecated — prefer SKU mappings with the provider registry.
       logger.info('Using legacy direct orderPayload path');
-      esimResult = await provisionViaDirectPayload(data.orderPayload);
       resolvedProvider = 'firoam';
+      esimResult = await provisionViaDirectPayload(data.orderPayload);
     } else {
       // Primary path: resolve SKU mapping → dispatch to the correct vendor provider.
       const sku = data.sku;
@@ -220,7 +220,11 @@ export async function handleProvision(data: ProvisionJobData) {
     logger.error({ error: msg }, 'Provision failed');
     await prisma.esimDelivery.update({
       where: { id: deliveryId },
-      data: { lastError: msg, status: 'failed' },
+      data: {
+        lastError: msg,
+        status: 'failed',
+        ...(resolvedProvider ? { provider: resolvedProvider } : {}),
+      },
     });
     throw err;
   }
