@@ -72,10 +72,7 @@ export default function usageRoutes(
         return await handleIccidSearch(app, reply, q);
       } catch (error) {
         app.log.error({ error }, '[Usage API] Error in search endpoint');
-        return reply.code(500).send({
-          error: 'Internal server error',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
+        return reply.code(500).send({ error: 'Internal server error' });
       }
     },
   );
@@ -94,10 +91,7 @@ export default function usageRoutes(
         return await handleIccidSearch(app, reply, iccid);
       } catch (error) {
         app.log.error({ error }, '[Usage API] Error fetching usage data');
-        return reply.code(500).send({
-          error: 'Internal server error',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
+        return reply.code(500).send({ error: 'Internal server error' });
       }
     },
   );
@@ -189,6 +183,13 @@ async function handleOrderSearch(app: FastifyInstance, reply: FastifyReply, orde
     } catch {
       // ignore
     }
+  }
+
+  if (!iccid) {
+    return reply.code(404).send({
+      error: 'Usage not found',
+      message: 'Could not retrieve ICCID for this order',
+    });
   }
 
   return await dispatchUsageByProvider(app, reply, delivery, storedPayload, iccid);
