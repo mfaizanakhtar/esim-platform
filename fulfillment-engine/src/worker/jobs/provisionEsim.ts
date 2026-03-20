@@ -160,12 +160,14 @@ export async function handleProvision(data: ProvisionJobData) {
       }),
     );
 
+    const { hashIccid } = await import('../../utils/crypto');
     await prisma.esimDelivery.update({
       where: { id: deliveryId },
       data: {
         vendorReferenceId: esimResult.vendorOrderId,
         payloadEncrypted,
         status: 'delivered',
+        iccidHash: hashIccid(esimResult.iccid),
         ...(resolvedProvider ? { provider: resolvedProvider } : {}),
       },
     });

@@ -42,6 +42,7 @@ vi.mock('~/vendor/tgtClient', () => ({
 vi.mock('~/utils/crypto', () => ({
   decrypt: vi.fn(),
   encrypt: vi.fn(),
+  hashIccid: vi.fn((iccid: string) => `hash:${iccid}`),
 }));
 
 import prisma from '~/db/prisma';
@@ -60,6 +61,7 @@ function makeDelivery(overrides: Partial<EsimDelivery>): EsimDelivery {
     customerEmail: null,
     vendorReferenceId: null,
     provider: null,
+    iccidHash: null,
     payloadEncrypted: null,
     status: 'delivered',
     lastError: null,
@@ -126,6 +128,9 @@ describe('GET /api/esim/:iccid/usage', () => {
 
     // Default TGT mock: return no usage (so fallback tests don't error unexpectedly)
     mockGetUsage.mockResolvedValue({ usage: null });
+
+    // Hash lookup returns null by default → tests fall through to legacy findMany scan
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(null);
 
     app = Fastify({ logger: false });
     app.register(usageRoutes);

@@ -12,6 +12,7 @@ vi.mock('~/db/prisma', () => ({
 vi.mock('~/utils/crypto', () => ({
   encrypt: vi.fn(() => 'encrypted-payload'),
   decrypt: vi.fn(() => JSON.stringify({ lpa: 'LPA:1$h$a', activationCode: 'a', iccid: '1' })),
+  hashIccid: vi.fn(() => 'hashed-iccid'),
 }));
 
 vi.mock('~/services/email', () => ({
@@ -61,6 +62,7 @@ describe('finalizeDelivery', () => {
       customerEmail: 'user@example.com',
       vendorReferenceId: 'ref-1',
       provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'pending',
       lastError: null,
@@ -97,6 +99,7 @@ describe('finalizeDelivery', () => {
       customerEmail: null,
       vendorReferenceId: 'TGT-001',
       provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'polling',
       lastError: null,
@@ -148,6 +151,7 @@ describe('finalizeDelivery', () => {
       customerEmail: 'user@example.com',
       vendorReferenceId: 'ref-2',
       provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'pending',
       lastError: null,
@@ -179,6 +183,7 @@ describe('finalizeDelivery', () => {
       customerEmail: null,
       vendorReferenceId: 'ref-3',
       provider: null,
+      iccidHash: null,
       payloadEncrypted: null,
       status: 'pending',
       lastError: null,
@@ -214,6 +219,7 @@ describe('finalizeDelivery', () => {
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
       provider: null,
+      iccidHash: null,
       payloadEncrypted: 'encrypted',
       status: 'pending',
       lastError: null,
@@ -236,6 +242,7 @@ describe('finalizeDelivery', () => {
       customerEmail: 'test@example.com',
       vendorReferenceId: 'ref-1',
       provider: null,
+      iccidHash: null,
       payloadEncrypted: 'encrypted',
       status: 'pending',
       lastError: null,

@@ -1,5 +1,5 @@
 import prisma from '~/db/prisma';
-import { decrypt, encrypt } from '~/utils/crypto';
+import { decrypt, encrypt, hashIccid } from '~/utils/crypto';
 import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '~/services/email';
 import { getShopifyClient } from '~/shopify/client';
 import { logger } from '~/utils/logger';
@@ -55,6 +55,7 @@ export async function finalizeDelivery(
       payloadEncrypted,
       status: 'delivered',
       lastError: null,
+      iccidHash: hashIccid(args.iccid),
       ...(args.provider ? { provider: args.provider } : {}),
     },
   });

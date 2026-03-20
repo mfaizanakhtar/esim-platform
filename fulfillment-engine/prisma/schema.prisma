@@ -18,6 +18,7 @@ model EsimDelivery {
   customerEmail     String?
   vendorReferenceId String?
   provider          String?   // 'firoam' | 'tgt' — set at provision time
+  iccidHash         String?   // HMAC-SHA256(iccid, ENCRYPTION_KEY) — indexed for fast lookup
   payloadEncrypted  String?
   status            String            @default("pending")
   lastError         String?
@@ -25,6 +26,8 @@ model EsimDelivery {
   updatedAt         DateTime          @updatedAt
   attempts          DeliveryAttempt[]
   esimOrders        EsimOrder[]
+
+  @@index([iccidHash])
 }
 
 model DeliveryAttempt {

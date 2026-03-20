@@ -144,6 +144,7 @@ function makeDelivery(overrides: Partial<EsimDelivery> = {}): EsimDelivery {
     customerEmail: 'customer@test.com',
     vendorReferenceId: null,
     provider: null,
+    iccidHash: null,
     payloadEncrypted: null,
     status: 'pending',
     lastError: null,

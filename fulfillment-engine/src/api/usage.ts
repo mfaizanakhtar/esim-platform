@@ -3,7 +3,7 @@ import { z } from 'zod';
 import prisma from '~/db/prisma';
 import FiRoamClient from '~/vendor/firoamClient';
 import TgtClient from '~/vendor/tgtClient';
-import { decrypt } from '~/utils/crypto';
+import { decrypt, hashIccid } from '~/utils/crypto';
 
 /**
  * Schema for the JSON stored in EsimDelivery.payloadEncrypted.
@@ -102,9 +102,38 @@ export default function usageRoutes(
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 async function handleIccidSearch(app: FastifyInstance, reply: FastifyReply, iccid: string) {
+  // Fast path: hash-indexed lookup (O(1)) for rows provisioned after iccidHash was added
+  const iccid_hash = hashIccid(iccid);
+  const hashed = await prisma.esimDelivery.findFirst({
+    where: { iccidHash: iccid_hash, status: 'delivered' },
+    select: {
+      id: true,
+      vendorReferenceId: true,
+      provider: true,
+      payloadEncrypted: true,
+      orderName: true,
+      customerEmail: true,
+    },
+  });
+
+  if (hashed) {
+    let storedPayload: StoredPayload | null = null;
+    if (hashed.payloadEncrypted) {
+      try {
+        const result = StoredPayloadSchema.safeParse(JSON.parse(decrypt(hashed.payloadEncrypted)));
+        if (result.success) storedPayload = result.data;
+      } catch {
+        // ignore
+      }
+    }
+    return await dispatchUsageByProvider(app, reply, hashed, storedPayload, iccid);
+  }
+
+  // Legacy fallback: full scan + decrypt for rows without iccidHash (provisioned before this feature)
   const deliveries = await prisma.esimDelivery.findMany({
     where: {
       status: 'delivered',
+      iccidHash: null,
       payloadEncrypted: { not: null },
     },
     select: {
@@ -132,8 +161,7 @@ async function handleIccidSearch(app: FastifyInstance, reply: FastifyReply, icci
           storedPayload = payload;
           break;
         }
-      } catch (err) {
-        // Skip invalid payloads
+      } catch {
         continue;
       }
     }
