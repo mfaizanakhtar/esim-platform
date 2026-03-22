@@ -4,6 +4,7 @@ node_modules/
 .env.*
 !.env.example
 !**/.env.example
+!.env.shopify.example
 coverage/
 dist/
 .claude/settings.local.json
