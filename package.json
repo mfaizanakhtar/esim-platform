@@ -8,8 +8,8 @@
     "test:all": "pnpm -r test -- --run",
     "build:all": "pnpm -r build",
     "verify:all": "pnpm -r verify",
-    "theme:pull": "shopify theme pull --path=shopify",
-    "theme:push": "shopify theme push --path=shopify --allow-live --nodelete",
-    "theme:dev": "shopify theme dev --path=shopify"
+    "theme:pull": "sh -c 'set -a; . shopify/.env.shopify; set +a; shopify theme pull --path=shopify'",
+    "theme:push": "sh -c 'set -a; . shopify/.env.shopify; set +a; shopify theme push --path=shopify --allow-live --nodelete'",
+    "theme:dev": "sh -c 'set -a; . shopify/.env.shopify; set +a; shopify theme dev --path=shopify'"
   }
 }
