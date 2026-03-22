@@ -1,0 +1,397 @@
+/**
+ * eSIM Usage Tracking - Styles
+ * Mobile-first responsive design
+ */
+
+/* Container */
+.esim-usage-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Header */
+.esim-usage-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.esim-usage-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 8px;
+}
+
+.esim-usage-subtitle {
+  font-size: 1rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+/* Loading State */
+.esim-loading {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.esim-spinner {
+  width: 50px;
+  height: 50px;
+  margin: 0 auto 20px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: esim-spin 1s linear infinite;
+}
+
+@keyframes esim-spin {
+  to { transform: rotate(360deg); }
+}
+
+.esim-loading p {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+/* Error State */
+.esim-error {
+  text-align: center;
+  padding: 60px 20px;
+  background: #fef2f2;
+  border-radius: 12px;
+  border: 2px solid #fee2e2;
+}
+
+.esim-error-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+}
+
+.esim-error-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #991b1b;
+  margin-bottom: 12px;
+}
+
+.esim-error-message {
+  color: #7f1d1d;
+  font-size: 1rem;
+  margin-bottom: 24px;
+}
+
+.esim-error-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Dashboard Layout */
+.esim-dashboard {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .esim-dashboard {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .esim-dashboard {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .esim-usage-card {
+    grid-column: span 2;
+  }
+}
+
+/* Cards */
+.esim-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.esim-card-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 20px 0;
+}
+
+/* Info Card */
+.esim-info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .esim-info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.esim-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.esim-info-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.esim-info-value {
+  font-size: 1rem;
+  color: #1f2937;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+/* Status Badges */
+.esim-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.esim-badge--success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.esim-badge--warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.esim-badge--error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.esim-badge--neutral {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Usage Card */
+.esim-usage-visual {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.esim-circle-progress {
+  position: relative;
+  width: 200px;
+  height: 200px;
+}
+
+.esim-circle-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.esim-circle-percent {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1;
+}
+
+.esim-circle-label {
+  font-size: 1rem;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.esim-usage-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.esim-stat {
+  text-align: center;
+}
+
+.esim-stat-label {
+  display: block;
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.esim-stat-value {
+  display: block;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.esim-stat-value--used {
+  color: #3b82f6;
+}
+
+.esim-stat-value--remaining {
+  color: #10b981;
+}
+
+/* Validity Card */
+.esim-validity-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.esim-validity-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.esim-validity-icon {
+  font-size: 1.5rem;
+}
+
+.esim-validity-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.esim-validity-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* Help Card */
+.esim-help-card p {
+  color: #6b7280;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.esim-help-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Buttons */
+.esim-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.esim-button--primary {
+  background: #1a1f71;
+  color: white;
+}
+
+.esim-button--primary:hover {
+  background: #13165a;
+}
+
+.esim-button--secondary {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.esim-button--secondary:hover {
+  background: #f9fafb;
+}
+
+.esim-button--refresh {
+  background: #1a1f71;
+  color: white;
+  width: 100%;
+}
+
+.esim-button--refresh:hover {
+  background: #13165a;
+}
+
+/* Actions Section */
+.esim-actions {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding-top: 20px;
+}
+
+.esim-refresh-note {
+  margin-top: 12px;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 640px) {
+  .esim-usage-title {
+    font-size: 1.5rem;
+  }
+  
+  .esim-card {
+    padding: 16px;
+  }
+  
+  .esim-card-title {
+    font-size: 1.125rem;
+  }
+  
+  .esim-circle-progress {
+    width: 160px;
+    height: 160px;
+  }
+  
+  .esim-circle-progress svg {
+    width: 160px;
+    height: 160px;
+  }
+  
+  .esim-circle-percent {
+    font-size: 2rem;
+  }
+  
+  .esim-usage-stats {
+    gap: 12px;
+  }
+  
+  .esim-stat-value {
+    font-size: 1rem;
+  }
+}

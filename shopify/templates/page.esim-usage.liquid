@@ -1,0 +1,185 @@
+{% comment %}
+  eSIM Usage Tracking Page
+  Template for displaying real-time data usage for customer eSIMs
+  URL: /pages/my-esim-usage?iccid=XXXXX
+{% endcomment %}
+
+<div class="page-width">
+  <div class="esim-usage-wrapper">
+    {%- comment -%} Page Header {%- endcomment -%}
+    <div class="esim-usage-header">
+      <h1 class="esim-usage-title">{{ page.title | default: "My eSIM Usage" }}</h1>
+      <p class="esim-usage-subtitle">Track your data usage in real-time</p>
+    </div>
+
+    {%- comment -%} Loading State {%- endcomment -%}
+    <div id="esim-loading" class="esim-loading">
+      <div class="esim-spinner"></div>
+      <p>Loading your usage data...</p>
+    </div>
+
+    {%- comment -%} Error State {%- endcomment -%}
+    <div id="esim-error" class="esim-error" style="display: none;">
+      <div class="esim-error-icon">⚠️</div>
+      <h2 class="esim-error-title">Unable to Load Usage Data</h2>
+      <p class="esim-error-message" id="esim-error-message"></p>
+      <div class="esim-error-actions">
+        <button onclick="location.reload()" class="esim-button esim-button--primary">
+          Try Again
+        </button>
+        <a href="{{ routes.root_url }}" class="esim-button esim-button--secondary">
+          Back to Home
+        </a>
+      </div>
+    </div>
+
+    {%- comment -%} Usage Dashboard {%- endcomment -%}
+    <div id="esim-dashboard" class="esim-dashboard" style="display: none;">
+      
+      {%- comment -%} eSIM Info Card {%- endcomment -%}
+      <div class="esim-card esim-info-card">
+        <h2 class="esim-card-title">eSIM Information</h2>
+        <div class="esim-info-grid">
+          <div class="esim-info-item">
+            <span class="esim-info-label">ICCID</span>
+            <span class="esim-info-value" id="esim-iccid">-</span>
+          </div>
+          <div class="esim-info-item">
+            <span class="esim-info-label">Order Number</span>
+            <span class="esim-info-value" id="esim-order-num">-</span>
+          </div>
+          <div class="esim-info-item">
+            <span class="esim-info-label">Region</span>
+            <span class="esim-info-value" id="esim-region">-</span>
+          </div>
+          <div class="esim-info-item">
+            <span class="esim-info-label">Package</span>
+            <span class="esim-info-value" id="esim-package-name">-</span>
+          </div>
+          <div class="esim-info-item">
+            <span class="esim-info-label">Status</span>
+            <span class="esim-status-badge" id="esim-status">-</span>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} Data Usage Card {%- endcomment -%}
+      <div class="esim-card esim-usage-card">
+        <h2 class="esim-card-title">Data Usage</h2>
+        
+        {%- comment -%} Circular Progress {%- endcomment -%}
+        <div class="esim-usage-visual">
+          <div class="esim-circle-progress">
+            <svg width="200" height="200" viewBox="0 0 200 200">
+              <circle 
+                cx="100" 
+                cy="100" 
+                r="80" 
+                fill="none" 
+                stroke="#e5e7eb" 
+                stroke-width="12"
+              />
+              <circle 
+                id="esim-progress-circle"
+                cx="100" 
+                cy="100" 
+                r="80" 
+                fill="none" 
+                stroke="#3b82f6" 
+                stroke-width="12"
+                stroke-dasharray="502.65"
+                stroke-dashoffset="502.65"
+                transform="rotate(-90 100 100)"
+                style="transition: stroke-dashoffset 1s ease;"
+              />
+            </svg>
+            <div class="esim-circle-text">
+              <div class="esim-circle-percent" id="esim-usage-percent">0%</div>
+              <div class="esim-circle-label">Used</div>
+            </div>
+          </div>
+        </div>
+
+        {%- comment -%} Usage Stats {%- endcomment -%}
+        <div class="esim-usage-stats">
+          <div class="esim-stat">
+            <span class="esim-stat-label">Total Data</span>
+            <span class="esim-stat-value" id="esim-total-data">-</span>
+          </div>
+          <div class="esim-stat">
+            <span class="esim-stat-label">Used</span>
+            <span class="esim-stat-value esim-stat-value--used" id="esim-used-data">-</span>
+          </div>
+          <div class="esim-stat">
+            <span class="esim-stat-label">Remaining</span>
+            <span class="esim-stat-value esim-stat-value--remaining" id="esim-remaining-data">-</span>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} Validity Card {%- endcomment -%}
+      <div class="esim-card esim-validity-card">
+        <h2 class="esim-card-title">Validity Period</h2>
+        <div class="esim-validity-grid">
+          <div class="esim-validity-item">
+            <span class="esim-validity-icon">📅</span>
+            <div>
+              <div class="esim-validity-label">Duration</div>
+              <div class="esim-validity-value" id="esim-days">-</div>
+            </div>
+          </div>
+          <div class="esim-validity-item">
+            <span class="esim-validity-icon">▶️</span>
+            <div>
+              <div class="esim-validity-label">Start Date</div>
+              <div class="esim-validity-value" id="esim-start-date">Not activated</div>
+            </div>
+          </div>
+          <div class="esim-validity-item">
+            <span class="esim-validity-icon">⏹️</span>
+            <div>
+              <div class="esim-validity-label">End Date</div>
+              <div class="esim-validity-value" id="esim-end-date">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} Help Section 
+      <div class="esim-card esim-help-card">
+        <h2 class="esim-card-title">Need Help?</h2>
+        <p>If you have questions about your eSIM or need assistance, please contact our support team.</p>
+        <div class="esim-help-actions">
+          <a href="{{ routes.root_url }}/pages/contact" class="esim-button esim-button--secondary">
+            Contact Support
+          </a>
+          <a href="{{ routes.root_url }}/pages/esim-help" class="esim-button esim-button--secondary">
+            eSIM Help Guide
+          </a>
+        </div>
+      </div>
+      {%- endcomment -%}
+
+      {%- comment -%} Refresh Button {%- endcomment -%}
+      <div class="esim-actions">
+        <button onclick="window.loadEsimUsage()" class="esim-button esim-button--refresh">
+          Refresh Usage Data
+        </button>
+        <p class="esim-refresh-note">Data updates automatically every 5 minutes</p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{%- comment -%} Include JavaScript and CSS {%- endcomment -%}
+{{ 'esim-usage.css' | asset_url | stylesheet_tag }}
+
+<script>
+  // Pass backend API URL to JavaScript
+  // IMPORTANT: Replace this URL with your actual backend URL
+  window.ESIM_API_BASE = 'https://esim-api-production-a56a.up.railway.app';
+  window.ESIM_ICCID = new URLSearchParams(window.location.search).get('iccid');
+</script>
+
+{{ 'esim-usage.js' | asset_url | script_tag }}
