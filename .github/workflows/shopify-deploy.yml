@@ -31,8 +31,8 @@ jobs:
         run: |
           TOKEN=$(curl -s -X POST \
             "https://${SHOPIFY_SHOP_DOMAIN}/admin/oauth/access_token" \
-            -H "Content-Type: application/json" \
-            -d "{\"client_id\":\"${SHOPIFY_CLIENT_ID}\",\"client_secret\":\"${SHOPIFY_CLIENT_SECRET}\",\"grant_type\":\"client_credentials\"}" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=${SHOPIFY_CLIENT_ID}&client_secret=${SHOPIFY_CLIENT_SECRET}&grant_type=client_credentials" \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
           echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
 
