@@ -32,7 +32,7 @@ async function main() {
   const res = await axios.post<{ access_token: string; scope: string }>(
     `https://${SHOPIFY_SHOP_DOMAIN}/admin/oauth/access_token`,
     body.toString(),
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 10_000 },
   );
 
   // Mask the token in CI logs to prevent credential leakage
