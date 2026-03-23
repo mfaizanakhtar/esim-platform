@@ -1061,6 +1061,17 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            provider_skuId_productCode: {
+              provider: 'tgt',
+              skuId: '',
+              productCode: 'A-002-ES-AU-T-30D/180D-3GB(A)',
+            },
+          },
+        }),
+      );
       expect(res.json()).toMatchObject({ ok: true, provider: 'tgt', processed: 1 });
     });
 
