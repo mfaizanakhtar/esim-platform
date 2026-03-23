@@ -65,6 +65,7 @@ function EsimOrderStatusBlock() {
 
   const [esim, setEsim] = useState<EsimDeliveryResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -75,13 +76,14 @@ function EsimOrderStatusBlock() {
     if (!accessToken) return;
 
     setLoading(true);
+    setFetchError(false);
     fetch(`${BACKEND_URL}/esim/delivery/${accessToken}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.json() as Promise<EsimDeliveryResponse>;
       })
       .then((data) => setEsim(data))
-      .catch(() => {})
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [accessToken]);
 
@@ -118,6 +120,17 @@ function EsimOrderStatusBlock() {
       <BlockStack spacing="base">
         <Divider />
         <Text appearance="subdued">Setting up your eSIM...</Text>
+      </BlockStack>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <BlockStack spacing="base">
+        <Divider />
+        <Banner status="critical">
+          <Text>Unable to load eSIM details. Please try again later.</Text>
+        </Banner>
       </BlockStack>
     );
   }

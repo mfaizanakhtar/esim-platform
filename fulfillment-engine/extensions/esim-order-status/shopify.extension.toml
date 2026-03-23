@@ -18,6 +18,9 @@ handle = "esim-order-status"
   module = "./src/OrderBlock.tsx"
   target = "customer-account.order.action.render"
 
+  [extensions.capabilities]
+  network_access = true
+
   [[extensions.metafields]]
   namespace = "esim"
   key = "delivery_tokens"
