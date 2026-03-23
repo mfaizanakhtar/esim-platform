@@ -1,225 +1,326 @@
 /**
- * eSIM Usage Tracking - Frontend JavaScript
- * Fetches and displays real-time usage data from backend API
+ * eSIM Usage Tracking
+ * Supports ICCID, order number, or email search via GET /api/esim/usage?q=
+ * Auto-submits when ?iccid= or ?q= URL param is present (email link flow).
  */
 
-(function() {
+(function () {
   'use strict';
 
-  // Configuration
-  const API_BASE = window.ESIM_API_BASE || 'https://your-backend.railway.app';
-  const ICCID = window.ESIM_ICCID;
-  const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // 5 minutes
-  
-  // DOM Elements
-  const elements = {
-    loading: document.getElementById('esim-loading'),
-    error: document.getElementById('esim-error'),
-    errorMessage: document.getElementById('esim-error-message'),
-    dashboard: document.getElementById('esim-dashboard'),
-    
-    // Info
+  var API_BASE = window.ESIM_API_BASE || 'https://your-backend.railway.app';
+  var AUTO_REFRESH = 5 * 60 * 1000;
+  var refreshTimer = null;
+  var currentQuery = null;
+  var requestId = 0;
+  var multiResultsCache = [];
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+
+  var searchForm = document.getElementById('esim-search-form');
+  var searchInput = document.getElementById('esim-query');
+  var submitBtn = document.getElementById('esim-submit');
+  var notFound = document.getElementById('esim-not-found');
+  var loadingEl = document.getElementById('esim-loading');
+  var errorEl = document.getElementById('esim-error');
+  var errorMsg = document.getElementById('esim-error-message');
+  var dashboard = document.getElementById('esim-dashboard');
+  var multiResults = document.getElementById('esim-multi-results');
+  var refreshBtn = document.getElementById('esim-refresh-btn');
+
+  // Single-result elements
+  var els = {
     iccid: document.getElementById('esim-iccid'),
     orderNum: document.getElementById('esim-order-num'),
+    regionItem: document.getElementById('esim-region-item'),
     region: document.getElementById('esim-region'),
+    packageItem: document.getElementById('esim-package-item'),
     packageName: document.getElementById('esim-package-name'),
+    statusItem: document.getElementById('esim-status-item'),
     status: document.getElementById('esim-status'),
-    
-    // Usage
+    vendorItem: document.getElementById('esim-vendor-item'),
+    vendorOrder: document.getElementById('esim-vendor-order'),
+    // FiRoam
+    firoamVisual: document.getElementById('esim-firoam-visual'),
+    firoamStats: document.getElementById('esim-firoam-stats'),
     progressCircle: document.getElementById('esim-progress-circle'),
     usagePercent: document.getElementById('esim-usage-percent'),
     totalData: document.getElementById('esim-total-data'),
     usedData: document.getElementById('esim-used-data'),
     remainingData: document.getElementById('esim-remaining-data'),
-    
+    // TGT
+    tgtStats: document.getElementById('esim-tgt-stats'),
+    tgtTotal: document.getElementById('esim-tgt-total'),
+    tgtUsed: document.getElementById('esim-tgt-used'),
+    tgtResidual: document.getElementById('esim-tgt-residual'),
     // Validity
+    validityCard: document.getElementById('esim-validity-card'),
     days: document.getElementById('esim-days'),
     startDate: document.getElementById('esim-start-date'),
     endDate: document.getElementById('esim-end-date'),
   };
 
-  /**
-   * Format data size with units
-   */
-  function formatDataSize(mb) {
-    if (mb >= 1024) {
-      return `${(mb / 1024).toFixed(2)} GB`;
-    }
-    return `${mb} MB`;
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  // Only auto-submit ICCID from URL — email/order lookups must be typed manually
+  // to avoid PII appearing in shared links and server logs.
+  var params = new URLSearchParams(window.location.search);
+  var autoIccid = params.get('iccid');
+
+  if (autoIccid) {
+    searchInput.value = autoIccid;
+    doSearch(autoIccid);
   }
 
-  /**
-   * Format date string
-   */
-  function formatDate(dateString) {
-    if (!dateString || dateString === 'null') {
-      return 'Not activated';
-    }
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
+  searchForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var q = searchInput.value.trim();
+    if (q) doSearch(q);
+  });
+
+  refreshBtn.addEventListener('click', function () {
+    if (currentQuery) doSearch(currentQuery);
+  });
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
+  function doSearch(q) {
+    currentQuery = q;
+    clearTimeout(refreshTimer);
+    setLoading(true);
+    hideAll();
+    loadingEl.style.display = 'block';
+
+    var thisRequest = ++requestId;
+
+    fetch(API_BASE + '/api/esim/usage?q=' + encodeURIComponent(q))
+      .then(function (res) {
+        return res.json().then(function (body) {
+          return { status: res.status, body: body };
+        });
+      })
+      .then(function (r) {
+        if (thisRequest !== requestId) return; // discard stale response
+        setLoading(false);
+        hideAll();
+
+        if (r.status === 404) {
+          notFound.style.display = 'block';
+          return;
+        }
+        if (r.status !== 200) {
+          showError('Unexpected error (' + r.status + '). Please try again.');
+          return;
+        }
+
+        var body = r.body;
+        if (body.results && Array.isArray(body.results)) {
+          if (body.results.length === 0) {
+            notFound.style.display = 'block';
+          } else {
+            renderMulti(body.results);
+          }
+        } else {
+          renderSingle(body);
+          refreshTimer = setTimeout(function () {
+            doSearch(currentQuery);
+          }, AUTO_REFRESH);
+        }
+      })
+      .catch(function () {
+        if (thisRequest !== requestId) return;
+        setLoading(false);
+        hideAll();
+        showError('Unable to connect to server. Please check your connection.');
       });
+  }
+
+  // ── Single result ─────────────────────────────────────────────────────────
+
+  function renderSingle(data) {
+    var isFiroam = data.provider === 'firoam' || (!data.provider && data.usage && data.usage.usedMb != null);
+
+    // Info card
+    els.iccid.textContent = data.iccid || '—';
+    els.orderNum.textContent = data.orderNum || '—';
+
+    if (data.region) {
+      els.region.textContent = data.region;
+      els.regionItem.style.display = '';
+    } else {
+      els.regionItem.style.display = 'none';
+    }
+
+    if (data.packageName) {
+      els.packageName.textContent = data.packageName;
+      els.packageItem.style.display = '';
+    } else {
+      els.packageItem.style.display = 'none';
+    }
+
+    if (data.status != null) {
+      els.status.innerHTML = statusBadge(data.status);
+      els.statusItem.style.display = '';
+    } else {
+      els.statusItem.style.display = 'none';
+    }
+
+    if (data.vendorOrderNo) {
+      els.vendorOrder.textContent = data.vendorOrderNo;
+      els.vendorItem.style.display = '';
+    } else {
+      els.vendorItem.style.display = 'none';
+    }
+
+    // Usage
+    if (isFiroam) {
+      renderFiroamUsage(data.usage);
+      els.firoamVisual.style.display = '';
+      els.firoamStats.style.display = '';
+      els.tgtStats.style.display = 'none';
+      renderValidity(data.validity);
+      els.validityCard.style.display = '';
+    } else {
+      renderTgtUsage(data.usage);
+      els.firoamVisual.style.display = 'none';
+      els.firoamStats.style.display = 'none';
+      els.tgtStats.style.display = '';
+      els.validityCard.style.display = 'none';
+    }
+
+    dashboard.style.display = 'grid';
+  }
+
+  function renderFiroamUsage(usage) {
+    if (!usage) return;
+    var pct = Math.min(100, Math.max(0, usage.usagePercent || 0));
+    var circumference = 502.65;
+    var offset = circumference - (pct / 100) * circumference;
+    els.progressCircle.style.strokeDashoffset = offset;
+    els.progressCircle.style.stroke = pct >= 90 ? '#ef4444' : pct >= 75 ? '#f59e0b' : '#3b82f6';
+    els.usagePercent.textContent = Math.round(pct) + '%';
+    els.totalData.textContent = formatMb(usage.totalMb != null ? usage.totalMb : 0);
+    els.usedData.textContent = formatMb(usage.usedMb != null ? usage.usedMb : 0);
+    els.remainingData.textContent = formatMb(usage.remainingMb != null ? usage.remainingMb : 0);
+  }
+
+  function renderTgtUsage(usage) {
+    if (!usage) return;
+    els.tgtTotal.textContent = usage.dataTotal != null ? String(usage.dataTotal) : '—';
+    els.tgtUsed.textContent = usage.dataUsage != null ? String(usage.dataUsage) : '—';
+    els.tgtResidual.textContent = usage.dataResidual != null ? String(usage.dataResidual) : '—';
+  }
+
+  function renderValidity(validity) {
+    if (!validity) {
+      els.days.textContent = '—';
+      els.startDate.textContent = 'Not activated';
+      els.endDate.textContent = '—';
+      return;
+    }
+    els.days.textContent = validity.days ? validity.days + ' days' : '—';
+    els.startDate.textContent = formatDate(validity.beginDate);
+    els.endDate.textContent = formatDate(validity.endDate);
+  }
+
+  // ── Multi-result (email search) ───────────────────────────────────────────
+
+  function renderMulti(results) {
+    multiResultsCache = results;
+    var html = '<div class="esim-multi-header"><h2>Found ' + results.length + ' eSIM' + (results.length > 1 ? 's' : '') + '</h2></div>';
+    html += '<div class="esim-multi-grid">';
+    results.forEach(function (data, index) {
+      html += renderMiniCard(data, index);
+    });
+    html += '</div>';
+    multiResults.innerHTML = html;
+    // Bind buttons by index — avoids serialising objects into onclick attributes
+    multiResults.querySelectorAll('[data-esim-index]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = Number(btn.getAttribute('data-esim-index'));
+        viewDetail(multiResultsCache[idx]);
+      });
+    });
+    multiResults.style.display = 'block';
+  }
+
+  function renderMiniCard(data, index) {
+    var isFiroam = data.provider === 'firoam' || (!data.provider && data.usage && data.usage.usedMb != null);
+    var html = '<div class="esim-card esim-mini-card">';
+    html += '<div class="esim-mini-order">Order ' + esc(data.orderNum || '—') + '</div>';
+    html += '<div class="esim-mini-iccid">' + esc(data.iccid || '—') + '</div>';
+
+    if (isFiroam && data.usage) {
+      var pct = Math.min(100, Math.max(0, data.usage.usagePercent || 0));
+      html += '<div class="esim-mini-bar">';
+      html += '<div class="esim-mini-bar-track"><div class="esim-mini-bar-fill" style="width:' + pct + '%;background:' + (pct >= 90 ? '#ef4444' : pct >= 75 ? '#f59e0b' : '#3b82f6') + '"></div></div>';
+      html += '<div class="esim-mini-bar-label">' + formatMb(data.usage.usedMb || 0) + ' of ' + formatMb(data.usage.totalMb || 0) + ' (' + Math.round(pct) + '%)</div>';
+      html += '</div>';
+      if (data.region) html += '<div class="esim-mini-meta">' + esc(data.region) + '</div>';
+    } else if (data.usage) {
+      if (data.usage.dataUsage != null) html += '<div class="esim-mini-meta">Used: ' + esc(String(data.usage.dataUsage)) + '</div>';
+      if (data.usage.dataResidual != null) html += '<div class="esim-mini-meta">Remaining: ' + esc(String(data.usage.dataResidual)) + '</div>';
+    }
+
+    html += '<button type="button" class="esim-button esim-button--secondary esim-mini-btn" data-esim-index="' + index + '">View Details</button>';
+    html += '</div>';
+    return html;
+  }
+
+  function viewDetail(data) {
+    hideAll();
+    renderSingle(data);
+    currentQuery = data.iccid || currentQuery;
+    refreshTimer = setTimeout(function () { doSearch(currentQuery); }, AUTO_REFRESH);
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function hideAll() {
+    notFound.style.display = 'none';
+    loadingEl.style.display = 'none';
+    errorEl.style.display = 'none';
+    dashboard.style.display = 'none';
+    multiResults.style.display = 'none';
+  }
+
+  function setLoading(on) {
+    submitBtn.disabled = on;
+  }
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorEl.style.display = 'block';
+  }
+
+  function formatMb(mb) {
+    if (mb == null) return '—';
+    if (mb >= 1024) return (mb / 1024).toFixed(2) + ' GB';
+    return mb + ' MB';
+  }
+
+  function formatDate(str) {
+    if (!str || str === 'null') return 'Not activated';
+    try {
+      return new Date(str).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
     } catch (e) {
-      return dateString;
+      return str;
     }
   }
 
-  /**
-   * Get status badge HTML
-   */
-  function getStatusBadge(status) {
-    const badges = {
+  function statusBadge(status) {
+    var map = {
       0: '<span class="esim-badge esim-badge--success">Active</span>',
       1: '<span class="esim-badge esim-badge--warning">Pending</span>',
       2: '<span class="esim-badge esim-badge--error">Expired</span>',
     };
-    return badges[status] || '<span class="esim-badge esim-badge--neutral">Unknown</span>';
+    return map[status] || '<span class="esim-badge esim-badge--neutral">Unknown</span>';
   }
 
-  /**
-   * Update circular progress indicator
-   */
-  function updateProgressCircle(percent) {
-    const circle = elements.progressCircle;
-    const circumference = 2 * Math.PI * 80; // 2πr where r=80
-    const offset = circumference - (percent / 100) * circumference;
-    
-    circle.style.strokeDashoffset = offset;
-    
-    // Change color based on usage
-    if (percent >= 90) {
-      circle.style.stroke = '#ef4444'; // Red
-    } else if (percent >= 75) {
-      circle.style.stroke = '#f59e0b'; // Orange
-    } else {
-      circle.style.stroke = '#3b82f6'; // Blue
-    }
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
-
-  /**
-   * Show error state
-   */
-  function showError(message) {
-    elements.loading.style.display = 'none';
-    elements.dashboard.style.display = 'none';
-    elements.error.style.display = 'block';
-    elements.errorMessage.textContent = message;
-  }
-
-  /**
-   * Show loading state
-   */
-  function showLoading() {
-    elements.loading.style.display = 'block';
-    elements.dashboard.style.display = 'none';
-    elements.error.style.display = 'none';
-  }
-
-  /**
-   * Show dashboard with data
-   */
-  function showDashboard(data) {
-    // Update eSIM Info
-    elements.iccid.textContent = data.iccid || '-';
-    elements.orderNum.textContent = data.orderNum || '-';
-    elements.region.textContent = data.region || '-';
-    elements.packageName.textContent = data.packageName || '-';
-    elements.status.innerHTML = getStatusBadge(data.status);
-
-    // Update Usage
-    const usagePercent = data.usage.usagePercent || 0;
-    elements.usagePercent.textContent = `${Math.round(usagePercent)}%`;
-    elements.totalData.textContent = `${data.usage.total} ${data.usage.unit}`;
-    elements.usedData.textContent = formatDataSize(data.usage.usedMb);
-    elements.remainingData.textContent = formatDataSize(data.usage.remainingMb);
-    
-    updateProgressCircle(usagePercent);
-
-    // Update Validity
-    elements.days.textContent = `${data.validity.days} days`;
-    elements.startDate.textContent = formatDate(data.validity.beginDate);
-    elements.endDate.textContent = formatDate(data.validity.endDate);
-
-    // Show dashboard
-    elements.loading.style.display = 'none';
-    elements.error.style.display = 'none';
-    elements.dashboard.style.display = 'block';
-  }
-
-  /**
-   * Fetch usage data from API
-   */
-  async function fetchUsageData(iccid) {
-    const url = `${API_BASE}/api/esim/${iccid}/usage`;
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json',
-        },
-        // Enable CORS credentials if needed
-        credentials: 'omit',
-      });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('eSIM not found. Please check your link and try again.');
-        } else if (response.status === 429) {
-          throw new Error('Too many requests. Please wait a moment and try again.');
-        } else {
-          throw new Error(`Failed to load usage data (Error ${response.status})`);
-        }
-      }
-
-      const data = await response.json();
-      return data;
-      
-    } catch (error) {
-      // Network or parsing error
-      if (error.message.includes('Failed to fetch')) {
-        throw new Error('Unable to connect to server. Please check your internet connection.');
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * Main load function
-   */
-  async function loadEsimUsage() {
-    // Validate ICCID
-    if (!ICCID || ICCID.length < 15) {
-      showError('Invalid or missing ICCID. Please check your link.');
-      return;
-    }
-
-    showLoading();
-
-    try {
-      const data = await fetchUsageData(ICCID);
-      showDashboard(data);
-      
-      // Schedule next auto-refresh
-      setTimeout(loadEsimUsage, AUTO_REFRESH_INTERVAL);
-      
-    } catch (error) {
-      console.error('eSIM Usage Error:', error);
-      showError(error.message || 'An unexpected error occurred. Please try again.');
-    }
-  }
-
-  // Expose to global scope for manual refresh
-  window.loadEsimUsage = loadEsimUsage;
-
-  // Initialize on page load
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadEsimUsage);
-  } else {
-    loadEsimUsage();
-  }
-
 })();

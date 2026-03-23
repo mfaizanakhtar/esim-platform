@@ -3,6 +3,116 @@
  * Mobile-first responsive design
  */
 
+/* Search Form */
+.esim-search {
+  max-width: 640px;
+  margin: 0 auto 40px;
+}
+
+.esim-search-form {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.esim-search-input {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.esim-search-input:focus {
+  border-color: #1a1f71;
+}
+
+.esim-not-found {
+  color: #6b7280;
+  font-size: 0.95rem;
+  text-align: center;
+  margin: 0;
+}
+
+/* Multi-result */
+.esim-multi-header {
+  margin-bottom: 20px;
+}
+
+.esim-multi-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.esim-multi-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .esim-multi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .esim-multi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.esim-mini-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.esim-mini-order {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.esim-mini-iccid {
+  font-size: 0.8rem;
+  color: #6b7280;
+  word-break: break-all;
+}
+
+.esim-mini-bar-track {
+  background: #e5e7eb;
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.esim-mini-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.esim-mini-bar-label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.esim-mini-meta {
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.esim-mini-btn {
+  margin-top: auto;
+  padding: 8px 16px;
+  font-size: 0.875rem;
+}
+
 /* Container */
 .esim-usage-wrapper {
   max-width: 1200px;
