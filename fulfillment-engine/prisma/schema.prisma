@@ -80,6 +80,8 @@ model ProviderSkuCatalog {
   id            String               @id @default(cuid())
   provider      String
   productCode   String
+  skuId         String               @default("")  // FiRoam: sku.skuid as string; TGT/others: ""
+  skuName       String?                            // FiRoam: sku.display (human name); TGT: null
   productName   String
   productType   String?
   region        String?
@@ -97,7 +99,8 @@ model ProviderSkuCatalog {
   updatedAt     DateTime             @updatedAt
   skuMappings   ProviderSkuMapping[]
 
-  @@unique([provider, productCode])
+  @@unique([provider, skuId, productCode])
   @@index([provider])
+  @@index([skuId])
   @@index([isActive])
 }

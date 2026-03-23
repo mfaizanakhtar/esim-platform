@@ -1150,10 +1150,16 @@ describe('Admin Routes', () => {
         totalSkus: 1,
         skipsNoApiCode: 0,
       });
-      // Verify upsert uses apiCode as productCode
+      // Verify upsert uses (provider, skuId, productCode) as unique key
       expect(vi.mocked(prismaCatalog.upsert)).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { provider_productCode: { provider: 'firoam', productCode: 'US-10GB-30D' } },
+          where: {
+            provider_skuId_productCode: {
+              provider: 'firoam',
+              skuId: '156',
+              productCode: 'US-10GB-30D',
+            },
+          },
         }),
       );
     });

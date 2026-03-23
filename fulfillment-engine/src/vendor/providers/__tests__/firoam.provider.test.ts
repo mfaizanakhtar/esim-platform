@@ -448,6 +448,7 @@ describe('FiRoamProvider.provision()', () => {
     beforeEach(() => {
       mockFindUniqueOrThrow.mockResolvedValue({
         productCode: '826-0-?-1-G-D',
+        skuId: '120',
         rawPayload: { skuId: 120, priceid: 14094 },
       });
     });
@@ -458,7 +459,7 @@ describe('FiRoamProvider.provision()', () => {
       expect(mockFindUniqueOrThrow).toHaveBeenCalledWith({ where: { id: 'cat-001' } });
     });
 
-    it('uses skuId and priceId from rawPayload', async () => {
+    it('uses skuId from top-level column and priceId from rawPayload', async () => {
       await provider.provision(catalogConfig, ctx);
 
       expect(mockClient.addEsimOrder).toHaveBeenCalledWith(
@@ -466,10 +467,11 @@ describe('FiRoamProvider.provision()', () => {
       );
     });
 
-    it('throws MappingError when skuId is missing from rawPayload', async () => {
+    it('throws MappingError when skuId column is empty string', async () => {
       mockFindUniqueOrThrow.mockResolvedValue({
         productCode: '826-0-?-1-G-D',
-        rawPayload: { priceid: 14094 }, // no skuId
+        skuId: '', // missing — empty default
+        rawPayload: { priceid: 14094 },
       });
 
       await expect(provider.provision(catalogConfig, ctx)).rejects.toThrow(MappingError);
@@ -489,6 +491,7 @@ describe('FiRoamProvider.provision()', () => {
     it('uses apiCode as priceId when priceid is absent in catalog rawPayload (fixed pkg)', async () => {
       mockFindUniqueOrThrow.mockResolvedValue({
         productCode: 'MY-API-CODE',
+        skuId: '120',
         rawPayload: { skuId: 120 }, // no priceid
       });
 

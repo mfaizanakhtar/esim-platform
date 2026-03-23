@@ -82,6 +82,8 @@ export interface CatalogItem {
   id: string;
   provider: string;
   productCode: string;
+  skuId: string;
+  skuName: string | null;
   productName: string;
   productType: string | null;
   region: string | null;
