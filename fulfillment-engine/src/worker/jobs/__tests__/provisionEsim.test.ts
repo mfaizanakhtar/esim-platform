@@ -81,21 +81,13 @@ vi.mock('~/queue/jobQueue', () => ({
   }),
 }));
 
-vi.mock('~/services/email', () => ({
-  sendDeliveryEmail: vi.fn(),
-  recordDeliveryAttempt: vi.fn(),
-}));
-
-vi.mock('~/shopify/client', () => ({
-  getShopifyClient: vi.fn(() => ({
-    createFulfillment: vi.fn(),
-  })),
+vi.mock('~/worker/jobs/finalizeDelivery', () => ({
+  finalizeDelivery: vi.fn(async () => ({ ok: true })),
 }));
 
 // NOW import after mocks are set up
 import prisma from '~/db/prisma';
-import { sendDeliveryEmail } from '~/services/email';
-import { getShopifyClient } from '~/shopify/client';
+import { finalizeDelivery } from '~/worker/jobs/finalizeDelivery';
 import { handleProvision } from '~/worker/jobs/provisionEsim';
 
 describe('provisionEsim Worker Job', () => {
@@ -242,7 +234,6 @@ describe('provisionEsim Worker Job', () => {
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
-      vi.mocked(sendDeliveryEmail).mockResolvedValue({ success: true, messageId: 'test-123' });
 
       await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
 
@@ -277,7 +268,6 @@ describe('provisionEsim Worker Job', () => {
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
-      vi.mocked(sendDeliveryEmail).mockResolvedValue({ success: true, messageId: 'test-456' });
 
       await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-ASIA-5GB' });
 
@@ -318,11 +308,6 @@ describe('provisionEsim Worker Job', () => {
       // Mock the FiRoam addEsimOrder response
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
 
-      vi.mocked(sendDeliveryEmail).mockResolvedValue({
-        success: true,
-        messageId: 'email-123',
-      });
-
       await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
 
       expect(mockAddEsimOrder).toHaveBeenCalledWith(
@@ -335,11 +320,19 @@ describe('provisionEsim Worker Job', () => {
     });
   });
 
-  describe('Email Delivery', () => {
-    it('should send email if customerEmail exists', async () => {
-      const mockDelivery = createMockDelivery({ customerEmail: 'customer@example.com' });
-      const mockMapping = createMockMapping({ providerSku: '120:826-0-?-1-G-D:14094' });
-
+  describe('Finalize Delivery', () => {
+    it('calls finalizeDelivery with correct args including metadata', async () => {
+      const mockDelivery = createMockDelivery({
+        id: 'delivery-123',
+        customerEmail: 'customer@example.com',
+      });
+      const mockMapping = createMockMapping({
+        providerSku: '120:826-0-?-1-G-D:14094',
+        name: 'USA 10GB',
+        region: 'Americas',
+        dataAmount: '10GB',
+        validity: '30 days',
+      });
       const mockFiRoamResult = {
         raw: { code: 0, data: { orderNum: 'EP-123456' } },
         canonical: {
@@ -354,101 +347,21 @@ describe('provisionEsim Worker Job', () => {
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
-
-      // Mock the FiRoam addEsimOrder response
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
-      vi.mocked(sendDeliveryEmail).mockResolvedValue({ success: true, messageId: 'email-123' });
 
       await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
 
-      expect(sendDeliveryEmail).toHaveBeenCalledWith(
+      expect(vi.mocked(finalizeDelivery)).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: 'customer@example.com',
-          orderNumber: mockDelivery.orderName,
+          deliveryId: mockDelivery.id,
+          vendorOrderId: 'EP-123456',
+          lpa: 'LPA:1$smdp.io$activation-code',
+          activationCode: 'activation-code',
+          iccid: '8901000000000000001',
+          provider: 'firoam',
+          metadata: expect.objectContaining({ productName: 'USA 10GB', region: 'Americas' }),
         }),
       );
-    });
-
-    it('should skip email if customerEmail is missing', async () => {
-      const mockDelivery = createMockDelivery({ customerEmail: null });
-      const mockMapping = createMockMapping({ providerSku: '120:826-0-?-1-G-D:14094' });
-
-      const mockFiRoamResult = {
-        raw: { code: 0, data: { orderNum: 'EP-123456' } },
-        canonical: {
-          vendorId: 'EP-123456',
-          lpa: 'LPA:1$smdp.io$activation-code',
-          activationCode: 'activation-code',
-          iccid: '8901000000000000001',
-        },
-        db: { id: 'esim-order-1' },
-      };
-
-      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
-
-      // Mock the FiRoam addEsimOrder response
-      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
-
-      expect(sendDeliveryEmail).not.toHaveBeenCalled();
-    });
-
-    it('should NOT call sendDeliveryEmail when customerEmail is null (confirmed path)', async () => {
-      const mockDelivery = createMockDelivery({ customerEmail: null });
-      const mockMapping = createMockMapping({ providerSku: '120:826-0-?-1-G-D:14094' });
-
-      const mockFiRoamResult = {
-        raw: { code: 0, data: { orderNum: 'EP-123456' } },
-        canonical: {
-          vendorId: 'EP-123456',
-          lpa: 'LPA:1$smdp.io$activation-code',
-          activationCode: 'activation-code',
-          iccid: '8901000000000000001',
-        },
-        db: { id: 'esim-order-1' },
-      };
-
-      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
-      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
-
-      await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
-
-      expect(sendDeliveryEmail).not.toHaveBeenCalled();
-    });
-
-    it('continues without throwing when email delivery fails', async () => {
-      const mockDelivery = createMockDelivery({ customerEmail: 'fail@example.com' });
-      const mockMapping = createMockMapping({ providerSku: '120:826-0-?-1-G-D:14094' });
-
-      const mockFiRoamResult = {
-        raw: { code: 0, data: { orderNum: 'EP-123456' } },
-        canonical: {
-          vendorId: 'EP-123456',
-          lpa: 'LPA:1$smdp.io$activation-code',
-          activationCode: 'activation-code',
-          iccid: '8901000000000000001',
-        },
-        db: { id: 'esim-order-1' },
-      };
-
-      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
-      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
-      // Simulate email provider returning a failure
-      vi.mocked(sendDeliveryEmail).mockResolvedValue({
-        success: false,
-        error: 'Rate limit exceeded',
-      });
-
-      // Should NOT throw — eSIM is provisioned, email failure is recoverable
-      const result = await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
-
-      expect(result).toEqual({ ok: true });
-      expect(sendDeliveryEmail).toHaveBeenCalled();
     });
   });
 
@@ -552,74 +465,6 @@ describe('provisionEsim Worker Job', () => {
       await expect(handleProvision({ deliveryId: 'delivery-123', orderPayload })).rejects.toThrow(
         'No order number in FiRoam response',
       );
-    });
-  });
-
-  describe('Shopify Fulfillment', () => {
-    const setupMocks = () => {
-      const mockDelivery = createMockDelivery({ customerEmail: null });
-      const mockMapping = createMockMapping({ providerSku: '120:826-0-?-1-G-D:14094' });
-      const mockFiRoamResult = {
-        raw: { code: 0, data: { orderNum: 'EP-123456' } },
-        canonical: {
-          vendorId: 'EP-123456',
-          lpa: 'LPA:1$smdp.io$activation-code',
-          activationCode: 'activation-code',
-          iccid: '8901000000000000001',
-        },
-        db: { id: 'esim-order-1' },
-      };
-      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
-      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
-      return { mockDelivery, mockMapping, mockFiRoamResult };
-    };
-
-    it('creates Shopify fulfillment when orderId is provided', async () => {
-      setupMocks();
-      const mockCreateFulfillment = vi
-        .fn()
-        .mockResolvedValue({ id: 'gid://shopify/Fulfillment/1' });
-      vi.mocked(getShopifyClient).mockReturnValue({
-        createFulfillment: mockCreateFulfillment,
-      } as unknown as ReturnType<typeof getShopifyClient>);
-
-      const result = await handleProvision({
-        deliveryId: 'delivery-123',
-        sku: 'ESIM-USA-10GB',
-        orderId: '12345',
-      });
-
-      expect(result).toEqual({ ok: true });
-      expect(mockCreateFulfillment).toHaveBeenCalledWith('12345');
-    });
-
-    it('does not throw when Shopify fulfillment fails', async () => {
-      setupMocks();
-      vi.mocked(getShopifyClient).mockReturnValue({
-        createFulfillment: vi.fn().mockRejectedValue(new Error('Shopify is down')),
-      } as unknown as ReturnType<typeof getShopifyClient>);
-
-      const result = await handleProvision({
-        deliveryId: 'delivery-123',
-        sku: 'ESIM-USA-10GB',
-        orderId: '12345',
-      });
-
-      expect(result).toEqual({ ok: true });
-    });
-
-    it('skips Shopify fulfillment when orderId is not provided', async () => {
-      setupMocks();
-
-      const result = await handleProvision({
-        deliveryId: 'delivery-123',
-        sku: 'ESIM-USA-10GB',
-      });
-
-      expect(result).toEqual({ ok: true });
-      expect(getShopifyClient).not.toHaveBeenCalled();
     });
   });
 

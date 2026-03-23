@@ -10,9 +10,6 @@ handle = "esim-order-status"
   module = "./src/OrderStatusBlock.tsx"
   target = "customer-account.order-status.cart-line-item.render-after"
 
-  # Declare the metafields we need so Shopify passes them to the extension.
-  # Each delivered eSIM line item gets its own metafield keyed by lineItemId.
-  # We request the parent "esim" namespace; the extension filters by key at runtime.
   [[extensions.metafields]]
   namespace = "esim"
   key = "delivery_tokens"

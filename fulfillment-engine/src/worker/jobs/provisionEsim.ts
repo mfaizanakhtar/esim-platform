@@ -1,6 +1,5 @@
 import prisma from '~/db/prisma';
-import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '~/services/email';
-import { getShopifyClient } from '~/shopify/client';
+import { finalizeDelivery } from '~/worker/jobs/finalizeDelivery';
 import { getProvider } from '~/vendor/registry';
 import type { EsimProvisionResult } from '~/vendor/types';
 import { logger } from '~/utils/logger';
@@ -149,68 +148,20 @@ export async function handleProvision(data: ProvisionJobData) {
       'eSIM provisioned',
     );
 
-    // Encrypt the canonical payload for at-rest storage
-    const { encrypt, hashIccid } = await import('../../utils/crypto');
-    const payloadEncrypted = await encrypt(
-      JSON.stringify({
-        vendorId: esimResult.vendorOrderId,
-        lpa: esimResult.lpa,
-        activationCode: esimResult.activationCode,
-        iccid: esimResult.iccid,
-      }),
-    );
-
-    const normalizedIccid = esimResult.iccid?.trim();
-    await prisma.esimDelivery.update({
-      where: { id: deliveryId },
-      data: {
-        vendorReferenceId: esimResult.vendorOrderId,
-        payloadEncrypted,
-        status: 'delivered',
-        iccidHash: normalizedIccid ? hashIccid(normalizedIccid) : null,
-        ...(resolvedProvider ? { provider: resolvedProvider } : {}),
-      },
-    });
-
-    // Send delivery email with QR code
-    if (delivery.customerEmail) {
-      logger.info({ to: delivery.customerEmail }, 'Sending delivery email');
-
-      const esimPayload: EsimPayload = {
-        lpa: esimResult.lpa,
-        activationCode: esimResult.activationCode,
-        iccid: esimResult.iccid,
-      };
-
-      const emailResult = await sendDeliveryEmail({
-        to: delivery.customerEmail,
-        orderNumber: delivery.orderName,
+    await finalizeDelivery({
+      deliveryId,
+      vendorOrderId: esimResult.vendorOrderId,
+      lpa: esimResult.lpa,
+      activationCode: esimResult.activationCode,
+      iccid: esimResult.iccid,
+      provider: resolvedProvider,
+      metadata: {
         productName: mappingInfo?.name || data.productName,
-        esimPayload,
         region: mappingInfo?.region,
         dataAmount: mappingInfo?.dataAmount,
         validity: mappingInfo?.validity,
-      });
-
-      await recordDeliveryAttempt(
-        prisma,
-        deliveryId,
-        'email',
-        emailResult.success ? `sent:${emailResult.messageId}` : `failed:${emailResult.error}`,
-      );
-    }
-
-    // Create Shopify fulfillment
-    if (data.orderId) {
-      try {
-        const shopify = getShopifyClient();
-        await shopify.createFulfillment(data.orderId);
-      } catch (fulfillmentError) {
-        const fulfillmentMsg =
-          fulfillmentError instanceof Error ? fulfillmentError.message : String(fulfillmentError);
-        logger.error({ error: fulfillmentMsg }, 'Failed to create Shopify fulfillment');
-      }
-    }
+      },
+    });
 
     logger.info({ vendorOrderId: esimResult.vendorOrderId }, 'eSIM provisioned successfully');
 
