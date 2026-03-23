@@ -276,6 +276,158 @@ export class ShopifyClient {
   }
 
   /**
+   * Write a delivery access token into the order's "esim.delivery_tokens" metafield.
+   *
+   * All eSIM tokens for an order are stored as a single JSON object keyed by lineItemId:
+   *   { "<lineItemId>": "<accessToken>", "<lineItemId2>": "<accessToken2>" }
+   *
+   * This allows the Customer Account UI Extension to declare one static metafield key
+   * ("delivery_tokens") and look up the right token by matching the current line item ID.
+   *
+   * We read the existing value first and merge, so multiple line items in one order
+   * accumulate their tokens without overwriting each other.
+   */
+  async writeDeliveryMetafield(
+    orderId: string,
+    lineItemId: string,
+    token: string,
+  ): Promise<void> {
+    const accessToken = await this.getAccessToken();
+
+    // Step 1: Read existing delivery_tokens metafield (if any)
+    const queryMetafield = `
+      query getOrderMetafield($id: ID!, $namespace: String!, $key: String!) {
+        order(id: $id) {
+          metafield(namespace: $namespace, key: $key) {
+            id
+            value
+          }
+        }
+      }
+    `;
+
+    const queryResponse = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      {
+        query: queryMetafield,
+        variables: {
+          id: `gid://shopify/Order/${orderId}`,
+          namespace: 'esim',
+          key: 'delivery_tokens',
+        },
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': accessToken,
+        },
+      },
+    );
+
+    // Step 2: Merge new token into existing map
+    const existing = queryResponse.data?.data?.order?.metafield?.value;
+    let tokenMap: Record<string, string> = {};
+    if (existing) {
+      try {
+        tokenMap = JSON.parse(existing) as Record<string, string>;
+      } catch {
+        // ignore malformed existing value
+      }
+    }
+    tokenMap[lineItemId] = token;
+
+    // Step 3: Write merged map back
+    const mutation = `
+      mutation metafieldsSet($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields { id key }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const mutationResponse = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      {
+        query: mutation,
+        variables: {
+          metafields: [
+            {
+              ownerId: `gid://shopify/Order/${orderId}`,
+              namespace: 'esim',
+              key: 'delivery_tokens',
+              value: JSON.stringify(tokenMap),
+              type: 'json',
+            },
+          ],
+        },
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': accessToken,
+        },
+      },
+    );
+
+    const result = mutationResponse.data?.data?.metafieldsSet;
+    if (result?.userErrors?.length > 0) {
+      const errors = result.userErrors.map((e: { message: string }) => e.message).join(', ');
+      throw new Error(`Shopify metafield write errors: ${errors}`);
+    }
+  }
+
+  /**
+   * Cancel a Shopify order and issue a full refund.
+   * Used by the eSIM cancel flow after the vendor has confirmed the eSIM is not yet activated.
+   */
+  async cancelShopifyOrder(orderId: string): Promise<void> {
+    const token = await this.getAccessToken();
+
+    const mutation = `
+      mutation orderCancel($orderId: ID!, $reason: OrderCancelReason!, $refund: Boolean!, $restock: Boolean!, $notifyCustomer: Boolean!) {
+        orderCancel(orderId: $orderId, reason: $reason, refund: $refund, restock: $restock, notifyCustomer: $notifyCustomer) {
+          orderCancelUserErrors {
+            field
+            message
+          }
+          job {
+            id
+          }
+        }
+      }
+    `;
+
+    const response = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      {
+        query: mutation,
+        variables: {
+          orderId: `gid://shopify/Order/${orderId}`,
+          reason: 'CUSTOMER',
+          refund: true,
+          restock: false,
+          notifyCustomer: true,
+        },
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': token,
+        },
+      },
+    );
+
+    const result = response.data?.data?.orderCancel;
+    if (result?.orderCancelUserErrors?.length > 0) {
+      const errors = result.orderCancelUserErrors
+        .map((e: { message: string }) => e.message)
+        .join(', ');
+      throw new Error(`Shopify order cancel errors: ${errors}`);
+    }
+  }
+
+  /**
    * Initialize token on startup (optional but recommended)
    */
   async initialize(): Promise<void> {

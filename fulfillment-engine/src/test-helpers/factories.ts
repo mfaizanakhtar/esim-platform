@@ -27,6 +27,7 @@ export function esimDeliveryFactory(overrides: Partial<EsimDelivery> = {}): Esim
     provider: null,
     iccidHash: null,
     payloadEncrypted: null,
+    accessToken: null,
     status: 'pending',
     lastError: null,
     createdAt: faker.date.recent({ days: 7 }),

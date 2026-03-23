@@ -121,6 +121,7 @@ function makeDelivery(overrides: Partial<EsimDelivery> = {}): EsimDelivery {
     provider: null,
     iccidHash: null,
     payloadEncrypted: null,
+    accessToken: null,
     status: 'pending',
     lastError: null,
     createdAt: new Date(),
