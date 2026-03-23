@@ -5,6 +5,7 @@ import webhookRoutes from '~/api/webhook';
 import tgtCallbackRoutes from '~/api/tgtCallback';
 import usageRoutes from '~/api/usage';
 import adminRoutes from '~/api/admin';
+import esimRoutes from '~/api/esim';
 import { getShopifyClient } from '~/shopify/client';
 
 export default async function buildServer() {
@@ -26,6 +27,7 @@ export default async function buildServer() {
         'http://127.0.0.1:3000',
         'http://localhost:5173', // Dashboard dev server (Vite)
         'http://127.0.0.1:5173',
+        'https://extensions.shopifycdn.com', // Shopify Customer Account UI Extensions
       ];
 
       // Add custom domain if configured
@@ -95,6 +97,7 @@ export default async function buildServer() {
   app.register(tgtCallbackRoutes, { prefix: '/webhook/tgt' });
   app.register(usageRoutes);
   app.register(adminRoutes, { prefix: '/admin' });
+  app.register(esimRoutes);
 
   return app;
 }

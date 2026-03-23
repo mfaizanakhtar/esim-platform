@@ -20,6 +20,7 @@ model EsimDelivery {
   provider          String?   // 'firoam' | 'tgt' — set at provision time
   iccidHash         String?   // HMAC-SHA256(iccid, ENCRYPTION_KEY) — indexed for fast lookup
   payloadEncrypted  String?
+  accessToken       String?   @unique // UUID issued after delivery; used by Shopify UI extension
   status            String            @default("pending")
   lastError         String?
   createdAt         DateTime          @default(now())

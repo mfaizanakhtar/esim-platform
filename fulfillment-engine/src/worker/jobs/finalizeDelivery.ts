@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import prisma from '~/db/prisma';
 import { decrypt, encrypt, hashIccid } from '~/utils/crypto';
 import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '~/services/email';
@@ -42,6 +43,8 @@ export async function finalizeDelivery(
     }),
   );
 
+  const accessToken = randomUUID();
+
   // First-wins write: whoever flips to delivered runs side effects.
   const writeResult = await prisma.esimDelivery.updateMany({
     where: {
@@ -53,6 +56,7 @@ export async function finalizeDelivery(
     data: {
       vendorReferenceId: args.vendorOrderId,
       payloadEncrypted,
+      accessToken,
       status: 'delivered',
       lastError: null,
       iccidHash: hashIccid(args.iccid),
@@ -97,13 +101,24 @@ export async function finalizeDelivery(
   }
 
   if (delivery.orderId) {
+    const shopify = getShopifyClient();
+
     try {
-      const shopify = getShopifyClient();
       await shopify.createFulfillment(delivery.orderId);
     } catch (error) {
       logger.error(
         { deliveryId: args.deliveryId, err: error },
         'Failed to create Shopify fulfillment during finalize',
+      );
+    }
+
+    try {
+      await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, accessToken);
+    } catch (error) {
+      // Non-fatal: email was sent, eSIM is delivered. Extension can show a fallback.
+      logger.error(
+        { deliveryId: args.deliveryId, err: error },
+        'Failed to write delivery metafield to Shopify order',
       );
     }
   }
