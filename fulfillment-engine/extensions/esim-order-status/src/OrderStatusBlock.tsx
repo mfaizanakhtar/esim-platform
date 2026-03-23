@@ -1,7 +1,6 @@
 import {
   reactExtension,
-  useOrder,
-  useExtensionTarget,
+  useTarget,
   useAppMetafields,
   BlockStack,
   InlineStack,
@@ -12,10 +11,9 @@ import {
   Image,
   Badge,
   Modal,
-  useApi,
+  QRCode,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect, useCallback } from 'react';
-import QRCode from 'qrcode';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -46,25 +44,22 @@ export default reactExtension(
 );
 
 function EsimOrderStatusBlock() {
-  const { extension } = useApi();
-  const order = useOrder();
-  const target = useExtensionTarget();
+  const target = useTarget();
 
   // The extension renders once per line item.
-  // `target.lineItem.id` is the GID; extract the numeric ID.
-  const lineItemGid: string = (target as { lineItem?: { id?: string } })?.lineItem?.id ?? '';
-  const lineItemId = lineItemGid.replace('gid://shopify/LineItem/', '');
+  // target.id is formatted as gid://shopify/LineItem/123 on order status page.
+  const lineItemGid: string = (target as { id?: string })?.id ?? '';
+  const lineItemId = lineItemGid.split('/').pop() ?? '';
 
   // Read the single "esim.delivery_tokens" metafield declared in shopify.extension.toml.
   // Value is a JSON object: { "<lineItemId>": "<accessToken>", ... }
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
-  const tokenMap: Record<string, string> = tokensRaw ? JSON.parse(tokensRaw) : {};
+  const tokenMap: Record<string, string> = tokensRaw ? (JSON.parse(tokensRaw) as Record<string, string>) : {};
   const accessToken = lineItemId ? tokenMap[lineItemId] : undefined;
 
   const [esim, setEsim] = useState<EsimDeliveryResponse | null>(null);
   const [loading, setLoading] = useState(false);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -79,11 +74,6 @@ function EsimOrderStatusBlock() {
       .then((r) => r.json())
       .then((data: EsimDeliveryResponse) => {
         setEsim(data);
-        if (data.lpa) {
-          QRCode.toDataURL(data.lpa, { width: 200, margin: 2 })
-            .then(setQrDataUrl)
-            .catch(() => {});
-        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -165,9 +155,7 @@ function EsimOrderStatusBlock() {
         Your eSIM
       </Text>
 
-      {qrDataUrl && (
-        <Image source={qrDataUrl} accessibilityDescription="eSIM QR code" />
-      )}
+      {esim.lpa && <QRCode content={esim.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
 
       <BlockStack spacing="tight">
         <InlineStack spacing="base">
@@ -203,14 +191,11 @@ function EsimOrderStatusBlock() {
       )}
 
       {cancelModalOpen && (
-        <Modal
-          title="Cancel eSIM"
-          onClose={() => setCancelModalOpen(false)}
-        >
+        <Modal title="Cancel eSIM" onClose={() => setCancelModalOpen(false)}>
           <BlockStack spacing="base">
             <Text>
-              Are you sure you want to cancel this eSIM? This will deactivate the eSIM and
-              refund your order. This action cannot be undone if the eSIM has already been installed.
+              Are you sure you want to cancel this eSIM? This will deactivate the eSIM and refund
+              your order. This action cannot be undone if the eSIM has already been installed.
             </Text>
             {cancelError && (
               <Banner status="critical">
@@ -218,11 +203,7 @@ function EsimOrderStatusBlock() {
               </Banner>
             )}
             <InlineStack spacing="base">
-              <Button
-                appearance="critical"
-                onPress={handleCancel}
-                loading={cancelling}
-              >
+              <Button appearance="critical" onPress={handleCancel} loading={cancelling}>
                 Yes, Cancel eSIM
               </Button>
               <Button appearance="secondary" onPress={() => setCancelModalOpen(false)}>
