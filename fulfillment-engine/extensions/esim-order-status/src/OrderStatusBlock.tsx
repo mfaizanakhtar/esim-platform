@@ -47,8 +47,7 @@ function EsimOrderStatusBlock() {
 
   // The extension renders once per line item.
   // target.id is formatted as gid://shopify/LineItem/123 on order status page.
-  const lineItemGid: string = (target as { id?: string })?.id ?? '';
-  const lineItemId = lineItemGid.split('/').pop() ?? '';
+  const lineItemId = target.id.split('/').pop() ?? '';
 
   // Read the single "esim.delivery_tokens" metafield declared in shopify.extension.toml.
   // Value is a JSON object: { "<lineItemId>": "<accessToken>", ... }
