@@ -10,6 +10,17 @@ handle = "esim-order-status"
   module = "./src/OrderStatusBlock.tsx"
   target = "customer-account.order-status.cart-line-item.render-after"
 
+  [[extensions.targeting]]
+  module = "./src/OrderActionMenuItem.tsx"
+  target = "customer-account.order.action.menu-item.render"
+
+  [[extensions.targeting]]
+  module = "./src/OrderBlock.tsx"
+  target = "customer-account.order.action.render"
+
+  [extensions.capabilities]
+  network_access = true
+
   [[extensions.metafields]]
   namespace = "esim"
   key = "delivery_tokens"

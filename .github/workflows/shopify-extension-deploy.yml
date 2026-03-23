@@ -1,0 +1,33 @@
+name: Deploy Shopify Extension
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'fulfillment-engine/extensions/**'
+      - 'fulfillment-engine/shopify.app.toml'
+
+jobs:
+  deploy-extension:
+    name: Deploy eSIM Order Status extension
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Shopify CLI
+        run: npm install -g @shopify/cli
+
+      - name: Install extension dependencies
+        working-directory: fulfillment-engine/extensions/esim-order-status
+        run: npm ci
+
+      - name: Deploy extension
+        working-directory: fulfillment-engine
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+        run: shopify app deploy --allow-updates

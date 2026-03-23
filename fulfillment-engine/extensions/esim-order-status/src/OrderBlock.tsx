@@ -1,6 +1,5 @@
 import {
   reactExtension,
-  useTarget,
   useAppMetafields,
   BlockStack,
   InlineStack,
@@ -11,6 +10,7 @@ import {
   Badge,
   Modal,
   QRCode,
+  CustomerAccountAction,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -34,35 +34,46 @@ interface EsimDeliveryResponse {
 const BACKEND_URL = 'https://esim-api-production-a56a.up.railway.app';
 
 // ---------------------------------------------------------------------------
-// Extension entry point
+// Extension entry point — order action panel in customer account
 // ---------------------------------------------------------------------------
 
-export default reactExtension(
-  'customer-account.order-status.cart-line-item.render-after',
-  () => <EsimOrderStatusBlock />,
-);
+export default reactExtension('customer-account.order.action.render', () => <EsimOrderAction />);
 
-function EsimOrderStatusBlock() {
-  const target = useTarget();
-
-  // The extension renders once per line item.
-  // target.id is formatted as gid://shopify/LineItem/123 on order status page.
-  const lineItemId = target.id.split('/').pop() ?? '';
-
-  // Read the single "esim.delivery_tokens" metafield declared in shopify.extension.toml.
-  // Value is a JSON object: { "<lineItemId>": "<accessToken>", ... }
+function EsimOrderAction() {
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
+
   let tokenMap: Record<string, string> = {};
   if (tokensRaw) {
     try {
       tokenMap = JSON.parse(tokensRaw) as Record<string, string>;
     } catch {
-      // Malformed metafield value; treat as empty
+      // Malformed metafield; treat as empty
     }
   }
-  const accessToken = lineItemId ? tokenMap[lineItemId] : undefined;
 
+  const tokens = Object.values(tokenMap);
+
+  return (
+    <CustomerAccountAction title="Your eSIM">
+      {tokens.length === 0 ? (
+        <Text appearance="subdued">No eSIM found for this order.</Text>
+      ) : (
+        <BlockStack spacing="base">
+          {tokens.map((token) => (
+            <EsimCardLoader key={token} accessToken={token} />
+          ))}
+        </BlockStack>
+      )}
+    </CustomerAccountAction>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Per-eSIM card — fetches and renders one eSIM
+// ---------------------------------------------------------------------------
+
+function EsimCardLoader({ accessToken }: { accessToken: string }) {
   const [esim, setEsim] = useState<EsimDeliveryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState(false);
@@ -71,12 +82,8 @@ function EsimOrderStatusBlock() {
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
 
-  // Fetch eSIM data from backend
   useEffect(() => {
-    if (!accessToken) return;
-
     setLoading(true);
-    setFetchError(false);
     fetch(`${BACKEND_URL}/esim/delivery/${accessToken}`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -88,7 +95,6 @@ function EsimOrderStatusBlock() {
   }, [accessToken]);
 
   const handleCancel = useCallback(async () => {
-    if (!accessToken) return;
     setCancelling(true);
     setCancelError(null);
     try {
@@ -96,14 +102,16 @@ function EsimOrderStatusBlock() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      const body = (await res.json()) as { ok?: boolean; error?: string; message?: string };
-      if (res.ok) {
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string; message?: string };
+        if (body.error === 'esim_already_activated') {
+          setCancelError('This eSIM has already been installed and cannot be cancelled.');
+        } else {
+          setCancelError(body.message ?? 'Cancel failed. Please contact support.');
+        }
+      } else {
         setCancelled(true);
         setCancelModalOpen(false);
-      } else if (body.error === 'esim_already_activated') {
-        setCancelError('This eSIM has already been installed and cannot be cancelled.');
-      } else {
-        setCancelError(body.message ?? 'Cancel failed. Please contact support.');
       }
     } catch {
       setCancelError('Network error. Please try again.');
@@ -112,67 +120,38 @@ function EsimOrderStatusBlock() {
     }
   }, [accessToken]);
 
-  // Don't render anything if this line item has no eSIM token
-  if (!accessToken) return null;
-
   if (loading) {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Text appearance="subdued">Setting up your eSIM...</Text>
-      </BlockStack>
-    );
+    return <Text appearance="subdued">Setting up your eSIM...</Text>;
   }
 
-  if (fetchError) {
+  if (fetchError || !esim) {
     return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Banner status="critical">
-          <Text>Unable to load eSIM details. Please try again later.</Text>
-        </Banner>
-      </BlockStack>
+      <Banner status="critical">
+        <Text>Unable to load eSIM details. Please try again later.</Text>
+      </Banner>
     );
   }
-
-  if (!esim) return null;
 
   if (esim.status === 'cancelled' || cancelled) {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Badge tone="critical">eSIM Cancelled</Badge>
-      </BlockStack>
-    );
+    return <Badge tone="critical">eSIM Cancelled</Badge>;
   }
 
   if (esim.status === 'failed') {
     return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Banner status="critical">
-          <Text>eSIM setup failed. Please contact support.</Text>
-        </Banner>
-      </BlockStack>
+      <Banner status="critical">
+        <Text>eSIM setup failed. Please contact support.</Text>
+      </Banner>
     );
   }
 
   if (esim.status !== 'delivered') {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Text appearance="subdued">Your eSIM is being prepared...</Text>
-      </BlockStack>
-    );
+    return <Text appearance="subdued">Your eSIM is being prepared...</Text>;
   }
 
   // Delivered — show full eSIM card
   return (
     <BlockStack spacing="base">
       <Divider />
-      <Text size="medium" emphasis="bold">
-        Your eSIM
-      </Text>
 
       {esim.lpa && <QRCode content={esim.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
 
