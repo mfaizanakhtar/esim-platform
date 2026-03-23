@@ -738,8 +738,9 @@ export default function adminRoutes(
 
         await providerSkuCatalog.upsert({
           where: {
-            provider_productCode: {
+            provider_skuId_productCode: {
               provider: 'tgt',
+              skuId: '',
               productCode: product.productCode,
             },
           },
@@ -763,6 +764,7 @@ export default function adminRoutes(
           create: {
             provider: 'tgt',
             productCode: product.productCode,
+            skuId: '',
             productName: product.productName,
             productType: product.productType || null,
             region: null,
