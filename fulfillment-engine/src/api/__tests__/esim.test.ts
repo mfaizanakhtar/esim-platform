@@ -231,9 +231,7 @@ describe('POST /esim/delivery/:token/cancel', () => {
   });
 
   it('returns 409 if TGT eSIM profileStatus is set', async () => {
-    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
-      makeDelivery({ provider: 'tgt' }),
-    );
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(makeDelivery({ provider: 'tgt' }));
     mockQueryOrders.mockResolvedValue({
       orders: [{ orderNo: 'vendor-ref-1', profileStatus: 'ACTIVE', activatedStartTime: null }],
     });

@@ -287,11 +287,7 @@ export class ShopifyClient {
    * We read the existing value first and merge, so multiple line items in one order
    * accumulate their tokens without overwriting each other.
    */
-  async writeDeliveryMetafield(
-    orderId: string,
-    lineItemId: string,
-    token: string,
-  ): Promise<void> {
+  async writeDeliveryMetafield(orderId: string, lineItemId: string, token: string): Promise<void> {
     const accessToken = await this.getAccessToken();
 
     // Step 1: Read existing delivery_tokens metafield (if any)

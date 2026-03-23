@@ -34,10 +34,7 @@ export default function esimRoutes(
    */
   app.get(
     '/esim/delivery/:token',
-    async (
-      request: FastifyRequest<{ Params: { token: string } }>,
-      reply: FastifyReply,
-    ) => {
+    async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
       const { token } = request.params;
 
       const delivery = await prisma.esimDelivery.findUnique({
@@ -90,10 +87,7 @@ export default function esimRoutes(
    */
   app.post(
     '/esim/delivery/:token/cancel',
-    async (
-      request: FastifyRequest<{ Params: { token: string } }>,
-      reply: FastifyReply,
-    ) => {
+    async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
       const { token } = request.params;
 
       const delivery = await prisma.esimDelivery.findUnique({
@@ -211,7 +205,8 @@ export default function esimRoutes(
           logger.error({ deliveryId: delivery.id, err: error }, 'Failed to cancel Shopify order');
           return reply.code(502).send({
             error: 'shopify_cancel_failed',
-            message: 'eSIM was deactivated with vendor but Shopify order cancellation failed. Please contact support.',
+            message:
+              'eSIM was deactivated with vendor but Shopify order cancellation failed. Please contact support.',
           });
         }
       }
