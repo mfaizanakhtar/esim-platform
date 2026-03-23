@@ -46,6 +46,7 @@ TGT fulfillment modes: `hybrid` (default) → poll first, callback fallback.
 ## Key Architecture
 
 ### Order Flow
+
 1. Shopify `orders/paid` webhook → `fulfillment-engine/src/api/webhook.ts`
 2. Idempotency check (`orderId + lineItemId`) → create `EsimDelivery`
 3. Enqueue `provision-esim` job (pg-boss)
@@ -57,6 +58,7 @@ TGT fulfillment modes: `hybrid` (default) → poll first, callback fallback.
 7. `finalizeDelivery.ts` — idempotent, first-wins write — sends email + Shopify fulfillment
 
 ### Non-Negotiable Rules
+
 1. **Never provision eSIM inside the webhook handler** — always enqueue
 2. **Webhook handler must be idempotent** — check `orderId + lineItemId`
 3. **All vendor API calls in worker jobs**, not HTTP handlers
@@ -67,6 +69,7 @@ TGT fulfillment modes: `hybrid` (default) → poll first, callback fallback.
 ## Database — Key Models
 
 ### `EsimDelivery`
+
 ```prisma
 id                String   @id
 orderId           String
@@ -82,6 +85,7 @@ payloadEncrypted  String?  // AES-256 encrypted JSON: { vendorId, lpa, activatio
 ```
 
 ### `ProviderSkuMapping`
+
 Maps Shopify SKUs → vendor product codes. Admin UI in `dashboard/`.
 
 ---
@@ -97,6 +101,7 @@ Maps Shopify SKUs → vendor product codes. Admin UI in `dashboard/`.
 | GET/POST | `/admin/*` | `x-admin-key` header | Admin API |
 
 ### Usage Search (`GET /api/esim/usage?q=`)
+
 - `q` contains `@` → email search → returns `{ results: [...] }`
 - `q` matches `/^#?\d{1,8}$/` → order number search → single result
 - Otherwise → ICCID search → single result (O(1) via `iccidHash`, legacy full-scan fallback)
@@ -108,6 +113,7 @@ Maps Shopify SKUs → vendor product codes. Admin UI in `dashboard/`.
 Theme files live in `shopify/` and are auto-deployed to the live theme on every merge to `main` that touches `shopify/**` (via `.github/workflows/shopify-deploy.yml`).
 
 ### eSIM Usage Page
+
 - **Template**: `shopify/templates/page.esim-usage.liquid`
 - **JS**: `shopify/assets/esim-usage.js`
 - **CSS**: `shopify/assets/esim-usage.css`
@@ -118,6 +124,7 @@ Theme files live in `shopify/` and are auto-deployed to the live theme on every 
 - Email search renders multi-card grid with "View Details" drill-down
 
 ### Local Theme Workflow
+
 ```bash
 # Credentials in shopify/.env.shopify (gitignored)
 npm run theme:pull   # pull from live Shopify theme
@@ -126,6 +133,7 @@ npm run theme:dev    # local dev server
 ```
 
 ### Shopify App Scopes
+
 `read_orders, read_products, read_merchant_managed_fulfillment_orders, write_merchant_managed_fulfillment_orders, read_themes, write_themes`
 
 To update scopes: edit `fulfillment-engine/shopify.app.toml` → `shopify app deploy --force` → reinstall app.
@@ -135,9 +143,10 @@ To update scopes: edit `fulfillment-engine/shopify.app.toml` → `shopify app de
 ## Environment Variables
 
 ### fulfillment-engine (`fulfillment-engine/.env`)
-```
+
+```dotenv
 DATABASE_URL
-ENCRYPTION_KEY                 # 32-byte key — used for AES-256 + ICCID hashing
+ENCRYPTION_KEY                 # 32-byte key — used for AES-256 payload encryption and HMAC-SHA256 ICCID hashing
 SHOPIFY_SHOP_DOMAIN            # fluxyfi.com (custom domain)
 SHOPIFY_CLIENT_ID
 SHOPIFY_CLIENT_SECRET
@@ -150,13 +159,15 @@ ADMIN_API_KEY
 ```
 
 ### Shopify theme (`shopify/.env.shopify`)
-```
+
+```dotenv
 SHOPIFY_FLAG_STORE=fluxyfi-com.myshopify.com
 SHOPIFY_FLAG_THEME_ID=193336934730
 SHOPIFY_CLI_THEME_TOKEN=       # get via: cd fulfillment-engine && npx ts-node scripts/get-theme-token.ts
 ```
 
 ### GitHub Secrets (CI)
+
 `SHOPIFY_SHOP_DOMAIN`, `SHOPIFY_FLAG_THEME_ID`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`
 
 ---
