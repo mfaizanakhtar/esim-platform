@@ -8,7 +8,6 @@ import {
   Button,
   Banner,
   Divider,
-  Image,
   Badge,
   Modal,
   QRCode,
