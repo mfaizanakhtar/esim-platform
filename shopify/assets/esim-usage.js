@@ -11,6 +11,8 @@
   var AUTO_REFRESH = 5 * 60 * 1000;
   var refreshTimer = null;
   var currentQuery = null;
+  var requestId = 0;
+  var multiResultsCache = [];
 
   // ── DOM refs ──────────────────────────────────────────────────────────────
 
@@ -59,12 +61,14 @@
 
   // ── Init ──────────────────────────────────────────────────────────────────
 
+  // Only auto-submit ICCID from URL — email/order lookups must be typed manually
+  // to avoid PII appearing in shared links and server logs.
   var params = new URLSearchParams(window.location.search);
-  var autoQuery = params.get('iccid') || params.get('q');
+  var autoIccid = params.get('iccid');
 
-  if (autoQuery) {
-    searchInput.value = autoQuery;
-    doSearch(autoQuery);
+  if (autoIccid) {
+    searchInput.value = autoIccid;
+    doSearch(autoIccid);
   }
 
   searchForm.addEventListener('submit', function (e) {
@@ -86,6 +90,8 @@
     hideAll();
     loadingEl.style.display = 'block';
 
+    var thisRequest = ++requestId;
+
     fetch(API_BASE + '/api/esim/usage?q=' + encodeURIComponent(q))
       .then(function (res) {
         return res.json().then(function (body) {
@@ -93,6 +99,7 @@
         });
       })
       .then(function (r) {
+        if (thisRequest !== requestId) return; // discard stale response
         setLoading(false);
         hideAll();
 
@@ -120,6 +127,7 @@
         }
       })
       .catch(function () {
+        if (thisRequest !== requestId) return;
         setLoading(false);
         hideAll();
         showError('Unable to connect to server. Please check your connection.');
@@ -217,17 +225,25 @@
   // ── Multi-result (email search) ───────────────────────────────────────────
 
   function renderMulti(results) {
+    multiResultsCache = results;
     var html = '<div class="esim-multi-header"><h2>Found ' + results.length + ' eSIM' + (results.length > 1 ? 's' : '') + '</h2></div>';
     html += '<div class="esim-multi-grid">';
-    results.forEach(function (data) {
-      html += renderMiniCard(data);
+    results.forEach(function (data, index) {
+      html += renderMiniCard(data, index);
     });
     html += '</div>';
     multiResults.innerHTML = html;
+    // Bind buttons by index — avoids serialising objects into onclick attributes
+    multiResults.querySelectorAll('[data-esim-index]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = Number(btn.getAttribute('data-esim-index'));
+        viewDetail(multiResultsCache[idx]);
+      });
+    });
     multiResults.style.display = 'block';
   }
 
-  function renderMiniCard(data) {
+  function renderMiniCard(data, index) {
     var isFiroam = data.provider === 'firoam' || (!data.provider && data.usage && data.usage.usedMb != null);
     var html = '<div class="esim-card esim-mini-card">';
     html += '<div class="esim-mini-order">Order ' + esc(data.orderNum || '—') + '</div>';
@@ -245,17 +261,17 @@
       if (data.usage.dataResidual != null) html += '<div class="esim-mini-meta">Remaining: ' + esc(String(data.usage.dataResidual)) + '</div>';
     }
 
-    html += '<button class="esim-button esim-button--secondary esim-mini-btn" onclick="window._esimView(' + JSON.stringify(data) + ')">View Details</button>';
+    html += '<button type="button" class="esim-button esim-button--secondary esim-mini-btn" data-esim-index="' + index + '">View Details</button>';
     html += '</div>';
     return html;
   }
 
-  window._esimView = function (data) {
+  function viewDetail(data) {
     hideAll();
     renderSingle(data);
     currentQuery = data.iccid || currentQuery;
     refreshTimer = setTimeout(function () { doSearch(currentQuery); }, AUTO_REFRESH);
-  };
+  }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
