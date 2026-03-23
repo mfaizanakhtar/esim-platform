@@ -76,10 +76,11 @@ function EsimOrderStatusBlock() {
 
     setLoading(true);
     fetch(`${BACKEND_URL}/esim/delivery/${accessToken}`)
-      .then((r) => r.json())
-      .then((data: EsimDeliveryResponse) => {
-        setEsim(data);
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<EsimDeliveryResponse>;
       })
+      .then((data) => setEsim(data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [accessToken]);

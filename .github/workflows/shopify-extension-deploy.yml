@@ -30,4 +30,4 @@ jobs:
         working-directory: fulfillment-engine
         env:
           SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
-        run: shopify app deploy --force
+        run: shopify app deploy --allow-updates

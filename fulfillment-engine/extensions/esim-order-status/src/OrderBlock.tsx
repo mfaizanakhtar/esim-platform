@@ -10,6 +10,7 @@ import {
   Badge,
   Modal,
   QRCode,
+  CustomerAccountAction,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -33,12 +34,12 @@ interface EsimDeliveryResponse {
 const BACKEND_URL = 'https://esim-api-production-a56a.up.railway.app';
 
 // ---------------------------------------------------------------------------
-// Extension entry point — order detail page in customer account
+// Extension entry point — order action panel in customer account
 // ---------------------------------------------------------------------------
 
-export default reactExtension('customer-account.order.action.render', () => <EsimOrderBlock />);
+export default reactExtension('customer-account.order.action.render', () => <EsimOrderAction />);
 
-function EsimOrderBlock() {
+function EsimOrderAction() {
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
 
@@ -52,14 +53,19 @@ function EsimOrderBlock() {
   }
 
   const tokens = Object.values(tokenMap);
-  if (tokens.length === 0) return null;
 
   return (
-    <BlockStack spacing="base">
-      {tokens.map((token) => (
-        <EsimCardLoader key={token} accessToken={token} />
-      ))}
-    </BlockStack>
+    <CustomerAccountAction title="Your eSIM">
+      {tokens.length === 0 ? (
+        <Text appearance="subdued">No eSIM found for this order.</Text>
+      ) : (
+        <BlockStack spacing="base">
+          {tokens.map((token) => (
+            <EsimCardLoader key={token} accessToken={token} />
+          ))}
+        </BlockStack>
+      )}
+    </CustomerAccountAction>
   );
 }
 
@@ -70,6 +76,7 @@ function EsimOrderBlock() {
 function EsimCardLoader({ accessToken }: { accessToken: string }) {
   const [esim, setEsim] = useState<EsimDeliveryResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
@@ -78,9 +85,12 @@ function EsimCardLoader({ accessToken }: { accessToken: string }) {
   useEffect(() => {
     setLoading(true);
     fetch(`${BACKEND_URL}/esim/delivery/${accessToken}`)
-      .then((r) => r.json())
-      .then((data: EsimDeliveryResponse) => setEsim(data))
-      .catch(() => {})
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<EsimDeliveryResponse>;
+      })
+      .then((data) => setEsim(data))
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false));
   }, [accessToken]);
 
@@ -92,14 +102,16 @@ function EsimCardLoader({ accessToken }: { accessToken: string }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      const body = (await res.json()) as { ok?: boolean; error?: string; message?: string };
-      if (res.ok) {
+      if (!res.ok) {
+        const body = (await res.json()) as { error?: string; message?: string };
+        if (body.error === 'esim_already_activated') {
+          setCancelError('This eSIM has already been installed and cannot be cancelled.');
+        } else {
+          setCancelError(body.message ?? 'Cancel failed. Please contact support.');
+        }
+      } else {
         setCancelled(true);
         setCancelModalOpen(false);
-      } else if (body.error === 'esim_already_activated') {
-        setCancelError('This eSIM has already been installed and cannot be cancelled.');
-      } else {
-        setCancelError(body.message ?? 'Cancel failed. Please contact support.');
       }
     } catch {
       setCancelError('Network error. Please try again.');
@@ -109,52 +121,37 @@ function EsimCardLoader({ accessToken }: { accessToken: string }) {
   }, [accessToken]);
 
   if (loading) {
+    return <Text appearance="subdued">Setting up your eSIM...</Text>;
+  }
+
+  if (fetchError || !esim) {
     return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Text appearance="subdued">Setting up your eSIM...</Text>
-      </BlockStack>
+      <Banner status="critical">
+        <Text>Unable to load eSIM details. Please try again later.</Text>
+      </Banner>
     );
   }
 
-  if (!esim) return null;
-
   if (esim.status === 'cancelled' || cancelled) {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Badge tone="critical">eSIM Cancelled</Badge>
-      </BlockStack>
-    );
+    return <Badge tone="critical">eSIM Cancelled</Badge>;
   }
 
   if (esim.status === 'failed') {
     return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Banner status="critical">
-          <Text>eSIM setup failed. Please contact support.</Text>
-        </Banner>
-      </BlockStack>
+      <Banner status="critical">
+        <Text>eSIM setup failed. Please contact support.</Text>
+      </Banner>
     );
   }
 
   if (esim.status !== 'delivered') {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Text appearance="subdued">Your eSIM is being prepared...</Text>
-      </BlockStack>
-    );
+    return <Text appearance="subdued">Your eSIM is being prepared...</Text>;
   }
 
   // Delivered — show full eSIM card
   return (
     <BlockStack spacing="base">
       <Divider />
-      <Text size="medium" emphasis="bold">
-        Your eSIM
-      </Text>
 
       {esim.lpa && <QRCode content={esim.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
 
