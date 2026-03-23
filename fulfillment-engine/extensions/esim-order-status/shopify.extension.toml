@@ -1,6 +1,7 @@
 api_version = "2025-07"
 
 [[extensions]]
+uid = "587c72a4-6849-c6c2-4158-af8ec1e3669be06591a1"
 type = "ui_extension"
 name = "eSIM Order Status"
 handle = "esim-order-status"
