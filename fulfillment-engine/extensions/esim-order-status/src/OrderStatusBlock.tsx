@@ -55,7 +55,14 @@ function EsimOrderStatusBlock() {
   // Value is a JSON object: { "<lineItemId>": "<accessToken>", ... }
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
-  const tokenMap: Record<string, string> = tokensRaw ? (JSON.parse(tokensRaw) as Record<string, string>) : {};
+  let tokenMap: Record<string, string> = {};
+  if (tokensRaw) {
+    try {
+      tokenMap = JSON.parse(tokensRaw) as Record<string, string>;
+    } catch {
+      // Malformed metafield value; treat as empty
+    }
+  }
   const accessToken = lineItemId ? tokenMap[lineItemId] : undefined;
 
   const [esim, setEsim] = useState<EsimDeliveryResponse | null>(null);
