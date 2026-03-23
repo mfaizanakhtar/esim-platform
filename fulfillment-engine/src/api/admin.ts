@@ -37,6 +37,8 @@ export default function adminRoutes(
     id: string;
     provider: string;
     productCode: string;
+    skuId: string;
+    skuName: string | null;
     productName: string;
     region: string | null;
     dataAmount: string | null;
@@ -551,6 +553,8 @@ export default function adminRoutes(
         { productCode: { contains: query.search, mode: 'insensitive' } },
         { productName: { contains: query.search, mode: 'insensitive' } },
         { region: { contains: query.search, mode: 'insensitive' } },
+        { skuId: { contains: query.search, mode: 'insensitive' } },
+        { skuName: { contains: query.search, mode: 'insensitive' } },
       ];
     }
 
@@ -623,6 +627,8 @@ export default function adminRoutes(
             continue;
           }
 
+          const skuId = String(sku.skuid);
+          const skuName = pkgData.displayEn || sku.display || null;
           const dataAmount = `${pkg.flows}${pkg.unit}`;
           const validity = `${pkg.days} days`;
           const productName = pkgData.displayEn
@@ -643,12 +649,14 @@ export default function adminRoutes(
 
           await providerSkuCatalog.upsert({
             where: {
-              provider_productCode: {
+              provider_skuId_productCode: {
                 provider: 'firoam',
+                skuId,
                 productCode: pkg.apiCode,
               },
             },
             update: {
+              skuName,
               productName,
               productType: null,
               region: sku.countryCode || null,
@@ -666,6 +674,8 @@ export default function adminRoutes(
             create: {
               provider: 'firoam',
               productCode: pkg.apiCode,
+              skuId,
+              skuName,
               productName,
               productType: null,
               region: sku.countryCode || null,

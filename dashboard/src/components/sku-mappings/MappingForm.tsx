@@ -28,10 +28,12 @@ interface MappingFormProps {
   isPending: boolean;
 }
 
-// Don't hard-code '$' — only show the currency code when it's known
+// Don't hard-code '$' — only show the currency code when it's known.
+// Prefix with skuName so entries with the same productCode across different SKUs are distinguishable.
 function catalogLabel(item: CatalogItem): string {
+  const skuPrefix = item.skuName ? `[${item.skuName}] ` : '';
   const parts = [item.dataAmount, item.validity].filter(Boolean).join(', ');
-  const base = item.productName + (parts ? ` (${parts})` : '');
+  const base = skuPrefix + item.productName + (parts ? ` (${parts})` : '');
   if (item.netPrice) {
     return `${base} — ${item.netPrice}${item.currency ? ` ${item.currency}` : ''}`;
   }

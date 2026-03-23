@@ -51,20 +51,19 @@ export class FiRoamProvider implements VendorProvider {
           providerSkuCatalog: {
             findUniqueOrThrow: (args: {
               where: { id: string };
-            }) => Promise<{ productCode: string; rawPayload: unknown }>;
+            }) => Promise<{ productCode: string; skuId: string; rawPayload: unknown }>;
           };
         }
       ).providerSkuCatalog.findUniqueOrThrow({ where: { id: config.providerCatalogId } });
 
-      const raw = entry.rawPayload as { skuId?: unknown; priceid?: unknown };
-      skuId = String(raw.skuId ?? '');
+      // skuId is now a top-level column — no rawPayload parsing needed
+      skuId = entry.skuId;
       apiCode = entry.productCode; // may contain '?' for daypass
-      storedPriceId = raw.priceid != null ? String(raw.priceid) : null;
+      const raw = entry.rawPayload as { priceid?: unknown } | null;
+      storedPriceId = raw?.priceid != null ? String(raw.priceid) : null;
 
       if (!skuId) {
-        throw new MappingError(
-          `Catalog entry ${config.providerCatalogId} is missing skuId in rawPayload`,
-        );
+        throw new MappingError(`Catalog entry ${config.providerCatalogId} is missing skuId`);
       }
     } else {
       // Legacy path: parse colon-separated providerSku
