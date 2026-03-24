@@ -11,7 +11,8 @@ import {
   Badge,
   QRCode,
 } from '@shopify/ui-extensions-react/customer-account';
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
+import { CancelSection } from './CancelEsim';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -25,12 +26,6 @@ interface DeliveryMetafieldEntry {
   iccid?: string;
   usageUrl?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Config
-// ---------------------------------------------------------------------------
-
-const BACKEND_URL = 'https://esim-api-production-a56a.up.railway.app';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -62,35 +57,7 @@ function EsimOrderStatusBlock() {
   }
   const entry = lineItemId ? tokenMap[lineItemId] : undefined;
 
-  const [confirmingCancel, setConfirmingCancel] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
-
-  const handleCancel = useCallback(async () => {
-    if (!entry?.accessToken) return;
-    setCancelling(true);
-    setCancelError(null);
-    try {
-      const res = await fetch(`${BACKEND_URL}/esim/delivery/${entry.accessToken}/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const body = (await res.json()) as { ok?: boolean; error?: string; message?: string };
-      if (res.ok) {
-        setCancelled(true);
-        setConfirmingCancel(false);
-      } else if (body.error === 'esim_already_activated') {
-        setCancelError('This eSIM has already been installed and cannot be cancelled.');
-      } else {
-        setCancelError(body.message ?? 'Cancel failed. Please contact support.');
-      }
-    } catch {
-      setCancelError('Network error. Please try again.');
-    } finally {
-      setCancelling(false);
-    }
-  }, [entry?.accessToken]);
 
   // Don't render anything if this line item has no eSIM entry
   if (!entry) return null;
@@ -170,33 +137,11 @@ function EsimOrderStatusBlock() {
         )}
       </InlineStack>
 
-      {entry.accessToken && !cancelled && !confirmingCancel && (
-        <Button appearance="critical" onPress={() => setConfirmingCancel(true)}>
-          Cancel eSIM
-        </Button>
-      )}
-
-      {confirmingCancel && (
-        <BlockStack spacing="base">
-          <Text>
-            Are you sure you want to cancel this eSIM? This will deactivate the eSIM and refund
-            your order. This action cannot be undone if the eSIM has already been installed.
-          </Text>
-          {cancelError && (
-            <Banner status="critical">
-              <Text>{cancelError}</Text>
-            </Banner>
-          )}
-          <InlineStack spacing="base">
-            <Button appearance="critical" onPress={handleCancel} loading={cancelling}>
-              Yes, Cancel eSIM
-            </Button>
-            <Button appearance="secondary" onPress={() => { setConfirmingCancel(false); setCancelError(null); }}>
-              Keep eSIM
-            </Button>
-          </InlineStack>
-        </BlockStack>
-      )}
+      <CancelSection
+        accessToken={entry.accessToken}
+        cancelled={cancelled}
+        onCancelled={() => setCancelled(true)}
+      />
     </BlockStack>
   );
 }
