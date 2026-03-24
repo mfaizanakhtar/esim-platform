@@ -40,6 +40,10 @@ const ShopifyOrderPaidSchema = z.object({
 
 type ShopifyOrderPaidWebhook = z.infer<typeof ShopifyOrderPaidSchema>;
 
+const ShopifyOrderCancelledSchema = z.object({
+  id: z.coerce.number(),
+});
+
 export default function webhookRoutes(
   app: FastifyInstance,
   _opts: FastifyPluginOptions,
@@ -201,6 +205,78 @@ export default function webhookRoutes(
       app.log.error({ err }, 'Error processing webhook');
 
       // Still return 200 to avoid retries - log error for investigation
+      return reply.code(200).send({ received: true, error: 'Processing error' });
+    }
+  });
+
+  /**
+   * POST /webhook/orders/cancelled
+   * Handle Shopify order cancellation — cancel vendor eSIM for each delivered line item.
+   */
+  app.post('/orders/cancelled', async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const rawBody = (request as unknown as { rawBody?: string }).rawBody;
+      const hmacHeader = request.headers['x-shopify-hmac-sha256'] as string;
+      const topic = request.headers['x-shopify-topic'] as string | undefined;
+
+      if (!rawBody) {
+        app.log.error('cancelWebhook: No raw body');
+        return reply.code(400).send({ error: 'Missing request body' });
+      }
+
+      if (!hmacHeader) {
+        return reply.code(401).send({ error: 'Missing HMAC signature' });
+      }
+
+      const webhookSecret = process.env.SHOPIFY_WEBHOOK_SECRET!;
+      if (!webhookSecret) {
+        return reply.code(500).send({ error: 'Server misconfiguration' });
+      }
+
+      if (!verifyShopifyWebhook(rawBody, hmacHeader, webhookSecret)) {
+        return reply.code(401).send({ error: 'Invalid signature' });
+      }
+
+      if (topic && topic !== 'orders/cancelled') {
+        app.log.info({ topic }, 'cancelWebhook: Ignoring unsupported topic');
+        return reply.code(200).send({ received: true, ignored: true });
+      }
+
+      const parsed = ShopifyOrderCancelledSchema.safeParse(JSON.parse(rawBody));
+      if (!parsed.success) {
+        app.log.error({ issues: parsed.error.issues }, 'cancelWebhook: Invalid payload');
+        return reply.code(400).send({ error: 'Invalid webhook payload' });
+      }
+
+      const orderId = parsed.data.id.toString();
+      app.log.info({ orderId }, 'cancelWebhook: Received orders/cancelled');
+
+      // Find all non-terminal deliveries for this order
+      const deliveries = await prisma.esimDelivery.findMany({
+        where: {
+          orderId,
+          status: { notIn: ['cancelled', 'failed'] },
+        },
+        select: { id: true },
+      });
+
+      if (deliveries.length === 0) {
+        app.log.info({ orderId }, 'cancelWebhook: No active deliveries, skipping');
+        return reply.code(200).send({ received: true });
+      }
+
+      const queue = getJobQueue();
+      for (const delivery of deliveries) {
+        await queue.send('cancel-esim', { deliveryId: delivery.id, orderId }, { retryLimit: 2 });
+        app.log.info(
+          { deliveryId: delivery.id, orderId },
+          'cancelWebhook: Enqueued cancel-esim job',
+        );
+      }
+
+      return reply.code(200).send({ received: true });
+    } catch (error) {
+      app.log.error({ err: error }, 'cancelWebhook: Unexpected error');
       return reply.code(200).send({ received: true, error: 'Processing error' });
     }
   });
