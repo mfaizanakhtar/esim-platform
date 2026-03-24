@@ -1,4 +1,4 @@
-name: Deploy Shopify Extension
+name: Build Shopify Extension
 
 on:
   push:
@@ -8,8 +8,8 @@ on:
       - 'fulfillment-engine/shopify.app.toml'
 
 jobs:
-  deploy-extension:
-    name: Deploy eSIM Order Status extension
+  build-extension:
+    name: Build eSIM Order Status extension
     runs-on: ubuntu-latest
 
     steps:
