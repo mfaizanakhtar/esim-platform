@@ -26,6 +26,7 @@ export function useCancelEsim(accessToken: string | undefined, onSuccess: () => 
       const res = await fetch(`${BACKEND_URL}/esim/delivery/${accessToken}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: '{}',
       });
       const body = (await res.json()) as { ok?: boolean; error?: string; message?: string };
       if (res.ok) {
