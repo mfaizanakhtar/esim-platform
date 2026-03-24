@@ -58,7 +58,14 @@ export class TgtProvider implements VendorProvider {
     // ── Top-up / Renewal path ─────────────────────────────────────────────
     if (ctx.topupIccid) {
       const { orders } = await this.client.queryOrders({ iccid: ctx.topupIccid });
-      const currentOrder = orders[0];
+      // Sort descending by createdTime so the most-recent order is always first,
+      // regardless of the API's default ordering.
+      const sorted = [...orders].sort((a, b) => {
+        const ta = a.createdTime ?? '';
+        const tb = b.createdTime ?? '';
+        return tb.localeCompare(ta);
+      });
+      const currentOrder = sorted[0];
       if (!currentOrder) {
         throw new VendorError(`TGT: no existing order found for ICCID ${ctx.topupIccid}`);
       }
