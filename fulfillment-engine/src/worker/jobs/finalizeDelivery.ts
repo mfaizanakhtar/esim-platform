@@ -3,9 +3,9 @@ import prisma from '~/db/prisma';
 import { decrypt, encrypt, hashIccid } from '~/utils/crypto';
 import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '~/services/email';
 import { getShopifyClient } from '~/shopify/client';
+import { logger } from '~/utils/logger';
 
 const SHOPIFY_CUSTOM_DOMAIN = process.env.SHOPIFY_CUSTOM_DOMAIN ?? 'fluxyfi.com';
-import { logger } from '~/utils/logger';
 
 export interface DeliveryMetadata {
   productName?: string;

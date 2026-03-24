@@ -40,8 +40,8 @@ export async function handleProvision(data: ProvisionJobData) {
   await prisma.esimDelivery.update({ where: { id: deliveryId }, data: { status: 'provisioning' } });
 
   if (delivery.orderId) {
-    const shopify = getShopifyClient();
     try {
+      const shopify = getShopifyClient();
       await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, {
         status: 'provisioning',
       });
@@ -190,8 +190,8 @@ export async function handleProvision(data: ProvisionJobData) {
       },
     });
     if (delivery.orderId) {
-      const shopify = getShopifyClient();
       try {
+        const shopify = getShopifyClient();
         await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, {
           status: 'failed',
         });
