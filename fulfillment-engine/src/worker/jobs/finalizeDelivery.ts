@@ -47,8 +47,16 @@ export async function finalizeDelivery(
     if (earlyDelivery?.topupIccid) {
       try {
         resolvedIccid = decrypt(earlyDelivery.topupIccid);
-      } catch {
-        resolvedIccid = '';
+      } catch (error) {
+        logger.error(
+          { deliveryId: args.deliveryId, err: error },
+          'Failed to resolve stored top-up ICCID during finalize',
+        );
+        throw error;
+      }
+      if (!resolvedIccid) {
+        logger.error({ deliveryId: args.deliveryId }, 'Resolved top-up ICCID is empty');
+        throw new Error('topup_iccid_missing');
       }
     }
   }
@@ -99,10 +107,10 @@ export async function finalizeDelivery(
     return { ok: true };
   }
 
-  const decryptedTopupIccid = delivery.topupIccid ? decrypt(delivery.topupIccid) : null;
+  const isTopup = Boolean(delivery.topupIccid);
 
   if (delivery.customerEmail) {
-    const emailResult = decryptedTopupIccid
+    const emailResult = isTopup
       ? await sendTopupEmail({
           to: delivery.customerEmail,
           orderName: delivery.orderName,
@@ -149,7 +157,7 @@ export async function finalizeDelivery(
     }
 
     try {
-      const metafieldEntry = decryptedTopupIccid
+      const metafieldEntry = isTopup
         ? { status: 'delivered' as const, accessToken, iccid: resolvedIccid, isTopup: true }
         : {
             status: 'delivered' as const,

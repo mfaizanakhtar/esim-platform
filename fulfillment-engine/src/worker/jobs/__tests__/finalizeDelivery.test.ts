@@ -327,6 +327,42 @@ describe('finalizeDelivery', () => {
     );
   });
 
+  it('throws when pre-read decrypt fails for topupIccid', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValueOnce({
+      topupIccid: 'enc:bad',
+    } as never);
+    vi.mocked(decrypt).mockImplementationOnce(() => {
+      throw new Error('corrupt key');
+    });
+
+    await expect(
+      finalizeDelivery({
+        deliveryId: 'd-err',
+        vendorOrderId: 'X',
+        lpa: '',
+        activationCode: '',
+        iccid: '',
+      }),
+    ).rejects.toThrow('corrupt key');
+  });
+
+  it('throws when decrypted topupIccid is empty string', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValueOnce({
+      topupIccid: 'enc:empty',
+    } as never);
+    vi.mocked(decrypt).mockReturnValueOnce('');
+
+    await expect(
+      finalizeDelivery({
+        deliveryId: 'd-empty',
+        vendorOrderId: 'X',
+        lpa: '',
+        activationCode: '',
+        iccid: '',
+      }),
+    ).rejects.toThrow('topup_iccid_missing');
+  });
+
   it('resolves ICCID from topupIccid pre-read when args.iccid is empty', async () => {
     // Simulate a renewal callback that arrives without an ICCID in args
     // The delivery has an encrypted topupIccid that should be used as fallback
