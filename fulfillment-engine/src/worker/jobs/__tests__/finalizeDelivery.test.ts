@@ -278,6 +278,9 @@ describe('finalizeDelivery', () => {
   });
 
   it('sends topupEmail and writes isTopup metafield for top-up delivery', async () => {
+    // topupIccid is stored encrypted in DB; decrypt should return the plaintext ICCID
+    vi.mocked(decrypt).mockImplementationOnce(() => '89001234567890');
+
     vi.mocked(prisma.esimDelivery.updateMany).mockResolvedValue({ count: 1 });
     vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue({
       id: 'd-topup',
@@ -290,7 +293,7 @@ describe('finalizeDelivery', () => {
       vendorReferenceId: 'TGT-001',
       provider: 'tgt',
       iccidHash: null,
-      topupIccid: '89001234567890',
+      topupIccid: 'enc:89001234567890',
       sku: 'ESIM-US-5GB',
       payloadEncrypted: null,
       accessToken: 'token-topup',

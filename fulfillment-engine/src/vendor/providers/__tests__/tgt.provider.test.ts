@@ -281,7 +281,7 @@ describe('TgtProvider', () => {
       expect(createTopup).toHaveBeenCalledWith(
         expect.objectContaining({ orderNo: 'TGT-C4-001', purchaseType: 1 }),
       );
-      expect(result.vendorOrderId).toBe('TGT-C4-001');
+      expect(result.vendorOrderId).toBe('TOP-001');
       expect(result.iccid).toBe('89001234567890');
       expect(result.lpa).toBe('');
       expect(result.pending).toBeUndefined();

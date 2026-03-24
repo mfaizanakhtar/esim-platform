@@ -4,6 +4,7 @@ import { getProvider } from '~/vendor/registry';
 import type { EsimProvisionResult } from '~/vendor/types';
 import { logger } from '~/utils/logger';
 import { JobDataError, MappingError, VendorError } from '~/utils/errors';
+import { decrypt } from '~/utils/crypto';
 import {
   getTgtFulfillmentMode,
   getTgtPollIntervalSeconds,
@@ -103,7 +104,7 @@ export async function handleProvision(data: ProvisionJobData) {
           customerEmail: delivery.customerEmail ?? '',
           quantity: 1,
           deliveryId,
-          topupIccid: delivery.topupIccid ?? undefined,
+          topupIccid: delivery.topupIccid ? decrypt(delivery.topupIccid) : undefined,
         },
       );
     }

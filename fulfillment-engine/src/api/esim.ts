@@ -294,7 +294,8 @@ export default function esimRoutes(
       reply: FastifyReply,
     ) => {
       const { token } = request.params;
-      const { mappingId } = request.body as { mappingId?: string };
+      const body = request.body as Record<string, unknown>;
+      const mappingId = typeof body?.mappingId === 'string' ? body.mappingId : undefined;
 
       if (!mappingId) return reply.code(400).send({ error: 'mappingId required' });
 
@@ -331,10 +332,30 @@ export default function esimRoutes(
         return reply.code(400).send({ error: 'provider_mismatch' });
       }
 
+      // Guard: verify the mapping belongs to the same region as the original delivery
+      if (delivery.sku) {
+        const sourceMapping = await prisma.providerSkuMapping.findUnique({
+          where: { shopifySku: delivery.sku },
+        });
+        if (sourceMapping?.region && mapping.region !== sourceMapping.region) {
+          return reply.code(400).send({ error: 'region_mismatch' });
+        }
+      }
+
       const shopify = getShopifyClient();
 
       // Look up the Shopify variant GID by SKU
-      const variantGid = await shopify.getVariantGidBySku(mapping.shopifySku);
+      let variantGid: string | null;
+      try {
+        variantGid = await shopify.getVariantGidBySku(mapping.shopifySku);
+      } catch (error) {
+        logger.error(
+          { deliveryId: delivery.id, shopifySku: mapping.shopifySku, err: error },
+          'Failed to look up Shopify variant for top-up',
+        );
+        return reply.code(502).send({ error: 'shopify_unavailable' });
+      }
+
       if (!variantGid) {
         logger.error(
           { shopifySku: mapping.shopifySku },
@@ -344,7 +365,16 @@ export default function esimRoutes(
       }
 
       const customerEmail = delivery.customerEmail ?? '';
-      const { checkoutUrl } = await shopify.createDraftOrder(variantGid, iccid, customerEmail);
+      let checkoutUrl: string;
+      try {
+        ({ checkoutUrl } = await shopify.createDraftOrder(variantGid, iccid, customerEmail));
+      } catch (error) {
+        logger.error(
+          { deliveryId: delivery.id, err: error },
+          'Failed to create Shopify draft order for top-up',
+        );
+        return reply.code(502).send({ error: 'shopify_unavailable' });
+      }
 
       return reply.send({ checkoutUrl });
     },

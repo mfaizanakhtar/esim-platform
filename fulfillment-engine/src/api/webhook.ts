@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import prisma from '~/db/prisma';
+import { encrypt } from '~/utils/crypto';
 import { verifyShopifyWebhook } from '~/shopify/webhooks';
 import { getJobQueue } from '~/queue/jobQueue';
 
@@ -164,9 +165,9 @@ export default function webhookRoutes(
           continue;
         }
 
-        // Detect top-up: line item carries a hidden _iccid property
+        // Detect top-up: line item carries a hidden _iccid property (stored encrypted)
         const iccidProp = lineItem.properties?.find((p) => p.name === '_iccid');
-        const topupIccid = iccidProp?.value ?? null;
+        const topupIccid = iccidProp?.value ? encrypt(iccidProp.value) : null;
 
         // Create delivery record
         const delivery = await prisma.esimDelivery.create({

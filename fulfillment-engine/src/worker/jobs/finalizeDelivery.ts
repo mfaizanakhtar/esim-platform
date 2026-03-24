@@ -66,7 +66,7 @@ export async function finalizeDelivery(
       accessToken,
       status: 'delivered',
       lastError: null,
-      iccidHash: hashIccid(args.iccid),
+      iccidHash: hashIccid(args.iccid || ''),
       ...(args.provider ? { provider: args.provider } : {}),
     },
   });
@@ -81,9 +81,11 @@ export async function finalizeDelivery(
     return { ok: true };
   }
 
+  const decryptedTopupIccid = delivery.topupIccid ? decrypt(delivery.topupIccid) : null;
+
   if (delivery.customerEmail) {
-    const iccidForEmail = args.iccid || delivery.topupIccid || '';
-    const emailResult = delivery.topupIccid
+    const iccidForEmail = args.iccid || decryptedTopupIccid || '';
+    const emailResult = decryptedTopupIccid
       ? await sendTopupEmail({
           to: delivery.customerEmail,
           orderName: delivery.orderName,
@@ -130,8 +132,8 @@ export async function finalizeDelivery(
     }
 
     try {
-      const iccidForMetafield = args.iccid || delivery.topupIccid || '';
-      const metafieldEntry = delivery.topupIccid
+      const iccidForMetafield = args.iccid || decryptedTopupIccid || '';
+      const metafieldEntry = decryptedTopupIccid
         ? { status: 'delivered' as const, accessToken, iccid: iccidForMetafield, isTopup: true }
         : {
             status: 'delivered' as const,
