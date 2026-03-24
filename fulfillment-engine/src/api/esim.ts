@@ -333,13 +333,15 @@ export default function esimRoutes(
       }
 
       // Guard: verify the mapping belongs to the same region as the original delivery
-      if (delivery.sku) {
-        const sourceMapping = await prisma.providerSkuMapping.findUnique({
-          where: { shopifySku: delivery.sku },
-        });
-        if (sourceMapping?.region && mapping.region !== sourceMapping.region) {
-          return reply.code(400).send({ error: 'region_mismatch' });
-        }
+      if (!delivery.sku) {
+        return reply.code(400).send({ error: 'topup_source_mapping_missing' });
+      }
+
+      const sourceMapping = await prisma.providerSkuMapping.findUnique({
+        where: { shopifySku: delivery.sku },
+      });
+      if (sourceMapping?.region && mapping.region !== sourceMapping.region) {
+        return reply.code(400).send({ error: 'region_mismatch' });
       }
 
       const shopify = getShopifyClient();

@@ -326,4 +326,49 @@ describe('finalizeDelivery', () => {
       expect.objectContaining({ isTopup: true }),
     );
   });
+
+  it('resolves ICCID from topupIccid pre-read when args.iccid is empty', async () => {
+    // Simulate a renewal callback that arrives without an ICCID in args
+    // The delivery has an encrypted topupIccid that should be used as fallback
+    vi.mocked(decrypt).mockReturnValueOnce('89001234567890'); // pre-read decrypt call
+
+    vi.mocked(prisma.esimDelivery.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.esimDelivery.findUnique)
+      .mockResolvedValueOnce({ topupIccid: 'enc:89001234567890' } as never) // pre-read
+      .mockResolvedValueOnce({
+        id: 'd-renewal',
+        shop: 'test.myshopify.com',
+        orderId: 'order-renewal',
+        orderName: '#2002',
+        lineItemId: 'line-renewal',
+        variantId: 'var-renewal',
+        customerEmail: null,
+        vendorReferenceId: 'RENEW-001',
+        provider: 'tgt',
+        iccidHash: null,
+        topupIccid: 'enc:89001234567890',
+        sku: 'ESIM-US-5GB',
+        payloadEncrypted: null,
+        accessToken: 'token-renewal',
+        status: 'polling',
+        lastError: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never); // post-write read
+
+    const result = await finalizeDelivery({
+      deliveryId: 'd-renewal',
+      vendorOrderId: 'RENEW-001',
+      lpa: '',
+      activationCode: '',
+      iccid: '', // empty — should fall back to topupIccid
+    });
+
+    expect(result.ok).toBe(true);
+    expect(vi.mocked(prisma.esimDelivery.updateMany)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ iccidHash: 'hashed-iccid' }),
+      }),
+    );
+  });
 });

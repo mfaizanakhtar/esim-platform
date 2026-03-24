@@ -35,10 +35,28 @@ interface FinalizeArgs {
 export async function finalizeDelivery(
   args: FinalizeArgs,
 ): Promise<{ ok: true; alreadyDone?: boolean }> {
+  // Resolve the canonical ICCID: prefer args.iccid (from vendor), fall back to
+  // the delivery's stored topupIccid (decrypted) so payloadEncrypted, iccidHash,
+  // email, and metafield all use the same value.
+  let resolvedIccid = args.iccid;
+  if (!resolvedIccid) {
+    const earlyDelivery = await prisma.esimDelivery.findUnique({
+      where: { id: args.deliveryId },
+      select: { topupIccid: true },
+    });
+    if (earlyDelivery?.topupIccid) {
+      try {
+        resolvedIccid = decrypt(earlyDelivery.topupIccid);
+      } catch {
+        resolvedIccid = '';
+      }
+    }
+  }
+
   const payload: EsimPayload = {
     lpa: args.lpa,
     activationCode: args.activationCode,
-    iccid: args.iccid,
+    iccid: resolvedIccid,
   };
 
   const payloadEncrypted = encrypt(
@@ -46,7 +64,7 @@ export async function finalizeDelivery(
       vendorId: args.vendorOrderId,
       lpa: args.lpa,
       activationCode: args.activationCode,
-      iccid: args.iccid,
+      iccid: resolvedIccid,
     }),
   );
 
@@ -66,7 +84,7 @@ export async function finalizeDelivery(
       accessToken,
       status: 'delivered',
       lastError: null,
-      iccidHash: hashIccid(args.iccid || ''),
+      iccidHash: hashIccid(resolvedIccid),
       ...(args.provider ? { provider: args.provider } : {}),
     },
   });
@@ -84,12 +102,11 @@ export async function finalizeDelivery(
   const decryptedTopupIccid = delivery.topupIccid ? decrypt(delivery.topupIccid) : null;
 
   if (delivery.customerEmail) {
-    const iccidForEmail = args.iccid || decryptedTopupIccid || '';
     const emailResult = decryptedTopupIccid
       ? await sendTopupEmail({
           to: delivery.customerEmail,
           orderName: delivery.orderName,
-          iccid: iccidForEmail,
+          iccid: resolvedIccid,
           productName: args.metadata?.productName,
           dataAmount: args.metadata?.dataAmount,
           validity: args.metadata?.validity,
@@ -132,16 +149,15 @@ export async function finalizeDelivery(
     }
 
     try {
-      const iccidForMetafield = args.iccid || decryptedTopupIccid || '';
       const metafieldEntry = decryptedTopupIccid
-        ? { status: 'delivered' as const, accessToken, iccid: iccidForMetafield, isTopup: true }
+        ? { status: 'delivered' as const, accessToken, iccid: resolvedIccid, isTopup: true }
         : {
             status: 'delivered' as const,
             accessToken,
             lpa: args.lpa,
             activationCode: args.activationCode,
-            iccid: iccidForMetafield,
-            usageUrl: `https://${SHOPIFY_CUSTOM_DOMAIN}/pages/my-esim-usage?iccid=${iccidForMetafield}`,
+            iccid: resolvedIccid,
+            usageUrl: `https://${SHOPIFY_CUSTOM_DOMAIN}/pages/my-esim-usage?iccid=${resolvedIccid}`,
           };
       await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, metafieldEntry);
     } catch (error) {
