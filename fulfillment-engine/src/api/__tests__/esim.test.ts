@@ -38,9 +38,12 @@ vi.mock('~/vendor/tgtClient', () => ({
   },
 }));
 
+const mockWriteDeliveryMetafield = vi.fn();
+
 vi.mock('~/shopify/client', () => ({
   getShopifyClient: () => ({
     cancelShopifyOrder: mockCancelShopifyOrder,
+    writeDeliveryMetafield: mockWriteDeliveryMetafield,
   }),
 }));
 

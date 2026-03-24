@@ -85,6 +85,12 @@ vi.mock('~/worker/jobs/finalizeDelivery', () => ({
   finalizeDelivery: vi.fn(async () => ({ ok: true })),
 }));
 
+vi.mock('~/shopify/client', () => ({
+  getShopifyClient: vi.fn(() => ({
+    writeDeliveryMetafield: vi.fn(async () => undefined),
+  })),
+}));
+
 // NOW import after mocks are set up
 import prisma from '~/db/prisma';
 import { finalizeDelivery } from '~/worker/jobs/finalizeDelivery';

@@ -7,6 +7,15 @@ interface ShopifyConfig {
   clientSecret: string;
 }
 
+export interface DeliveryMetafieldEntry {
+  status: 'provisioning' | 'delivered' | 'cancelled' | 'failed';
+  accessToken?: string;
+  lpa?: string;
+  activationCode?: string;
+  iccid?: string;
+  usageUrl?: string;
+}
+
 interface TokenResponse {
   access_token: string;
   scope: string;
@@ -287,7 +296,11 @@ export class ShopifyClient {
    * We read the existing value first and merge, so multiple line items in one order
    * accumulate their tokens without overwriting each other.
    */
-  async writeDeliveryMetafield(orderId: string, lineItemId: string, token: string): Promise<void> {
+  async writeDeliveryMetafield(
+    orderId: string,
+    lineItemId: string,
+    entry: DeliveryMetafieldEntry,
+  ): Promise<void> {
     const accessToken = await this.getAccessToken();
 
     // Step 1: Read existing delivery_tokens metafield (if any)
@@ -320,17 +333,17 @@ export class ShopifyClient {
       },
     );
 
-    // Step 2: Merge new token into existing map
+    // Step 2: Merge new entry into existing map
     const existing = queryResponse.data?.data?.order?.metafield?.value;
-    let tokenMap: Record<string, string> = {};
+    let tokenMap: Record<string, DeliveryMetafieldEntry> = {};
     if (existing) {
       try {
-        tokenMap = JSON.parse(existing) as Record<string, string>;
+        tokenMap = JSON.parse(existing) as Record<string, DeliveryMetafieldEntry>;
       } catch {
         // ignore malformed existing value
       }
     }
-    tokenMap[lineItemId] = token;
+    tokenMap[lineItemId] = entry;
 
     // Step 3: Write merged map back
     const mutation = `

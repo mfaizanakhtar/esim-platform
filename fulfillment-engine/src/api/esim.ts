@@ -218,6 +218,20 @@ export default function esimRoutes(
         data: { status: 'cancelled' },
       });
 
+      if (delivery.orderId) {
+        try {
+          const shopify = getShopifyClient();
+          await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, {
+            status: 'cancelled',
+          });
+        } catch (error) {
+          logger.warn(
+            { deliveryId: delivery.id, err: error },
+            'Failed to update cancelled metafield (non-fatal)',
+          );
+        }
+      }
+
       return reply.send({ ok: true });
     },
   );
