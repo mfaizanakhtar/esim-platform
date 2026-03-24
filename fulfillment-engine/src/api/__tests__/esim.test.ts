@@ -495,6 +495,42 @@ describe('POST /esim/topup-checkout/:token', () => {
     expect(res.json()).toMatchObject({ error: 'topup_source_mapping_missing' });
   });
 
+  it('returns 400 when source mapping has no region', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ provider: 'firoam', sku: 'ESIM-US-5GB' }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique)
+      .mockResolvedValueOnce(makeMapping())
+      .mockResolvedValueOnce(makeMapping({ region: null }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'topup_source_mapping_missing' });
+  });
+
+  it('returns 400 when regions do not match', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ provider: 'firoam', sku: 'ESIM-EU-5GB' }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique)
+      .mockResolvedValueOnce(makeMapping({ region: 'Americas' }))
+      .mockResolvedValueOnce(makeMapping({ region: 'Europe' }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'region_mismatch' });
+  });
+
   it('returns 404 when Shopify variant not found', async () => {
     vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
       makeDelivery({ provider: 'firoam', sku: 'ESIM-US-5GB' }),

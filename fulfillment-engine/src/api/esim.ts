@@ -340,7 +340,10 @@ export default function esimRoutes(
       const sourceMapping = await prisma.providerSkuMapping.findUnique({
         where: { shopifySku: delivery.sku },
       });
-      if (sourceMapping?.region && mapping.region !== sourceMapping.region) {
+      if (!sourceMapping?.region) {
+        return reply.code(400).send({ error: 'topup_source_mapping_missing' });
+      }
+      if (mapping.region !== sourceMapping.region) {
         return reply.code(400).send({ error: 'region_mismatch' });
       }
 
