@@ -1,7 +1,12 @@
 import { randomUUID } from 'crypto';
 import prisma from '~/db/prisma';
 import { decrypt, encrypt, hashIccid } from '~/utils/crypto';
-import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '~/services/email';
+import {
+  sendDeliveryEmail,
+  sendTopupEmail,
+  recordDeliveryAttempt,
+  type EsimPayload,
+} from '~/services/email';
 import { getShopifyClient } from '~/shopify/client';
 import { logger } from '~/utils/logger';
 
@@ -77,15 +82,25 @@ export async function finalizeDelivery(
   }
 
   if (delivery.customerEmail) {
-    const emailResult = await sendDeliveryEmail({
-      to: delivery.customerEmail,
-      orderNumber: delivery.orderName,
-      productName: args.metadata?.productName,
-      esimPayload: payload,
-      region: args.metadata?.region,
-      dataAmount: args.metadata?.dataAmount,
-      validity: args.metadata?.validity,
-    });
+    const iccidForEmail = args.iccid || delivery.topupIccid || '';
+    const emailResult = delivery.topupIccid
+      ? await sendTopupEmail({
+          to: delivery.customerEmail,
+          orderName: delivery.orderName,
+          iccid: iccidForEmail,
+          productName: args.metadata?.productName,
+          dataAmount: args.metadata?.dataAmount,
+          validity: args.metadata?.validity,
+        })
+      : await sendDeliveryEmail({
+          to: delivery.customerEmail,
+          orderNumber: delivery.orderName,
+          productName: args.metadata?.productName,
+          esimPayload: payload,
+          region: args.metadata?.region,
+          dataAmount: args.metadata?.dataAmount,
+          validity: args.metadata?.validity,
+        });
 
     await recordDeliveryAttempt(
       prisma,
@@ -115,15 +130,18 @@ export async function finalizeDelivery(
     }
 
     try {
-      const usageUrl = `https://${SHOPIFY_CUSTOM_DOMAIN}/pages/my-esim-usage?iccid=${args.iccid}`;
-      await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, {
-        status: 'delivered',
-        accessToken,
-        lpa: args.lpa,
-        activationCode: args.activationCode,
-        iccid: args.iccid,
-        usageUrl,
-      });
+      const iccidForMetafield = args.iccid || delivery.topupIccid || '';
+      const metafieldEntry = delivery.topupIccid
+        ? { status: 'delivered' as const, accessToken, iccid: iccidForMetafield, isTopup: true }
+        : {
+            status: 'delivered' as const,
+            accessToken,
+            lpa: args.lpa,
+            activationCode: args.activationCode,
+            iccid: iccidForMetafield,
+            usageUrl: `https://${SHOPIFY_CUSTOM_DOMAIN}/pages/my-esim-usage?iccid=${iccidForMetafield}`,
+          };
+      await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, metafieldEntry);
     } catch (error) {
       // Non-fatal: email was sent, eSIM is delivered. Extension can show a fallback.
       logger.error(

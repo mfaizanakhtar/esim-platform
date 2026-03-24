@@ -79,7 +79,13 @@ vi.mock('pdfkit', () => ({
 // ---------------------------------------------------------------------------
 // Import the module under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
-import { sendDeliveryEmail, recordDeliveryAttempt, type DeliveryEmailData } from '~/services/email';
+import {
+  sendDeliveryEmail,
+  sendTopupEmail,
+  recordDeliveryAttempt,
+  type DeliveryEmailData,
+  type TopupEmailData,
+} from '~/services/email';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -233,5 +239,90 @@ describe('recordDeliveryAttempt', () => {
     await expect(
       recordDeliveryAttempt(mockPrisma, 'delivery-id-xyz', 'email', 'failed'),
     ).rejects.toThrow('DB connection lost');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendTopupEmail
+// ---------------------------------------------------------------------------
+describe('sendTopupEmail', () => {
+  const baseTopup: TopupEmailData = {
+    to: 'customer@example.com',
+    orderName: '#1002',
+    iccid: '89001234567890',
+    productName: 'USA 5GB',
+    dataAmount: '5GB',
+    validity: '30 days',
+  };
+
+  beforeEach(() => {
+    vi.stubEnv('RESEND_API_KEY', 'test-resend-key');
+    vi.stubEnv('EMAIL_FROM', 'orders@test.com');
+    mocks.MockResend.mockImplementation(function () {
+      return { emails: { send: mocks.mockSend } };
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.clearAllMocks();
+  });
+
+  it('returns success with messageId on happy path', async () => {
+    mocks.mockSend.mockResolvedValueOnce({ data: { id: 'topup-msg-1' }, error: null });
+
+    const result = await sendTopupEmail(baseTopup);
+
+    expect(result.success).toBe(true);
+    expect(result.messageId).toBe('topup-msg-1');
+  });
+
+  it('sends email to correct recipient with order number in subject', async () => {
+    mocks.mockSend.mockResolvedValueOnce({ data: { id: 'topup-msg-2' }, error: null });
+
+    await sendTopupEmail(baseTopup);
+
+    const callArg = mocks.mockSend.mock.calls[0][0] as Record<string, unknown>;
+    expect(callArg.to).toBe('customer@example.com');
+    expect(String(callArg.subject)).toContain('#1002');
+    expect(callArg.from).toBe('orders@test.com');
+  });
+
+  it('returns failure when Resend returns an error object', async () => {
+    mocks.mockSend.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'Rate limit exceeded', name: 'rate_limit_error' },
+    });
+
+    const result = await sendTopupEmail(baseTopup);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Rate limit exceeded');
+  });
+
+  it('returns failure when Resend throws', async () => {
+    mocks.mockSend.mockRejectedValueOnce(new Error('SMTP timeout'));
+
+    const result = await sendTopupEmail(baseTopup);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('SMTP timeout');
+  });
+
+  it('returns failure when RESEND_API_KEY is not set', async () => {
+    vi.unstubAllEnvs();
+
+    const result = await sendTopupEmail(baseTopup);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('RESEND_API_KEY');
+    expect(mocks.mockSend).not.toHaveBeenCalled();
+  });
+
+  it('works when iccid is empty (shows no display suffix)', async () => {
+    mocks.mockSend.mockResolvedValueOnce({ data: { id: 'topup-msg-3' }, error: null });
+
+    const result = await sendTopupEmail({ ...baseTopup, iccid: '' });
+    expect(result.success).toBe(true);
   });
 });

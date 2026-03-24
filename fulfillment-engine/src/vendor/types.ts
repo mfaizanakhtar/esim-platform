@@ -63,6 +63,11 @@ export interface ProvisionContext {
   quantity: number;
   /** Internal delivery id for cross-system correlation (e.g., channelOrderNo). */
   deliveryId?: string;
+  /**
+   * When set, attach a new package to this existing ICCID instead of provisioning a new card.
+   * Used for top-up / renewal orders.
+   */
+  topupIccid?: string;
 }
 
 /**

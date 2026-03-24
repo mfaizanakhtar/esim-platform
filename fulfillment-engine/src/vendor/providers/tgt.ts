@@ -54,6 +54,52 @@ export class TgtProvider implements VendorProvider {
     }
 
     const providerConfig = (config.providerConfig ?? {}) as Record<string, unknown>;
+
+    // ── Top-up / Renewal path ─────────────────────────────────────────────
+    if (ctx.topupIccid) {
+      const { orders } = await this.client.queryOrders({ iccid: ctx.topupIccid });
+      const currentOrder = orders[0];
+      if (!currentOrder) {
+        throw new VendorError(`TGT: no existing order found for ICCID ${ctx.topupIccid}`);
+      }
+
+      const isC4 = currentOrder.productCode?.includes('-C4-') ?? false;
+
+      if (isC4) {
+        // C4 daily pack: synchronous data top-up
+        const purchaseType =
+          typeof providerConfig.tgtPurchaseType === 'number'
+            ? (providerConfig.tgtPurchaseType as number)
+            : 1;
+        await this.client.createTopup({
+          orderNo: currentOrder.orderNo,
+          purchaseType,
+          idempotencyKey: crypto.randomUUID(),
+        });
+        return {
+          vendorOrderId: currentOrder.orderNo,
+          lpa: '',
+          activationCode: '',
+          iccid: ctx.topupIccid,
+        };
+      } else {
+        // M1/C2/F2: async renewal with new product code
+        const { orderNo } = await this.client.renewOrder({
+          iccid: ctx.topupIccid,
+          productCode,
+          idempotencyKey: crypto.randomUUID(),
+          channelOrderNo: (ctx.deliveryId || crypto.randomUUID()).slice(0, 100),
+        });
+        return {
+          vendorOrderId: orderNo,
+          lpa: '',
+          activationCode: '',
+          iccid: '',
+          pending: true,
+        };
+      }
+    }
+
     const startDate =
       typeof providerConfig.startDate === 'string' ? providerConfig.startDate : undefined;
 

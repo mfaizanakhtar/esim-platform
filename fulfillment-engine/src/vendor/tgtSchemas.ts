@@ -145,6 +145,27 @@ export const TgtCallbackSchema = z.object({
   data: TgtCallbackDataSchema,
 });
 
+export const TgtRenewRequestSchema = z.object({
+  iccid: z.string(),
+  productCode: z.string(),
+  idempotencyKey: z.string(),
+  channelOrderNo: z.string(),
+});
+
+export const TgtRenewResponseSchema = TgtBaseResponseSchema.extend({
+  data: z.object({ orderNo: z.string() }).optional(),
+});
+
+export const TgtTopupRequestSchema = z.object({
+  orderNo: z.string(),
+  purchaseType: z.number(),
+  idempotencyKey: z.string(),
+});
+
+export const TgtTopupResponseSchema = TgtBaseResponseSchema.extend({
+  data: z.object({ topupNumber: z.string() }).optional(),
+});
+
 export type TgtProduct = z.infer<typeof TgtProductSchema>;
 export type TgtOrderInfo = z.infer<typeof TgtOrderInfoSchema>;
 export type TgtCallbackPayload = z.infer<typeof TgtCallbackSchema>;

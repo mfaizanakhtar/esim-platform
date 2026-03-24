@@ -30,6 +30,8 @@ export function esimDeliveryFactory(overrides: Partial<EsimDelivery> = {}): Esim
     accessToken: null,
     status: 'pending',
     lastError: null,
+    topupIccid: null,
+    sku: null,
     createdAt: faker.date.recent({ days: 7 }),
     updatedAt: faker.date.recent({ days: 1 }),
     ...overrides,

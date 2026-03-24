@@ -372,3 +372,115 @@ describe('refreshAccessToken error', () => {
     await expect(client.getOrder('12345')).rejects.toThrow('Failed to authenticate with Shopify');
   });
 });
+// ---------------------------------------------------------------------------
+// getVariantGidBySku
+// ---------------------------------------------------------------------------
+describe('getVariantGidBySku', () => {
+  it('returns variant GID when found', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariants: {
+            edges: [{ node: { id: 'gid://shopify/ProductVariant/123' } }],
+          },
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.getVariantGidBySku('ESIM-US-5GB');
+
+    expect(result).toBe('gid://shopify/ProductVariant/123');
+  });
+
+  it('returns null when no variant found', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariants: { edges: [] },
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.getVariantGidBySku('ESIM-NONEXISTENT');
+
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createDraftOrder
+// ---------------------------------------------------------------------------
+describe('createDraftOrder', () => {
+  it('returns checkoutUrl on success', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          draftOrderCreate: {
+            draftOrder: { invoiceUrl: 'https://shop.com/56780000/invoices/abc123' },
+            userErrors: [],
+          },
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.createDraftOrder(
+      'gid://shopify/ProductVariant/999',
+      '89001234567890',
+      'customer@example.com',
+    );
+
+    expect(result.checkoutUrl).toBe('https://shop.com/56780000/invoices/abc123');
+  });
+
+  it('throws when userErrors are returned', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          draftOrderCreate: {
+            draftOrder: null,
+            userErrors: [{ field: 'variantId', message: 'Variant not found' }],
+          },
+        },
+      });
+
+    const client = makeClient();
+    await expect(
+      client.createDraftOrder(
+        'gid://shopify/ProductVariant/bad',
+        '89001234567890',
+        'customer@example.com',
+      ),
+    ).rejects.toThrow('Variant not found');
+  });
+
+  it('throws when invoiceUrl is missing', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          draftOrderCreate: {
+            draftOrder: { invoiceUrl: null },
+            userErrors: [],
+          },
+        },
+      });
+
+    const client = makeClient();
+    await expect(
+      client.createDraftOrder(
+        'gid://shopify/ProductVariant/999',
+        '89001234567890',
+        'customer@example.com',
+      ),
+    ).rejects.toThrow('no invoiceUrl');
+  });
+});

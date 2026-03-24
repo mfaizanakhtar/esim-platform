@@ -12,6 +12,10 @@ const ShopifyLineItemSchema = z.object({
   title: z.string().nullable().optional(),
   name: z.string().nullable().optional(),
   sku: z.string().nullable().optional(),
+  properties: z
+    .array(z.object({ name: z.string(), value: z.string() }))
+    .nullable()
+    .optional(),
 });
 
 const ShopifyOrderPaidSchema = z.object({
@@ -160,6 +164,10 @@ export default function webhookRoutes(
           continue;
         }
 
+        // Detect top-up: line item carries a hidden _iccid property
+        const iccidProp = lineItem.properties?.find((p) => p.name === '_iccid');
+        const topupIccid = iccidProp?.value ?? null;
+
         // Create delivery record
         const delivery = await prisma.esimDelivery.create({
           data: {
@@ -170,6 +178,8 @@ export default function webhookRoutes(
             variantId,
             customerEmail,
             status: 'pending',
+            topupIccid,
+            sku: lineItem.sku ?? null,
           },
         });
 

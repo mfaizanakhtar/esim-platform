@@ -103,6 +103,7 @@ export async function handleProvision(data: ProvisionJobData) {
           customerEmail: delivery.customerEmail ?? '',
           quantity: 1,
           deliveryId,
+          topupIccid: delivery.topupIccid ?? undefined,
         },
       );
     }

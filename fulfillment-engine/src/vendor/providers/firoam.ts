@@ -158,7 +158,14 @@ export class FiRoamProvider implements VendorProvider {
     }
 
     //
-    // 4. Place the order
+    // 4. Attach to existing ICCID for top-up orders
+    //
+    if (ctx.topupIccid) {
+      orderPayload.iccids = ctx.topupIccid;
+    }
+
+    //
+    // 5. Place the order
     //
     const result = await this.client.addEsimOrder(orderPayload);
 

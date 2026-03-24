@@ -5,7 +5,9 @@ import {
   TgtCreateOrderResponseSchema,
   TgtProductsListResponseSchema,
   TgtQueryOrdersResponseSchema,
+  TgtRenewResponseSchema,
   TgtTokenResponseSchema,
+  TgtTopupResponseSchema,
   TgtUsageResponseSchema,
   type TgtOrderInfo,
   type TgtProduct,
@@ -233,6 +235,42 @@ export default class TgtClient {
     }
 
     return { raw, orders: parsed.data?.list ?? [] };
+  }
+
+  async renewOrder(params: {
+    iccid: string;
+    productCode: string;
+    idempotencyKey: string;
+    channelOrderNo: string;
+  }): Promise<{ orderNo: string }> {
+    const raw = await this.post<{ orderNo: string }>('/eSIMApi/v2/order/renew', {
+      iccid: params.iccid,
+      productCode: params.productCode,
+      idempotencyKey: params.idempotencyKey,
+      channelOrderNo: params.channelOrderNo,
+    });
+    const parsed = TgtRenewResponseSchema.parse(raw);
+    if (parsed.code !== '0000' || !parsed.data?.orderNo) {
+      throw new VendorError(`TGT renewOrder failed: ${parsed.msg} (${parsed.subCode || 'n/a'})`);
+    }
+    return { orderNo: parsed.data.orderNo };
+  }
+
+  async createTopup(params: {
+    orderNo: string;
+    purchaseType: number;
+    idempotencyKey: string;
+  }): Promise<{ topupNumber: string }> {
+    const raw = await this.post<{ topupNumber: string }>('/eSIMApi/v2/order/topup/create', {
+      orderNo: params.orderNo,
+      purchaseType: params.purchaseType,
+      idempotencyKey: params.idempotencyKey,
+    });
+    const parsed = TgtTopupResponseSchema.parse(raw);
+    if (parsed.code !== '0000' || !parsed.data?.topupNumber) {
+      throw new VendorError(`TGT createTopup failed: ${parsed.msg} (${parsed.subCode || 'n/a'})`);
+    }
+    return { topupNumber: parsed.data.topupNumber };
   }
 
   async getUsage(orderNo: string) {
