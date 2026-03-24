@@ -26,6 +26,9 @@ jobs:
         working-directory: fulfillment-engine/extensions/esim-order-status
         run: npm ci
 
-      - name: Deploy extension
+      - name: Build extension
         working-directory: fulfillment-engine
-        run: shopify app deploy --force --client-id ${{ secrets.SHOPIFY_CLIENT_ID }}
+        run: shopify app build --client-id ${{ secrets.SHOPIFY_CLIENT_ID }}
+
+      # Deploy requires an interactive Shopify session — run locally:
+      #   cd fulfillment-engine && shopify app deploy --force
