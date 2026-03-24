@@ -148,6 +148,10 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
     // Cancel with FiRoam
     const cancelResult = await firoam.cancelOrder({ orderNum: vendorOrderId, iccids: iccid });
     if (!cancelResult.success) {
+      await prisma.esimDelivery.update({
+        where: { id: deliveryId },
+        data: { lastError: `firoam_cancel_failed: ${cancelResult.message ?? 'unknown'}` },
+      });
       await writeOutcome(
         shopify,
         orderId,
@@ -185,6 +189,10 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
     if (orders.length > 0) {
       const activated = !!orders[0].profileStatus || !!orders[0].activatedStartTime;
       if (activated) {
+        await prisma.esimDelivery.update({
+          where: { id: deliveryId },
+          data: { status: 'delivered', lastError: 'cancel_blocked: already activated' },
+        });
         await writeOutcome(
           shopify,
           orderId,
