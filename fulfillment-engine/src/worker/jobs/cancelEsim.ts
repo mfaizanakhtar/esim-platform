@@ -68,6 +68,10 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
 
   if (!delivery.payloadEncrypted) {
     logger.error({ deliveryId }, 'cancelEsim: delivered but payload missing');
+    await prisma.esimDelivery.update({
+      where: { id: deliveryId },
+      data: { lastError: 'cancel_failed: payload missing' },
+    });
     await writeOutcome(
       shopify,
       orderId,
@@ -89,6 +93,10 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
     iccid = parseResult.data.iccid;
   } catch {
     logger.error({ deliveryId }, 'cancelEsim: failed to decrypt payload');
+    await prisma.esimDelivery.update({
+      where: { id: deliveryId },
+      data: { lastError: 'cancel_failed: decrypt error' },
+    });
     await writeOutcome(
       shopify,
       orderId,
@@ -102,6 +110,10 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
 
   if (!iccid || !vendorOrderId) {
     logger.error({ deliveryId }, 'cancelEsim: missing iccid or vendorOrderId');
+    await prisma.esimDelivery.update({
+      where: { id: deliveryId },
+      data: { lastError: 'cancel_failed: missing iccid or vendorOrderId' },
+    });
     await writeOutcome(
       shopify,
       orderId,
