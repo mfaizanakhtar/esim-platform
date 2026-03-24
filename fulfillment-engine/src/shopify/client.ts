@@ -14,6 +14,7 @@ export interface DeliveryMetafieldEntry {
   activationCode?: string;
   iccid?: string;
   usageUrl?: string;
+  isTopup?: boolean;
 }
 
 interface TokenResponse {
@@ -506,6 +507,84 @@ export class ShopifyClient {
         `Order tag errors: ${errors.map((e: { message: string }) => e.message).join(', ')}`,
       );
     }
+  }
+
+  /**
+   * Look up a Shopify product variant GID by SKU string.
+   * Returns null if no variant with that SKU exists.
+   */
+  async getVariantGidBySku(sku: string): Promise<string | null> {
+    const token = await this.getAccessToken();
+
+    const response = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      {
+        query: `
+          query getVariantBySku($query: String!) {
+            productVariants(first: 1, query: $query) {
+              edges { node { id } }
+            }
+          }
+        `,
+        variables: { query: `sku:${sku}` },
+      },
+      { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+    );
+
+    const edge = response.data?.data?.productVariants?.edges?.[0];
+    return edge?.node?.id ?? null;
+  }
+
+  /**
+   * Create a Shopify draft order for a top-up checkout.
+   * Embeds the existing ICCID as a hidden line item custom attribute (_iccid).
+   * Returns the draft order's hosted checkout URL (invoiceUrl).
+   */
+  async createDraftOrder(
+    variantGid: string,
+    iccid: string,
+    customerEmail: string,
+  ): Promise<{ checkoutUrl: string }> {
+    const token = await this.getAccessToken();
+
+    const mutation = `
+      mutation draftOrderCreate($input: DraftOrderInput!) {
+        draftOrderCreate(input: $input) {
+          draftOrder {
+            invoiceUrl
+          }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const response = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      {
+        query: mutation,
+        variables: {
+          input: {
+            lineItems: [{ variantId: variantGid, quantity: 1 }],
+            customAttributes: [{ key: '_iccid', value: iccid }],
+            email: customerEmail,
+          },
+        },
+      },
+      { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+    );
+
+    const result = response.data?.data?.draftOrderCreate;
+    if (result?.userErrors?.length > 0) {
+      const errors = result.userErrors.map((e: { message: string }) => e.message).join(', ');
+      throw new Error(`Shopify draftOrderCreate errors: ${errors}`);
+    }
+
+    const checkoutUrl = result?.draftOrder?.invoiceUrl;
+    if (!checkoutUrl) {
+      throw new Error('Shopify draftOrderCreate returned no invoiceUrl');
+    }
+
+    return { checkoutUrl };
   }
 
   /**

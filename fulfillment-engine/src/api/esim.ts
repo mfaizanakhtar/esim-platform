@@ -236,5 +236,154 @@ export default function esimRoutes(
     },
   );
 
+  /**
+   * GET /esim/topup-options/:token
+   * Returns same-region active SKU mappings the customer can top-up with.
+   * Only valid for delivered, non-top-up deliveries.
+   */
+  app.get(
+    '/esim/topup-options/:token',
+    async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply) => {
+      const { token } = request.params;
+
+      const delivery = await prisma.esimDelivery.findUnique({
+        where: { accessToken: token },
+      });
+
+      if (!delivery) return reply.code(404).send({ error: 'Not found' });
+      if (delivery.status !== 'delivered') return reply.code(400).send({ error: 'not_delivered' });
+      if (delivery.topupIccid)
+        return reply.code(400).send({ error: 'topup_not_allowed_on_topup_delivery' });
+
+      // Find the mapping the original delivery was provisioned with (by stored SKU)
+      if (!delivery.sku || !delivery.provider) {
+        return reply.send({ options: [] });
+      }
+
+      const sourceMapping = await prisma.providerSkuMapping.findUnique({
+        where: { shopifySku: delivery.sku },
+      });
+
+      if (!sourceMapping?.region) {
+        return reply.send({ options: [] });
+      }
+
+      // Return all active same-provider + same-region mappings as top-up options
+      const options = await prisma.providerSkuMapping.findMany({
+        where: {
+          provider: delivery.provider,
+          region: sourceMapping.region,
+          isActive: true,
+        },
+        select: { id: true, name: true, dataAmount: true, validity: true, shopifySku: true },
+      });
+
+      return reply.send({ options });
+    },
+  );
+
+  /**
+   * POST /esim/topup-checkout/:token
+   * Creates a Shopify draft order for the selected top-up package.
+   * Returns { checkoutUrl } for the extension to redirect to.
+   */
+  app.post(
+    '/esim/topup-checkout/:token',
+    async (
+      request: FastifyRequest<{ Params: { token: string }; Body: { mappingId: string } }>,
+      reply: FastifyReply,
+    ) => {
+      const { token } = request.params;
+      const body = request.body as Record<string, unknown>;
+      const mappingId = typeof body?.mappingId === 'string' ? body.mappingId : undefined;
+
+      if (!mappingId) return reply.code(400).send({ error: 'mappingId required' });
+
+      const delivery = await prisma.esimDelivery.findUnique({
+        where: { accessToken: token },
+      });
+
+      if (!delivery) return reply.code(404).send({ error: 'Not found' });
+      if (delivery.status !== 'delivered') return reply.code(400).send({ error: 'not_delivered' });
+      if (delivery.topupIccid)
+        return reply.code(400).send({ error: 'topup_not_allowed_on_topup_delivery' });
+
+      // Decrypt to get the ICCID
+      if (!delivery.payloadEncrypted) {
+        return reply.code(500).send({ error: 'Payload missing' });
+      }
+
+      let iccid: string;
+      try {
+        const decrypted = decrypt(delivery.payloadEncrypted);
+        const parsed = StoredPayloadSchema.parse(JSON.parse(decrypted));
+        if (!parsed.iccid) throw new Error('iccid missing from payload');
+        iccid = parsed.iccid;
+      } catch {
+        return reply.code(500).send({ error: 'Failed to read eSIM credentials' });
+      }
+
+      // Validate the selected mapping
+      const mapping = await prisma.providerSkuMapping.findUnique({ where: { id: mappingId } });
+      if (!mapping || !mapping.isActive) {
+        return reply.code(404).send({ error: 'mapping_not_found' });
+      }
+      if (mapping.provider !== delivery.provider) {
+        return reply.code(400).send({ error: 'provider_mismatch' });
+      }
+
+      // Guard: verify the mapping belongs to the same region as the original delivery
+      if (!delivery.sku) {
+        return reply.code(400).send({ error: 'topup_source_mapping_missing' });
+      }
+
+      const sourceMapping = await prisma.providerSkuMapping.findUnique({
+        where: { shopifySku: delivery.sku },
+      });
+      if (!sourceMapping?.region) {
+        return reply.code(400).send({ error: 'topup_source_mapping_missing' });
+      }
+      if (mapping.region !== sourceMapping.region) {
+        return reply.code(400).send({ error: 'region_mismatch' });
+      }
+
+      const shopify = getShopifyClient();
+
+      // Look up the Shopify variant GID by SKU
+      let variantGid: string | null;
+      try {
+        variantGid = await shopify.getVariantGidBySku(mapping.shopifySku);
+      } catch (error) {
+        logger.error(
+          { deliveryId: delivery.id, shopifySku: mapping.shopifySku, err: error },
+          'Failed to look up Shopify variant for top-up',
+        );
+        return reply.code(502).send({ error: 'shopify_unavailable' });
+      }
+
+      if (!variantGid) {
+        logger.error(
+          { shopifySku: mapping.shopifySku },
+          'Shopify variant not found for top-up SKU',
+        );
+        return reply.code(404).send({ error: 'shopify_variant_not_found' });
+      }
+
+      const customerEmail = delivery.customerEmail ?? '';
+      let checkoutUrl: string;
+      try {
+        ({ checkoutUrl } = await shopify.createDraftOrder(variantGid, iccid, customerEmail));
+      } catch (error) {
+        logger.error(
+          { deliveryId: delivery.id, err: error },
+          'Failed to create Shopify draft order for top-up',
+        );
+        return reply.code(502).send({ error: 'shopify_unavailable' });
+      }
+
+      return reply.send({ checkoutUrl });
+    },
+  );
+
   done();
 }

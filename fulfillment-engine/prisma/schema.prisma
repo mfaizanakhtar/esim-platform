@@ -21,6 +21,8 @@ model EsimDelivery {
   iccidHash         String?   // HMAC-SHA256(iccid, ENCRYPTION_KEY) — indexed for fast lookup
   payloadEncrypted  String?
   accessToken       String?   @unique // UUID issued after delivery; used by Shopify UI extension
+  topupIccid        String?   // if set: this delivery tops up an existing eSIM with this ICCID
+  sku               String?   // Shopify SKU from line item — cached for mapping lookup
   status            String            @default("pending")
   lastError         String?
   createdAt         DateTime          @default(now())

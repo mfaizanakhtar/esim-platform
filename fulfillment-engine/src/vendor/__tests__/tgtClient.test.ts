@@ -297,4 +297,98 @@ describe('TgtClient', () => {
     const result = await client.queryOrders({ orderNo: 'SE99' });
     expect(result.orders.length).toBe(1);
   });
+
+  it('renewOrder calls /eSIMApi/v2/order/renew and returns orderNo', async () => {
+    nock(base)
+      .post('/oauth/token')
+      .reply(200, {
+        code: '0000',
+        msg: 'success',
+        data: { accessToken: 'token-1', expires: 86400 },
+      });
+
+    nock(base)
+      .post('/eSIMApi/v2/order/renew')
+      .reply(200, { code: '0000', msg: 'success', data: { orderNo: 'RENEW-123' } });
+
+    const client = new TgtClient();
+    const result = await client.renewOrder({
+      iccid: '89001234567890',
+      productCode: 'A-M1-30D-3GB',
+      idempotencyKey: 'idem-key-1',
+      channelOrderNo: 'CH-ORDER-1',
+    });
+
+    expect(result.orderNo).toBe('RENEW-123');
+  });
+
+  it('renewOrder throws VendorError when API returns non-0000 code', async () => {
+    nock(base)
+      .post('/oauth/token')
+      .reply(200, {
+        code: '0000',
+        msg: 'success',
+        data: { accessToken: 'token-1', expires: 86400 },
+      });
+
+    nock(base)
+      .post('/eSIMApi/v2/order/renew')
+      .reply(200, { code: '9999', msg: 'renewal failed', subCode: 'E01' });
+
+    const client = new TgtClient();
+    await expect(
+      client.renewOrder({
+        iccid: '89001234567890',
+        productCode: 'A-M1-30D-3GB',
+        idempotencyKey: 'idem-key-fail',
+        channelOrderNo: 'CH-FAIL',
+      }),
+    ).rejects.toThrow('renewal failed');
+  });
+
+  it('createTopup calls /eSIMApi/v2/order/topup/create and returns topupNumber', async () => {
+    nock(base)
+      .post('/oauth/token')
+      .reply(200, {
+        code: '0000',
+        msg: 'success',
+        data: { accessToken: 'token-1', expires: 86400 },
+      });
+
+    nock(base)
+      .post('/eSIMApi/v2/order/topup/create')
+      .reply(200, { code: '0000', msg: 'success', data: { topupNumber: 'TOP-456' } });
+
+    const client = new TgtClient();
+    const result = await client.createTopup({
+      orderNo: 'TGT-C4-001',
+      purchaseType: 1,
+      idempotencyKey: 'idem-topup-1',
+    });
+
+    expect(result.topupNumber).toBe('TOP-456');
+  });
+
+  it('createTopup throws VendorError when API returns non-0000 code', async () => {
+    nock(base)
+      .post('/oauth/token')
+      .reply(200, {
+        code: '0000',
+        msg: 'success',
+        data: { accessToken: 'token-1', expires: 86400 },
+      });
+
+    nock(base)
+      .post('/eSIMApi/v2/order/topup/create')
+      .reply(200, { code: '8888', msg: 'topup failed', subCode: 'E02' });
+
+    const client = new TgtClient();
+    await expect(
+      client.createTopup({
+        orderNo: 'TGT-C4-002',
+        purchaseType: 2,
+        idempotencyKey: 'idem-topup-fail',
+      }),
+    ).rejects.toThrow('topup failed');
+  });
 });

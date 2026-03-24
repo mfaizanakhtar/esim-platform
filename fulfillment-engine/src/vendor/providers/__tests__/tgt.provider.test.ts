@@ -5,6 +5,9 @@ import { TgtProvider } from '~/vendor/providers/tgt';
 const createOrder = vi.fn();
 const tryResolveOrderCredentials = vi.fn();
 const mockFindUnique = vi.fn();
+const queryOrders = vi.fn();
+const renewOrder = vi.fn();
+const createTopup = vi.fn();
 
 vi.mock('~/vendor/tgtClient', () => {
   return {
@@ -14,6 +17,15 @@ vi.mock('~/vendor/tgtClient', () => {
       }
       tryResolveOrderCredentials(...args: unknown[]) {
         return tryResolveOrderCredentials(...args);
+      }
+      queryOrders(...args: unknown[]) {
+        return queryOrders(...args);
+      }
+      renewOrder(...args: unknown[]) {
+        return renewOrder(...args);
+      }
+      createTopup(...args: unknown[]) {
+        return createTopup(...args);
       }
     },
   };
@@ -244,5 +256,83 @@ describe('TgtProvider', () => {
 
     expect(tryResolveOrderCredentials).toHaveBeenCalledTimes(2);
     expect(result.lpa).toBe('LPA:1$host$ACT2');
+  });
+
+  // ── Top-up / Renewal path ─────────────────────────────────────────────────
+
+  describe('top-up branch (topupIccid set)', () => {
+    const topupCtx: ProvisionContext = {
+      customerEmail: 'user@example.com',
+      quantity: 1,
+      deliveryId: 'delivery-topup-1',
+      topupIccid: '89001234567890',
+    };
+
+    it('calls createTopup for C4 card type and returns sync result', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
+      queryOrders.mockResolvedValue({
+        orders: [{ orderNo: 'TGT-C4-001', productCode: 'A-C4-DAILY-5GB', profileStatus: null }],
+      });
+      createTopup.mockResolvedValue({ topupNumber: 'TOP-001' });
+
+      const provider = new TgtProvider();
+      const result = await provider.provision(config, topupCtx);
+
+      expect(createTopup).toHaveBeenCalledWith(
+        expect.objectContaining({ orderNo: 'TGT-C4-001', purchaseType: 1 }),
+      );
+      expect(result.vendorOrderId).toBe('TOP-001');
+      expect(result.iccid).toBe('89001234567890');
+      expect(result.lpa).toBe('');
+      expect(result.pending).toBeUndefined();
+    });
+
+    it('uses tgtPurchaseType from providerConfig for C4 top-up', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
+      queryOrders.mockResolvedValue({
+        orders: [{ orderNo: 'TGT-C4-002', productCode: 'A-C4-DAILY-5GB' }],
+      });
+      createTopup.mockResolvedValue({ topupNumber: 'TOP-002' });
+
+      const configWithPurchaseType: ProviderMappingConfig = {
+        providerSku: 'A-002-ES-AU-T-30D/180D-3GB(A)',
+        providerConfig: { tgtPurchaseType: 2 },
+      };
+
+      const provider = new TgtProvider();
+      await provider.provision(configWithPurchaseType, topupCtx);
+
+      expect(createTopup).toHaveBeenCalledWith(expect.objectContaining({ purchaseType: 2 }));
+    });
+
+    it('calls renewOrder for M1/C2 card type and returns pending result', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
+      queryOrders.mockResolvedValue({
+        orders: [{ orderNo: 'TGT-M1-001', productCode: 'A-M1-30D-3GB' }],
+      });
+      renewOrder.mockResolvedValue({ orderNo: 'RENEW-001' });
+
+      const provider = new TgtProvider();
+      const result = await provider.provision(config, topupCtx);
+
+      expect(renewOrder).toHaveBeenCalledWith(
+        expect.objectContaining({
+          iccid: '89001234567890',
+          productCode: 'A-002-ES-AU-T-30D/180D-3GB(A)',
+        }),
+      );
+      expect(result.vendorOrderId).toBe('RENEW-001');
+      expect(result.pending).toBe(true);
+      expect(result.iccid).toBe('');
+    });
+
+    it('throws VendorError when no existing order found for topupIccid', async () => {
+      vi.stubEnv('TGT_FULFILLMENT_MODE', 'callback');
+      queryOrders.mockResolvedValue({ orders: [] });
+
+      const { VendorError: VE } = await import('~/utils/errors');
+      const provider = new TgtProvider();
+      await expect(provider.provision(config, topupCtx)).rejects.toThrow(VE);
+    });
   });
 });

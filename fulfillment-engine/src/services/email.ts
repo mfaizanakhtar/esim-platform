@@ -438,6 +438,91 @@ export async function sendDeliveryEmail(
   }
 }
 
+export interface TopupEmailData {
+  to: string;
+  orderName: string;
+  iccid: string;
+  productName?: string;
+  dataAmount?: string;
+  validity?: string;
+}
+
+/**
+ * Send top-up confirmation email — no QR code, no installation instructions.
+ * Customer already has the eSIM installed; just confirming the data package was added.
+ */
+export async function sendTopupEmail(
+  data: TopupEmailData,
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const { to, orderName, iccid, productName, dataAmount, validity } = data;
+
+  logger.info({ orderName, to }, 'Preparing top-up confirmation email');
+
+  try {
+    const fromEmail = process.env.EMAIL_FROM || 'orders@fluxyfi.com';
+    const bccEmail = process.env.EMAIL_BCC;
+    const resendApiKey = process.env.RESEND_API_KEY;
+
+    if (!resendApiKey) {
+      throw new Error('RESEND_API_KEY is not configured');
+    }
+
+    const iccidDisplay = iccid ? `...${iccid.slice(-4)}` : '';
+    const packageLabel = productName || (dataAmount ? `${dataAmount}` : 'Data package');
+    const validityLine = validity ? `<p style="margin:0;color:#555">Validity: ${validity}</p>` : '';
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <div style="background:#667eea;padding:30px;text-align:center;border-radius:8px 8px 0 0">
+          <h1 style="color:#fff;margin:0;font-size:24px">Data Added to Your eSIM</h1>
+          <p style="color:#e0e7ff;margin:8px 0 0">Order ${orderName}</p>
+        </div>
+        <div style="background:#fff;padding:30px;border:1px solid #e2e8f0;border-radius:0 0 8px 8px">
+          <p style="color:#333">Your additional data package has been successfully added to your eSIM.</p>
+          <div style="background:#f7f9fc;padding:20px;border-radius:8px;margin:20px 0">
+            <p style="margin:0 0 8px;font-weight:bold;color:#333">Package Added</p>
+            <p style="margin:0;color:#555">${packageLabel}</p>
+            ${validityLine}
+            <p style="margin:8px 0 0;color:#888;font-size:13px">eSIM ending in ${iccidDisplay}</p>
+          </div>
+          <p style="color:#555;font-size:14px">
+            No action is required — the data will be available on your existing eSIM automatically.
+          </p>
+          <p style="color:#555;font-size:14px">
+            If you have any questions, please contact support with your order number <strong>${orderName}</strong>.
+          </p>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `Data Added to Your eSIM — Order ${orderName}\n\n${packageLabel} has been added to your eSIM (ending in ${iccidDisplay}).\n\nNo action required — the data is available on your existing eSIM automatically.\n`;
+
+    const resend = new Resend(resendApiKey);
+    const result = await resend.emails.send({
+      from: fromEmail,
+      to,
+      bcc: bccEmail,
+      subject: `Data added to your eSIM - Order ${orderName}`,
+      html,
+      text,
+    });
+
+    if (result.error) {
+      throw new Error(`Resend error: ${result.error.message}`);
+    }
+
+    logger.info({ messageId: result.data?.id }, 'Top-up email sent');
+    return { success: true, messageId: result.data?.id };
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error({ err: error, errorMsg }, 'Failed to send top-up email');
+    return { success: false, error: errorMsg };
+  }
+}
+
 /**
  * Record email delivery attempt in database
  */

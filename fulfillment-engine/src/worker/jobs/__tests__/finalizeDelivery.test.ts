@@ -17,6 +17,7 @@ vi.mock('~/utils/crypto', () => ({
 
 vi.mock('~/services/email', () => ({
   sendDeliveryEmail: vi.fn(async () => ({ success: true, messageId: 'msg-1' })),
+  sendTopupEmail: vi.fn(async () => ({ success: true, messageId: 'topup-msg-1' })),
   recordDeliveryAttempt: vi.fn(async () => undefined),
 }));
 
@@ -28,7 +29,7 @@ vi.mock('~/shopify/client', () => ({
 }));
 
 import prisma from '~/db/prisma';
-import { sendDeliveryEmail, recordDeliveryAttempt } from '~/services/email';
+import { sendDeliveryEmail, sendTopupEmail, recordDeliveryAttempt } from '~/services/email';
 import { getShopifyClient } from '~/shopify/client';
 import { finalizeDelivery, getDecryptedEsimPayload } from '~/worker/jobs/finalizeDelivery';
 import { decrypt } from '~/utils/crypto';
@@ -66,6 +67,8 @@ describe('finalizeDelivery', () => {
       vendorReferenceId: 'ref-1',
       provider: null,
       iccidHash: null,
+      topupIccid: null,
+      sku: null,
       payloadEncrypted: null,
       accessToken: null,
       status: 'pending',
@@ -104,6 +107,8 @@ describe('finalizeDelivery', () => {
       vendorReferenceId: 'TGT-001',
       provider: null,
       iccidHash: null,
+      topupIccid: null,
+      sku: null,
       payloadEncrypted: null,
       accessToken: null,
       status: 'polling',
@@ -157,6 +162,8 @@ describe('finalizeDelivery', () => {
       vendorReferenceId: 'ref-2',
       provider: null,
       iccidHash: null,
+      topupIccid: null,
+      sku: null,
       payloadEncrypted: null,
       accessToken: null,
       status: 'pending',
@@ -190,6 +197,8 @@ describe('finalizeDelivery', () => {
       vendorReferenceId: 'ref-3',
       provider: null,
       iccidHash: null,
+      topupIccid: null,
+      sku: null,
       payloadEncrypted: null,
       accessToken: null,
       status: 'pending',
@@ -227,6 +236,8 @@ describe('finalizeDelivery', () => {
       vendorReferenceId: 'ref-1',
       provider: null,
       iccidHash: null,
+      topupIccid: null,
+      sku: null,
       payloadEncrypted: 'encrypted',
       accessToken: null,
       status: 'pending',
@@ -251,6 +262,8 @@ describe('finalizeDelivery', () => {
       vendorReferenceId: 'ref-1',
       provider: null,
       iccidHash: null,
+      topupIccid: null,
+      sku: null,
       payloadEncrypted: 'encrypted',
       accessToken: null,
       status: 'pending',
@@ -262,5 +275,136 @@ describe('finalizeDelivery', () => {
 
     const payload = await getDecryptedEsimPayload('d1');
     expect(payload).toBeNull();
+  });
+
+  it('sends topupEmail and writes isTopup metafield for top-up delivery', async () => {
+    // topupIccid is stored encrypted in DB; decrypt should return the plaintext ICCID
+    vi.mocked(decrypt).mockImplementationOnce(() => '89001234567890');
+
+    vi.mocked(prisma.esimDelivery.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue({
+      id: 'd-topup',
+      shop: 'test.myshopify.com',
+      orderId: 'order-topup',
+      orderName: '#2001',
+      lineItemId: 'line-topup',
+      variantId: 'var-topup',
+      customerEmail: 'user@example.com',
+      vendorReferenceId: 'TGT-001',
+      provider: 'tgt',
+      iccidHash: null,
+      topupIccid: 'enc:89001234567890',
+      sku: 'ESIM-US-5GB',
+      payloadEncrypted: null,
+      accessToken: 'token-topup',
+      status: 'polling',
+      lastError: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const writeDeliveryMetafield = vi.fn(async () => undefined);
+    vi.mocked(getShopifyClient).mockReturnValue({
+      createFulfillment: vi.fn(async () => undefined),
+      writeDeliveryMetafield,
+    } as unknown as ReturnType<typeof getShopifyClient>);
+
+    await finalizeDelivery({
+      deliveryId: 'd-topup',
+      vendorOrderId: 'TGT-001',
+      lpa: '',
+      activationCode: '',
+      iccid: '89001234567890',
+    });
+
+    expect(vi.mocked(sendTopupEmail)).toHaveBeenCalled();
+    expect(vi.mocked(sendDeliveryEmail)).not.toHaveBeenCalled();
+
+    expect(writeDeliveryMetafield).toHaveBeenCalledWith(
+      'order-topup',
+      'line-topup',
+      expect.objectContaining({ isTopup: true }),
+    );
+  });
+
+  it('throws when pre-read decrypt fails for topupIccid', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValueOnce({
+      topupIccid: 'enc:bad',
+    } as never);
+    vi.mocked(decrypt).mockImplementationOnce(() => {
+      throw new Error('corrupt key');
+    });
+
+    await expect(
+      finalizeDelivery({
+        deliveryId: 'd-err',
+        vendorOrderId: 'X',
+        lpa: '',
+        activationCode: '',
+        iccid: '',
+      }),
+    ).rejects.toThrow('corrupt key');
+  });
+
+  it('throws when decrypted topupIccid is empty string', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValueOnce({
+      topupIccid: 'enc:empty',
+    } as never);
+    vi.mocked(decrypt).mockReturnValueOnce('');
+
+    await expect(
+      finalizeDelivery({
+        deliveryId: 'd-empty',
+        vendorOrderId: 'X',
+        lpa: '',
+        activationCode: '',
+        iccid: '',
+      }),
+    ).rejects.toThrow('topup_iccid_missing');
+  });
+
+  it('resolves ICCID from topupIccid pre-read when args.iccid is empty', async () => {
+    // Simulate a renewal callback that arrives without an ICCID in args
+    // The delivery has an encrypted topupIccid that should be used as fallback
+    vi.mocked(decrypt).mockReturnValueOnce('89001234567890'); // pre-read decrypt call
+
+    vi.mocked(prisma.esimDelivery.updateMany).mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.esimDelivery.findUnique)
+      .mockResolvedValueOnce({ topupIccid: 'enc:89001234567890' } as never) // pre-read
+      .mockResolvedValueOnce({
+        id: 'd-renewal',
+        shop: 'test.myshopify.com',
+        orderId: 'order-renewal',
+        orderName: '#2002',
+        lineItemId: 'line-renewal',
+        variantId: 'var-renewal',
+        customerEmail: null,
+        vendorReferenceId: 'RENEW-001',
+        provider: 'tgt',
+        iccidHash: null,
+        topupIccid: 'enc:89001234567890',
+        sku: 'ESIM-US-5GB',
+        payloadEncrypted: null,
+        accessToken: 'token-renewal',
+        status: 'polling',
+        lastError: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as never); // post-write read
+
+    const result = await finalizeDelivery({
+      deliveryId: 'd-renewal',
+      vendorOrderId: 'RENEW-001',
+      lpa: '',
+      activationCode: '',
+      iccid: '', // empty — should fall back to topupIccid
+    });
+
+    expect(result.ok).toBe(true);
+    expect(vi.mocked(prisma.esimDelivery.updateMany)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ iccidHash: 'hashed-iccid' }),
+      }),
+    );
   });
 });

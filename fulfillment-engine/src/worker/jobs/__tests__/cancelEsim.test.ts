@@ -65,6 +65,8 @@ const baseDelivery = {
   vendorReferenceId: 'VENDOR-001',
   provider: 'firoam' as string | null,
   iccidHash: null,
+  topupIccid: null,
+  sku: null,
   payloadEncrypted: 'encrypted-payload',
   accessToken: 'token-abc',
   status: 'delivered',

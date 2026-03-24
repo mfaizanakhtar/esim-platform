@@ -62,6 +62,8 @@ function makeDelivery(overrides: Partial<EsimDelivery>): EsimDelivery {
     vendorReferenceId: null,
     provider: null,
     iccidHash: null,
+    topupIccid: null,
+    sku: null,
     payloadEncrypted: null,
     accessToken: null,
     status: 'delivered',

@@ -9,12 +9,18 @@ const mockQueryEsimOrder = vi.fn();
 const mockCancelOrder = vi.fn();
 const mockQueryOrders = vi.fn();
 const mockCancelShopifyOrder = vi.fn();
+const mockGetVariantGidBySku = vi.fn();
+const mockCreateDraftOrder = vi.fn();
 
 vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findUnique: vi.fn(),
       update: vi.fn(),
+    },
+    providerSkuMapping: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
   },
 }));
@@ -44,6 +50,8 @@ vi.mock('~/shopify/client', () => ({
   getShopifyClient: () => ({
     cancelShopifyOrder: mockCancelShopifyOrder,
     writeDeliveryMetafield: mockWriteDeliveryMetafield,
+    getVariantGidBySku: mockGetVariantGidBySku,
+    createDraftOrder: mockCreateDraftOrder,
   }),
 }));
 
@@ -54,6 +62,7 @@ vi.mock('~/utils/crypto', () => ({
 }));
 
 import prisma from '~/db/prisma';
+import type { ProviderSkuMapping } from '@prisma/client';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -73,6 +82,8 @@ function makeDelivery(overrides: Partial<EsimDelivery> = {}): EsimDelivery {
     accessToken: 'test-uuid-token',
     status: 'delivered',
     lastError: null,
+    topupIccid: null,
+    sku: null,
     createdAt: new Date('2026-01-01'),
     updatedAt: new Date('2026-01-01'),
     ...overrides,
@@ -247,5 +258,322 @@ describe('POST /esim/delivery/:token/cancel', () => {
     });
     expect(res.statusCode).toBe(409);
     expect(res.json()).toMatchObject({ error: 'esim_already_activated' });
+  });
+});
+
+// ── Helpers for new endpoints ─────────────────────────────────────────────────
+
+function makeMapping(overrides: Partial<ProviderSkuMapping> = {}): ProviderSkuMapping {
+  return {
+    id: 'map-1',
+    shopifySku: 'ESIM-US-5GB',
+    provider: 'firoam',
+    providerSku: '123:456-0-?-1-G-D:789',
+    providerConfig: null,
+    isActive: true,
+    name: 'USA 5GB',
+    region: 'Americas',
+    dataAmount: '5GB',
+    validity: '30 days',
+    packageType: 'fixed',
+    daysCount: null,
+    providerCatalogId: null,
+    createdAt: new Date('2026-01-01'),
+    updatedAt: new Date('2026-01-01'),
+    ...overrides,
+  };
+}
+
+// ── GET /esim/topup-options/:token ────────────────────────────────────────────
+
+describe('GET /esim/topup-options/:token', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    app = Fastify();
+    app.register(esimRoutes);
+    await app.ready();
+  });
+
+  it('returns 404 for unknown token', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(null);
+
+    const res = await app.inject({ method: 'GET', url: '/esim/topup-options/bad-token' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 400 when delivery is not delivered', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ status: 'provisioning' }),
+    );
+
+    const res = await app.inject({ method: 'GET', url: '/esim/topup-options/test-uuid-token' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'not_delivered' });
+  });
+
+  it('returns 400 when delivery is already a top-up', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ topupIccid: '8901000000000001' }),
+    );
+
+    const res = await app.inject({ method: 'GET', url: '/esim/topup-options/test-uuid-token' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'topup_not_allowed_on_topup_delivery' });
+  });
+
+  it('returns empty options when sku or provider is missing', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ sku: null, provider: null }),
+    );
+
+    const res = await app.inject({ method: 'GET', url: '/esim/topup-options/test-uuid-token' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ options: [] });
+  });
+
+  it('returns empty options when source mapping not found', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ sku: 'ESIM-US-5GB', provider: 'firoam' }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+
+    const res = await app.inject({ method: 'GET', url: '/esim/topup-options/test-uuid-token' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ options: [] });
+  });
+
+  it('returns empty options when source mapping has no region', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ sku: 'ESIM-US-5GB', provider: 'firoam' }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(
+      makeMapping({ region: null }),
+    );
+
+    const res = await app.inject({ method: 'GET', url: '/esim/topup-options/test-uuid-token' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ options: [] });
+  });
+
+  it('returns same-region options', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ sku: 'ESIM-US-5GB', provider: 'firoam' }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(makeMapping());
+    vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
+      makeMapping({ id: 'map-1', name: 'USA 5GB', dataAmount: '5GB' }),
+      makeMapping({
+        id: 'map-2',
+        name: 'USA 10GB',
+        dataAmount: '10GB',
+        shopifySku: 'ESIM-US-10GB',
+      }),
+    ]);
+
+    const res = await app.inject({ method: 'GET', url: '/esim/topup-options/test-uuid-token' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.options).toHaveLength(2);
+    expect(body.options[0]).toMatchObject({ id: 'map-1', name: 'USA 5GB' });
+  });
+});
+
+// ── POST /esim/topup-checkout/:token ─────────────────────────────────────────
+
+describe('POST /esim/topup-checkout/:token', () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    app = Fastify();
+    app.register(esimRoutes);
+    await app.ready();
+  });
+
+  it('returns 404 for unknown token', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(null);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/bad-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('returns 400 when mappingId is missing', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(makeDelivery());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'mappingId required' });
+  });
+
+  it('returns 400 when delivery is not delivered', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ status: 'provisioning' }),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'not_delivered' });
+  });
+
+  it('returns 400 when delivery is already a top-up', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ topupIccid: '8901000000000001' }),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'topup_not_allowed_on_topup_delivery' });
+  });
+
+  it('returns 404 when mapping not found', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(makeDelivery());
+    vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-missing' },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: 'mapping_not_found' });
+  });
+
+  it('returns 400 when provider mismatch', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ provider: 'firoam' }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(
+      makeMapping({ provider: 'tgt' }),
+    );
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'provider_mismatch' });
+  });
+
+  it('returns 400 when delivery has no sku (source mapping missing)', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ provider: 'firoam', sku: null }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(makeMapping());
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'topup_source_mapping_missing' });
+  });
+
+  it('returns 400 when source mapping has no region', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ provider: 'firoam', sku: 'ESIM-US-5GB' }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique)
+      .mockResolvedValueOnce(makeMapping())
+      .mockResolvedValueOnce(makeMapping({ region: null }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'topup_source_mapping_missing' });
+  });
+
+  it('returns 400 when regions do not match', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ provider: 'firoam', sku: 'ESIM-EU-5GB' }),
+    );
+    vi.mocked(prisma.providerSkuMapping.findUnique)
+      .mockResolvedValueOnce(makeMapping({ region: 'Americas' }))
+      .mockResolvedValueOnce(makeMapping({ region: 'Europe' }));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'region_mismatch' });
+  });
+
+  it('returns 404 when Shopify variant not found', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ provider: 'firoam', sku: 'ESIM-US-5GB' }),
+    );
+    // First call: selected mapping; second call: source mapping for region check
+    vi.mocked(prisma.providerSkuMapping.findUnique)
+      .mockResolvedValueOnce(makeMapping())
+      .mockResolvedValueOnce(makeMapping());
+    mockGetVariantGidBySku.mockResolvedValue(null);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: 'shopify_variant_not_found' });
+  });
+
+  it('returns checkoutUrl on success', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+      makeDelivery({ provider: 'firoam', sku: 'ESIM-US-5GB' }),
+    );
+    // First call: selected mapping; second call: source mapping for region check
+    vi.mocked(prisma.providerSkuMapping.findUnique)
+      .mockResolvedValueOnce(makeMapping())
+      .mockResolvedValueOnce(makeMapping());
+    mockGetVariantGidBySku.mockResolvedValue('gid://shopify/ProductVariant/999');
+    mockCreateDraftOrder.mockResolvedValue({ checkoutUrl: 'https://shop.com/checkout/abc' });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/topup-checkout/test-uuid-token',
+      headers: JSON_HEADERS,
+      payload: { mappingId: 'map-1' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ checkoutUrl: 'https://shop.com/checkout/abc' });
+    expect(mockCreateDraftOrder).toHaveBeenCalledWith(
+      'gid://shopify/ProductVariant/999',
+      '8901000000000001',
+      'test@example.com',
+    );
   });
 });
