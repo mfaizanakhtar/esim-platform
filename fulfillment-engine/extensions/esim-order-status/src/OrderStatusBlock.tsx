@@ -12,19 +12,19 @@ import {
   Modal,
   QRCode,
 } from '@shopify/ui-extensions-react/customer-account';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-interface EsimDeliveryResponse {
-  status: string;
+interface DeliveryMetafieldEntry {
+  status: 'provisioning' | 'delivered' | 'cancelled' | 'failed';
+  accessToken?: string;
   lpa?: string;
   activationCode?: string;
   iccid?: string;
   usageUrl?: string;
-  canCancel?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -50,49 +50,30 @@ function EsimOrderStatusBlock() {
   const lineItemId = target.id.split('/').pop() ?? '';
 
   // Read the single "esim.delivery_tokens" metafield declared in shopify.extension.toml.
-  // Value is a JSON object: { "<lineItemId>": "<accessToken>", ... }
+  // Value is a JSON object: { "<lineItemId>": { status, accessToken, lpa, ... }, ... }
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
-  let tokenMap: Record<string, string> = {};
+  let tokenMap: Record<string, DeliveryMetafieldEntry> = {};
   if (tokensRaw) {
     try {
-      tokenMap = JSON.parse(tokensRaw) as Record<string, string>;
+      tokenMap = JSON.parse(tokensRaw) as Record<string, DeliveryMetafieldEntry>;
     } catch {
       // Malformed metafield value; treat as empty
     }
   }
-  const accessToken = lineItemId ? tokenMap[lineItemId] : undefined;
+  const entry = lineItemId ? tokenMap[lineItemId] : undefined;
 
-  const [esim, setEsim] = useState<EsimDeliveryResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [fetchError, setFetchError] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
 
-  // Fetch eSIM data from backend
-  useEffect(() => {
-    if (!accessToken) return;
-
-    setLoading(true);
-    setFetchError(false);
-    fetch(`${BACKEND_URL}/esim/delivery/${accessToken}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json() as Promise<EsimDeliveryResponse>;
-      })
-      .then((data) => setEsim(data))
-      .catch(() => setFetchError(true))
-      .finally(() => setLoading(false));
-  }, [accessToken]);
-
   const handleCancel = useCallback(async () => {
-    if (!accessToken) return;
+    if (!entry?.accessToken) return;
     setCancelling(true);
     setCancelError(null);
     try {
-      const res = await fetch(`${BACKEND_URL}/esim/delivery/${accessToken}/cancel`, {
+      const res = await fetch(`${BACKEND_URL}/esim/delivery/${entry.accessToken}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -110,12 +91,12 @@ function EsimOrderStatusBlock() {
     } finally {
       setCancelling(false);
     }
-  }, [accessToken]);
+  }, [entry?.accessToken]);
 
-  // Don't render anything if this line item has no eSIM token
-  if (!accessToken) return null;
+  // Don't render anything if this line item has no eSIM entry
+  if (!entry) return null;
 
-  if (loading) {
+  if (entry.status === 'provisioning') {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -124,29 +105,7 @@ function EsimOrderStatusBlock() {
     );
   }
 
-  if (fetchError) {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Banner status="critical">
-          <Text>Unable to load eSIM details. Please try again later.</Text>
-        </Banner>
-      </BlockStack>
-    );
-  }
-
-  if (!esim) return null;
-
-  if (esim.status === 'cancelled' || cancelled) {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Badge tone="critical">eSIM Cancelled</Badge>
-      </BlockStack>
-    );
-  }
-
-  if (esim.status === 'failed') {
+  if (entry.status === 'failed') {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -157,7 +116,16 @@ function EsimOrderStatusBlock() {
     );
   }
 
-  if (esim.status !== 'delivered') {
+  if (entry.status === 'cancelled' || cancelled) {
+    return (
+      <BlockStack spacing="base">
+        <Divider />
+        <Badge tone="critical">eSIM Cancelled</Badge>
+      </BlockStack>
+    );
+  }
+
+  if (entry.status !== 'delivered') {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -174,36 +142,36 @@ function EsimOrderStatusBlock() {
         Your eSIM
       </Text>
 
-      {esim.lpa && <QRCode content={esim.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
+      {entry.lpa && <QRCode content={entry.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
 
       <BlockStack spacing="tight">
         <InlineStack spacing="base">
           <Text appearance="subdued">Activation Code</Text>
-          <Text emphasis="bold">{esim.activationCode}</Text>
+          <Text emphasis="bold">{entry.activationCode}</Text>
         </InlineStack>
         <InlineStack spacing="base">
           <Text appearance="subdued">ICCID</Text>
-          <Text>{esim.iccid}</Text>
+          <Text>{entry.iccid}</Text>
         </InlineStack>
       </BlockStack>
 
       <InlineStack spacing="base">
-        {esim.lpa && (
+        {entry.lpa && (
           <Button
-            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(esim.lpa)}`}
+            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(entry.lpa)}`}
             appearance="primary"
           >
             Install on iPhone
           </Button>
         )}
-        {esim.usageUrl && (
-          <Button to={esim.usageUrl} appearance="secondary">
+        {entry.usageUrl && (
+          <Button to={entry.usageUrl} appearance="secondary">
             View Usage
           </Button>
         )}
       </InlineStack>
 
-      {esim.canCancel && !cancelled && (
+      {entry.accessToken && !cancelled && (
         <Button appearance="critical" onPress={() => setCancelModalOpen(true)}>
           Cancel eSIM
         </Button>

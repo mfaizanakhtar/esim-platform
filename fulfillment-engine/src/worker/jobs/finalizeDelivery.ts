@@ -3,6 +3,8 @@ import prisma from '~/db/prisma';
 import { decrypt, encrypt, hashIccid } from '~/utils/crypto';
 import { sendDeliveryEmail, recordDeliveryAttempt, type EsimPayload } from '~/services/email';
 import { getShopifyClient } from '~/shopify/client';
+
+const SHOPIFY_CUSTOM_DOMAIN = process.env.SHOPIFY_CUSTOM_DOMAIN ?? 'fluxyfi.com';
 import { logger } from '~/utils/logger';
 
 export interface DeliveryMetadata {
@@ -113,7 +115,15 @@ export async function finalizeDelivery(
     }
 
     try {
-      await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, accessToken);
+      const usageUrl = `https://${SHOPIFY_CUSTOM_DOMAIN}/pages/my-esim-usage?iccid=${args.iccid}`;
+      await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, {
+        status: 'delivered',
+        accessToken,
+        lpa: args.lpa,
+        activationCode: args.activationCode,
+        iccid: args.iccid,
+        usageUrl,
+      });
     } catch (error) {
       // Non-fatal: email was sent, eSIM is delivered. Extension can show a fallback.
       logger.error(

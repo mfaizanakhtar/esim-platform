@@ -21,7 +21,10 @@ vi.mock('~/services/email', () => ({
 }));
 
 vi.mock('~/shopify/client', () => ({
-  getShopifyClient: vi.fn(() => ({ createFulfillment: vi.fn(async () => undefined) })),
+  getShopifyClient: vi.fn(() => ({
+    createFulfillment: vi.fn(async () => undefined),
+    writeDeliveryMetafield: vi.fn(async () => undefined),
+  })),
 }));
 
 import prisma from '~/db/prisma';

@@ -10,6 +10,7 @@ import {
   getTgtPollMaxAttempts,
 } from '~/vendor/tgtConfig';
 import { getJobQueue } from '~/queue/jobQueue';
+import { getShopifyClient } from '~/shopify/client';
 
 interface ProvisionJobData {
   deliveryId: string;
@@ -37,6 +38,17 @@ export async function handleProvision(data: ProvisionJobData) {
   }
 
   await prisma.esimDelivery.update({ where: { id: deliveryId }, data: { status: 'provisioning' } });
+
+  if (delivery.orderId) {
+    const shopify = getShopifyClient();
+    try {
+      await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, {
+        status: 'provisioning',
+      });
+    } catch (error) {
+      logger.warn({ deliveryId, err: error }, 'Failed to write provisioning metafield (non-fatal)');
+    }
+  }
 
   logger.info(
     { deliveryId, requestId: data.requestId, orderName: delivery.orderName },
@@ -177,6 +189,19 @@ export async function handleProvision(data: ProvisionJobData) {
         ...(resolvedProvider ? { provider: resolvedProvider } : {}),
       },
     });
+    if (delivery.orderId) {
+      const shopify = getShopifyClient();
+      try {
+        await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, {
+          status: 'failed',
+        });
+      } catch (metafieldError) {
+        logger.warn(
+          { deliveryId, err: metafieldError },
+          'Failed to write failed metafield (non-fatal)',
+        );
+      }
+    }
     throw err;
   }
 }

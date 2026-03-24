@@ -218,6 +218,25 @@ export default function esimRoutes(
         data: { status: 'cancelled' },
       });
 
+      if (delivery.orderId) {
+        try {
+          const shopify = getShopifyClient();
+          await shopify.writeDeliveryMetafield(delivery.orderId, delivery.lineItemId, {
+            status: 'cancelled',
+            accessToken: delivery.accessToken ?? undefined,
+            lpa: payload.lpa ?? undefined,
+            activationCode: payload.activationCode ?? undefined,
+            iccid: payload.iccid ?? undefined,
+            usageUrl: `https://${SHOPIFY_CUSTOM_DOMAIN}/pages/my-esim-usage?iccid=${payload.iccid ?? ''}`,
+          });
+        } catch (error) {
+          logger.warn(
+            { deliveryId: delivery.id, err: error },
+            'Failed to update cancelled metafield (non-fatal)',
+          );
+        }
+      }
+
       return reply.send({ ok: true });
     },
   );
