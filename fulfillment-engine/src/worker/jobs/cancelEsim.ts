@@ -1,9 +1,15 @@
+import { z } from 'zod';
 import prisma from '~/db/prisma';
 import { decrypt } from '~/utils/crypto';
 import { getShopifyClient } from '~/shopify/client';
 import FiRoamClient from '~/vendor/firoamClient';
 import TgtClient from '~/vendor/tgtClient';
 import { logger } from '~/utils/logger';
+
+const DecryptedPayloadSchema = z.object({
+  iccid: z.string().optional(),
+  vendorId: z.string().optional(),
+});
 
 interface CancelEsimJobData {
   deliveryId: string;
@@ -74,11 +80,13 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
 
   let iccid: string | undefined;
   try {
-    const parsed = JSON.parse(decrypt(delivery.payloadEncrypted)) as {
-      iccid?: string;
-      vendorId?: string;
-    };
-    iccid = parsed.iccid;
+    const parseResult = DecryptedPayloadSchema.safeParse(
+      JSON.parse(decrypt(delivery.payloadEncrypted)),
+    );
+    if (!parseResult.success) {
+      throw new Error(`Invalid payload shape: ${parseResult.error.message}`);
+    }
+    iccid = parseResult.data.iccid;
   } catch {
     logger.error({ deliveryId }, 'cancelEsim: failed to decrypt payload');
     await writeOutcome(

@@ -58,7 +58,10 @@ async function run() {
       logger.info({ jobId }, 'cancel-esim job completed');
     } catch (err) {
       logger.error({ jobId, err }, 'cancel-esim job failed');
-      throw err;
+      if (isRetryable(err)) {
+        throw err;
+      }
+      logger.warn({ jobId }, 'Non-retryable cancel-esim error — skipping pg-boss retries');
     }
   });
 
