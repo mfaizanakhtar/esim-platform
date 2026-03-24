@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { initializeJobQueue, stopJobQueue } from '~/queue/jobQueue';
 import { handleProvision } from '~/worker/jobs/provisionEsim';
 import { handleTgtPoll } from '~/worker/jobs/tgtPoll';
+import { handleCancelEsim } from '~/worker/jobs/cancelEsim';
 import { logger } from '~/utils/logger';
 import { isRetryable } from '~/utils/errors';
 
@@ -45,6 +46,22 @@ async function run() {
       if (isRetryable(err)) {
         throw err;
       }
+    }
+  });
+
+  await boss.work('cancel-esim', { teamSize: 3, teamConcurrency: 1 }, async (job: unknown) => {
+    const j = job as Record<string, unknown>;
+    const jobId = j.id ? String(j.id) : 'unknown';
+
+    try {
+      await handleCancelEsim(j.data as Parameters<typeof handleCancelEsim>[0]);
+      logger.info({ jobId }, 'cancel-esim job completed');
+    } catch (err) {
+      logger.error({ jobId, err }, 'cancel-esim job failed');
+      if (isRetryable(err)) {
+        throw err;
+      }
+      logger.warn({ jobId }, 'Non-retryable cancel-esim error — skipping pg-boss retries');
     }
   });
 

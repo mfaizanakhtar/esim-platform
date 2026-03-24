@@ -23,6 +23,7 @@ vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findFirst: vi.fn(),
+      findMany: vi.fn(),
       create: vi.fn(),
     },
   },
@@ -698,6 +699,177 @@ describe('POST /orders/paid — Fastify handler', () => {
       'provision-esim',
       expect.objectContaining({ requestId: expect.any(String) }),
       expect.any(Object),
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /orders/cancelled — admin cancel webhook
+// ---------------------------------------------------------------------------
+
+describe('POST /orders/cancelled — Fastify handler', () => {
+  let app: FastifyInstance;
+
+  const CANCEL_PAYLOAD = { id: 777777 };
+
+  function cancelSignedHeaders(rawBody: string) {
+    return {
+      'content-type': 'application/json',
+      'x-shopify-hmac-sha256': computeHmac(rawBody),
+      'x-shopify-shop-domain': 'test-store.myshopify.com',
+      'x-shopify-topic': 'orders/cancelled',
+    };
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    process.env.SHOPIFY_WEBHOOK_SECRET = TEST_SECRET;
+    app = await buildTestApp();
+  });
+
+  afterEach(async () => {
+    vi.resetAllMocks();
+    await app.close();
+  });
+
+  it('returns 401 when HMAC header is missing', async () => {
+    const rawBody = JSON.stringify(CANCEL_PAYLOAD);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/cancelled',
+      headers: { 'content-type': 'application/json' },
+      payload: rawBody,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 401 when HMAC is invalid', async () => {
+    const rawBody = JSON.stringify(CANCEL_PAYLOAD);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/cancelled',
+      headers: {
+        'content-type': 'application/json',
+        'x-shopify-hmac-sha256': 'bad-hmac',
+      },
+      payload: rawBody,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 200 and ignores when topic is not orders/cancelled', async () => {
+    const rawBody = JSON.stringify(CANCEL_PAYLOAD);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/cancelled',
+      headers: {
+        'content-type': 'application/json',
+        'x-shopify-hmac-sha256': computeHmac(rawBody),
+        'x-shopify-topic': 'orders/updated',
+      },
+      payload: rawBody,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ received: true, ignored: true });
+    expect(mockJobSend).not.toHaveBeenCalled();
+  });
+
+  it('returns 200 and skips when no active deliveries found', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([]);
+
+    const rawBody = JSON.stringify(CANCEL_PAYLOAD);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/cancelled',
+      headers: cancelSignedHeaders(rawBody),
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ received: true });
+    expect(mockJobSend).not.toHaveBeenCalled();
+  });
+
+  it('enqueues one cancel-esim job per active delivery', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({ id: 'del-1', status: 'delivered' }),
+      makeDelivery({ id: 'del-2', status: 'pending' }),
+    ] as EsimDelivery[]);
+
+    const rawBody = JSON.stringify(CANCEL_PAYLOAD);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/cancelled',
+      headers: cancelSignedHeaders(rawBody),
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockJobSend).toHaveBeenCalledTimes(2);
+    expect(mockJobSend).toHaveBeenCalledWith(
+      'cancel-esim',
+      expect.objectContaining({ deliveryId: 'del-1', orderId: '777777' }),
+      expect.any(Object),
+    );
+    expect(mockJobSend).toHaveBeenCalledWith(
+      'cancel-esim',
+      expect.objectContaining({ deliveryId: 'del-2', orderId: '777777' }),
+      expect.any(Object),
+    );
+  });
+
+  it('returns 400 when payload fails schema validation', async () => {
+    const badPayload = { this_is: 'not a shopify cancel order' };
+    const rawBody = JSON.stringify(badPayload);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/cancelled',
+      headers: {
+        'content-type': 'application/json',
+        'x-shopify-hmac-sha256': computeHmac(rawBody),
+        'x-shopify-topic': 'orders/cancelled',
+      },
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: 'Invalid webhook payload' });
+  });
+
+  it('returns 200 with error when an unexpected exception is thrown', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockRejectedValue(new Error('DB crash'));
+
+    const rawBody = JSON.stringify(CANCEL_PAYLOAD);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/orders/cancelled',
+      headers: cancelSignedHeaders(rawBody),
+      payload: rawBody,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ received: true, error: 'Processing error' });
+  });
+
+  it('returns 200 and queries with notIn terminal statuses', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([]);
+
+    const rawBody = JSON.stringify(CANCEL_PAYLOAD);
+    await app.inject({
+      method: 'POST',
+      url: '/orders/cancelled',
+      headers: cancelSignedHeaders(rawBody),
+      payload: rawBody,
+    });
+
+    expect(vi.mocked(prisma.esimDelivery.findMany)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          orderId: '777777',
+          status: { notIn: ['cancelled', 'failed'] },
+        }),
+      }),
     );
   });
 });

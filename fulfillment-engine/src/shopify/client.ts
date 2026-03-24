@@ -437,6 +437,78 @@ export class ShopifyClient {
   }
 
   /**
+   * Append a note to a Shopify order (reads current note first to avoid overwriting).
+   */
+  async appendOrderNote(orderId: string, note: string): Promise<void> {
+    const token = await this.getAccessToken();
+
+    const queryResponse = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      {
+        query: `query getOrderNote($id: ID!) { order(id: $id) { note } }`,
+        variables: { id: `gid://shopify/Order/${orderId}` },
+      },
+      { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+    );
+
+    const currentNote = (queryResponse.data?.data?.order?.note as string | null) ?? '';
+    const updatedNote = currentNote ? `${currentNote}\n---\n${note}` : note;
+
+    const mutationResponse = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      {
+        query: `
+          mutation orderUpdate($input: OrderInput!) {
+            orderUpdate(input: $input) {
+              order { id }
+              userErrors { field message }
+            }
+          }
+        `,
+        variables: { input: { id: `gid://shopify/Order/${orderId}`, note: updatedNote } },
+      },
+      { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+    );
+
+    const errors = mutationResponse.data?.data?.orderUpdate?.userErrors;
+    if (errors?.length > 0) {
+      throw new Error(
+        `Order note update errors: ${errors.map((e: { message: string }) => e.message).join(', ')}`,
+      );
+    }
+  }
+
+  /**
+   * Add tags to a Shopify order.
+   */
+  async addOrderTags(orderId: string, tags: string[]): Promise<void> {
+    const token = await this.getAccessToken();
+
+    const response = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      {
+        query: `
+          mutation tagsAdd($id: ID!, $tags: [String!]!) {
+            tagsAdd(id: $id, tags: $tags) {
+              node { id }
+              userErrors { message }
+            }
+          }
+        `,
+        variables: { id: `gid://shopify/Order/${orderId}`, tags },
+      },
+      { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+    );
+
+    const errors = response.data?.data?.tagsAdd?.userErrors;
+    if (errors?.length > 0) {
+      throw new Error(
+        `Order tag errors: ${errors.map((e: { message: string }) => e.message).join(', ')}`,
+      );
+    }
+  }
+
+  /**
    * Initialize token on startup (optional but recommended)
    */
   async initialize(): Promise<void> {

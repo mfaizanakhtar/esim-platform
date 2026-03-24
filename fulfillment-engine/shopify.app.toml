@@ -12,6 +12,10 @@ api_version = "2026-01"
   topics = [ "orders/paid" ]
   uri = "/webhook/orders/paid"
 
+  [[webhooks.subscriptions]]
+  topics = [ "orders/cancelled" ]
+  uri = "/webhook/orders/cancelled"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_orders,write_orders,read_products,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_themes,write_themes"
