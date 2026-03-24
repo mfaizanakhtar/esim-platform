@@ -8,7 +8,6 @@ import {
   Banner,
   Divider,
   Badge,
-  Modal,
   QRCode,
   CustomerAccountAction,
 } from '@shopify/ui-extensions-react/customer-account';
@@ -74,7 +73,7 @@ function EsimOrderAction() {
 // ---------------------------------------------------------------------------
 
 function EsimCard({ entry }: { entry: DeliveryMetafieldEntry }) {
-  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelled, setCancelled] = useState(false);
@@ -97,7 +96,7 @@ function EsimCard({ entry }: { entry: DeliveryMetafieldEntry }) {
         }
       } else {
         setCancelled(true);
-        setCancelModalOpen(false);
+        setConfirmingCancel(false);
       }
     } catch {
       setCancelError('Network error. Please try again.');
@@ -160,34 +159,32 @@ function EsimCard({ entry }: { entry: DeliveryMetafieldEntry }) {
         )}
       </InlineStack>
 
-      {entry.accessToken && !cancelled && (
-        <Button appearance="critical" onPress={() => setCancelModalOpen(true)}>
+      {entry.accessToken && !cancelled && !confirmingCancel && (
+        <Button appearance="critical" onPress={() => setConfirmingCancel(true)}>
           Cancel eSIM
         </Button>
       )}
 
-      {cancelModalOpen && (
-        <Modal title="Cancel eSIM" onClose={() => setCancelModalOpen(false)}>
-          <BlockStack spacing="base">
-            <Text>
-              Are you sure you want to cancel this eSIM? This will deactivate the eSIM and refund
-              your order. This action cannot be undone if the eSIM has already been installed.
-            </Text>
-            {cancelError && (
-              <Banner status="critical">
-                <Text>{cancelError}</Text>
-              </Banner>
-            )}
-            <InlineStack spacing="base">
-              <Button appearance="critical" onPress={handleCancel} loading={cancelling}>
-                Yes, Cancel eSIM
-              </Button>
-              <Button appearance="secondary" onPress={() => setCancelModalOpen(false)}>
-                Keep eSIM
-              </Button>
-            </InlineStack>
-          </BlockStack>
-        </Modal>
+      {confirmingCancel && (
+        <BlockStack spacing="base">
+          <Text>
+            Are you sure you want to cancel this eSIM? This will deactivate the eSIM and refund
+            your order. This action cannot be undone if the eSIM has already been installed.
+          </Text>
+          {cancelError && (
+            <Banner status="critical">
+              <Text>{cancelError}</Text>
+            </Banner>
+          )}
+          <InlineStack spacing="base">
+            <Button appearance="critical" onPress={handleCancel} loading={cancelling}>
+              Yes, Cancel eSIM
+            </Button>
+            <Button appearance="secondary" onPress={() => { setConfirmingCancel(false); setCancelError(null); }}>
+              Keep eSIM
+            </Button>
+          </InlineStack>
+        </BlockStack>
       )}
     </BlockStack>
   );
