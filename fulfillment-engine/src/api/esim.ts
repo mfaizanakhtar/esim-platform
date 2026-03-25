@@ -384,47 +384,5 @@ export default function esimRoutes(
     },
   );
 
-  /**
-   * GET /esim/order-delivery-status/:orderId
-   * Returns eSIM delivery status (no credentials) for all line items in an order.
-   * Used by the checkout thank-you extension to show provisioning state before
-   * the Shopify order metafield is written (timing gap after checkout).
-   * Intentionally returns status only — no tokens or credentials.
-   */
-  const OrderDeliveryStatusParamsSchema = z.object({ orderId: z.string().min(1) });
-
-  app.get(
-    '/esim/order-delivery-status/:orderId',
-    async (request: FastifyRequest<{ Params: { orderId: string } }>, reply: FastifyReply) => {
-      const parsed = OrderDeliveryStatusParamsSchema.safeParse(request.params);
-      if (!parsed.success) {
-        return reply.code(400).send({ error: 'Invalid orderId' });
-      }
-      const { orderId } = parsed.data;
-
-      logger.info({ orderId }, 'Order delivery status requested');
-
-      let deliveries: { lineItemId: string; status: string }[];
-      try {
-        deliveries = await prisma.esimDelivery.findMany({
-          where: { orderId },
-          select: { lineItemId: true, status: true },
-        });
-      } catch (error) {
-        logger.error({ orderId, err: error }, 'Failed to query order delivery status');
-        return reply.code(500).send({ error: 'Failed to retrieve delivery status' });
-      }
-
-      logger.info({ orderId, count: deliveries.length }, 'Order delivery status returned');
-
-      return reply.send({
-        deliveries: deliveries.map((d) => ({
-          lineItemId: d.lineItemId,
-          status: d.status,
-        })),
-      });
-    },
-  );
-
   done();
 }

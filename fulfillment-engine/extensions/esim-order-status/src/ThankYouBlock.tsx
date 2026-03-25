@@ -1,6 +1,5 @@
 import {
   reactExtension,
-  useOrderConfirmation,
   useCartLine,
   useAppMetafields,
   BlockStack,
@@ -13,11 +12,15 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
-import { BACKEND, PROVISIONING_QUIPS, type DeliveryMetafieldEntry, parseTokenMap } from './shared';
+import { PROVISIONING_QUIPS, type DeliveryMetafieldEntry, parseTokenMap } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point — renders under each line item on the post-checkout
 // thank-you page (checkout surface, visible without a customer account).
+//
+// Credentials come from the order metafield (esim.delivery_tokens) — the same
+// source used by the customer-account order status extension. No backend call
+// is made from this component; all data goes through Shopify's metafield API.
 // ---------------------------------------------------------------------------
 
 export default reactExtension(
@@ -25,144 +28,52 @@ export default reactExtension(
   () => <ThankYouEsimBlock />,
 );
 
-interface OrderDelivery {
-  lineItemId: string;
-  status: string;
+/** Detect whether the current cart line is an eSIM product by inspecting
+ *  the merchandise metadata available in the checkout surface. */
+function isEsimMerchandise(cartLine: ReturnType<typeof useCartLine>): boolean {
+  const title = cartLine?.merchandise?.title ?? '';
+  const productType = (cartLine?.merchandise as { product?: { productType?: string } })?.product
+    ?.productType ?? '';
+  return (
+    title.toLowerCase().includes('esim') ||
+    title.toLowerCase().includes('e-sim') ||
+    productType.toLowerCase().includes('esim')
+  );
 }
-
-// ---------------------------------------------------------------------------
-// Module-level shared poll registry — one poll per order, shared across all
-// cart line instances, avoids duplicate requests for multi-line orders.
-// ---------------------------------------------------------------------------
-
-type PollCallback = (deliveries: OrderDelivery[]) => void;
-
-const activeOrderPolls = new Map<
-  string,
-  { callbacks: Set<PollCallback>; stopped: boolean }
->();
-
-function subscribeToOrderDeliveries(orderId: string, onResult: PollCallback): () => void {
-  if (!activeOrderPolls.has(orderId)) {
-    const state: { callbacks: Set<PollCallback>; stopped: boolean } = {
-      callbacks: new Set(),
-      stopped: false,
-    };
-    activeOrderPolls.set(orderId, state);
-
-    let attempts = 0;
-    const poll = async () => {
-      if (state.stopped || ++attempts > 40) {
-        activeOrderPolls.delete(orderId);
-        return;
-      }
-      try {
-        const r = await fetch(`${BACKEND}/esim/order-delivery-status/${orderId}`);
-        if (r.ok) {
-          const data = (await r.json()) as { deliveries: OrderDelivery[] };
-          state.callbacks.forEach((cb) => cb(data.deliveries));
-          const allSettled =
-            data.deliveries.length > 0 &&
-            data.deliveries.every((d) => !['pending', 'provisioning'].includes(d.status));
-          if (allSettled) {
-            state.stopped = true;
-            activeOrderPolls.delete(orderId);
-            return;
-          }
-        }
-      } catch {
-        /* network blip — retry */
-      }
-      if (!state.stopped) setTimeout(() => void poll(), 3000);
-    };
-
-    void poll();
-  }
-
-  const state = activeOrderPolls.get(orderId)!;
-  state.callbacks.add(onResult);
-  return () => {
-    state.callbacks.delete(onResult);
-    if (state.callbacks.size === 0) {
-      state.stopped = true;
-      activeOrderPolls.delete(orderId);
-    }
-  };
-}
-
-// ---------------------------------------------------------------------------
 
 function ThankYouEsimBlock() {
-  const orderConfirmation = useOrderConfirmation();
   const cartLine = useCartLine();
 
-  // Extract numeric IDs from GIDs (e.g. "gid://shopify/Order/12345" → "12345")
-  const numericOrderId = orderConfirmation?.order?.id?.split('/').pop() ?? '';
-  const numericLineItemId = cartLine?.id?.split('/').pop() ?? '';
-
-  // Read the order metafield — written by the webhook/worker with credentials.
-  // This is the primary source for credentials on the thank-you page.
+  // Read the order metafield — written by the webhook/worker with delivery state.
+  // The value is a JSON map: { "<lineItemId>": { status, lpa, ... }, ... }
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
   const tokenMap = parseTokenMap(tokensRaw);
-  const metafieldEntry: DeliveryMetafieldEntry | undefined = numericLineItemId
+  const numericLineItemId = cartLine?.id?.split('/').pop() ?? '';
+  const entry: DeliveryMetafieldEntry | undefined = numericLineItemId
     ? tokenMap[numericLineItemId]
     : undefined;
 
-  // Optimistic status: start as 'pending' so the spinner shows immediately
-  // while the poll is in-flight. If the line item turns out to have no eSIM
-  // (poll returns no match after all attempts), status stays 'pending' but
-  // the component is hidden via the `isEsim` flag.
-  const [isEsim, setIsEsim] = useState<boolean | null>(null);
-  const [polledStatus, setPolledStatus] = useState<string>('pending');
+  // Optimistic provisioning state: show spinner while metafield is being written.
+  // Only shown for products identified as eSIMs via merchandise metadata —
+  // prevents false-positive spinners under non-eSIM line items.
+  const looksLikeEsim = isEsimMerchandise(cartLine);
   const [quipIndex, setQuipIndex] = useState(0);
+  const isProvisioning = !entry && looksLikeEsim;
 
-  // Rotate quips while provisioning / pending
-  const activeStatus = metafieldEntry?.status ?? polledStatus;
   useEffect(() => {
-    if (activeStatus !== 'provisioning' && activeStatus !== 'pending') return;
+    if (!isProvisioning) return;
     const interval = setInterval(() => {
       setQuipIndex((prev) => (prev + 1) % PROVISIONING_QUIPS.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, [activeStatus]);
+  }, [isProvisioning]);
 
-  // Subscribe to shared order poll — updates polledStatus and isEsim flag
-  useEffect(() => {
-    if (!numericOrderId || !numericLineItemId) return;
-    return subscribeToOrderDeliveries(numericOrderId, (deliveries) => {
-      const match = deliveries.find((d) => d.lineItemId === numericLineItemId);
-      if (match) {
-        setIsEsim(true);
-        setPolledStatus(match.status);
-      } else {
-        setIsEsim(false);
-      }
-    });
-  }, [numericOrderId, numericLineItemId]);
+  // Nothing to render if not an eSIM line and no metafield entry
+  if (!entry && !looksLikeEsim) return null;
 
-  // If the metafield already has an entry we know it's an eSIM line
-  if (!metafieldEntry && isEsim === false) return null;
-  if (!metafieldEntry && isEsim === null) {
-    // Still waiting for first poll result — show optimistic spinner
-    return (
-      <BlockStack spacing="tight">
-        <Banner status="info">
-          <InlineStack spacing="base" blockAlignment="center">
-            <Spinner size="small" />
-            <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
-          </InlineStack>
-        </Banner>
-      </BlockStack>
-    );
-  }
-
-  // Use metafield entry as source of truth once available
-  const entry = metafieldEntry;
-  const status = entry?.status ?? polledStatus;
-
-  // ── Provisioning / pending ────────────────────────────────────────────────
-  if (status === 'provisioning' || status === 'pending') {
+  // ── Optimistic provisioning (metafield not yet written) ───────────────────
+  if (isProvisioning) {
     return (
       <BlockStack spacing="tight">
         <Banner status="info">
@@ -173,12 +84,11 @@ function ThankYouEsimBlock() {
             </InlineStack>
             <Text appearance="subdued">{PROVISIONING_QUIPS[quipIndex]}</Text>
             <Text>
-              Once ready, your QR code and activation details will appear right here automatically
-              — no need to refresh.
+              Once ready, your QR code and activation details will appear right here — no need to
+              refresh.
             </Text>
             <Text>
-              Feel free to close this page. {"We'll"} email you the details once your eSIM is
-              ready.
+              {"Feel free to close this page. We'll email you the details once your eSIM is ready."}
             </Text>
           </BlockStack>
         </Banner>
@@ -186,8 +96,35 @@ function ThankYouEsimBlock() {
     );
   }
 
-  // ── Delivered with full credentials from metafield ────────────────────────
-  if (status === 'delivered' && entry?.lpa) {
+  // Metafield entry exists — use it as the source of truth
+  if (!entry) return null;
+
+  // ── Provisioning from metafield ───────────────────────────────────────────
+  if (entry.status === 'provisioning' || entry.status === 'pending') {
+    return (
+      <BlockStack spacing="tight">
+        <Banner status="info">
+          <BlockStack spacing="base">
+            <InlineStack spacing="base" blockAlignment="center">
+              <Spinner size="small" />
+              <Text emphasis="bold">Your eSIM is being set up</Text>
+            </InlineStack>
+            <Text appearance="subdued">{PROVISIONING_QUIPS[quipIndex]}</Text>
+            <Text>
+              Once ready, your QR code and activation details will appear right here — no need to
+              refresh.
+            </Text>
+            <Text>
+              {"Feel free to close this page. We'll email you the details once your eSIM is ready."}
+            </Text>
+          </BlockStack>
+        </Banner>
+      </BlockStack>
+    );
+  }
+
+  // ── Delivered with full credentials ──────────────────────────────────────
+  if (entry.status === 'delivered' && entry.lpa) {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -233,8 +170,8 @@ function ThankYouEsimBlock() {
     );
   }
 
-  // ── Delivered but metafield not yet populated with credentials ────────────
-  if (status === 'delivered') {
+  // ── Delivered but credentials not yet in metafield ────────────────────────
+  if (entry.status === 'delivered') {
     return (
       <BlockStack spacing="tight">
         <Banner status="success">
@@ -255,7 +192,7 @@ function ThankYouEsimBlock() {
     );
   }
 
-  if (status === 'failed') {
+  if (entry.status === 'failed') {
     return (
       <BlockStack spacing="tight">
         <Banner status="critical">

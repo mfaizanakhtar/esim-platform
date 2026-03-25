@@ -1,6 +1,5 @@
 import {
   reactExtension,
-  useOrder,
   useAppMetafields,
   InlineStack,
   Text,
@@ -23,83 +22,22 @@ export default reactExtension(
   () => <EsimOrderStatusAnnouncement />,
 );
 
-interface OrderDelivery {
-  lineItemId: string;
-  status: string;
-}
-
 function EsimOrderStatusAnnouncement() {
-  // Read order ID for bootstrap polling (before metafield is written)
-  const order = useOrder();
-  const numericOrderId = order?.id?.split('/').pop() ?? '';
-
-  // Metafield snapshot (written by webhook after order creation)
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
   const tokenMap = parseTokenMap(tokensRaw);
-  const metafieldEntries = Object.values(tokenMap).filter(
+
+  const activeEntries = Object.values(tokenMap).filter(
     (e) => e.status === 'provisioning' || e.status === 'delivered',
   );
-
-  // Bootstrap entries: polled from backend when metafield isn't written yet
-  const [bootstrapEntries, setBootstrapEntries] = useState<OrderDelivery[]>([]);
 
   // Live updates from /esim/delivery/:token polling
   const [liveMap, setLiveMap] = useState<Record<string, DeliveryMetafieldEntry>>({});
   const [quipIndex, setQuipIndex] = useState(0);
 
-  // ── Bootstrap poll ──────────────────────────────────────────────────────
-  // When the metafield is missing (typical on first load — the webhook
-  // hasn't fired yet), poll the order-status endpoint until we see deliveries.
-  const hasMetafieldEntries = metafieldEntries.length > 0;
-  useEffect(() => {
-    if (!numericOrderId || hasMetafieldEntries) return;
-    let stopped = false;
-    let attempts = 0;
-
-    const poll = async () => {
-      if (stopped || ++attempts > 30) return;
-      try {
-        const r = await fetch(`${BACKEND}/esim/order-delivery-status/${numericOrderId}`);
-        if (r.ok) {
-          const data = (await r.json()) as { deliveries: OrderDelivery[] };
-          const active = data.deliveries.filter(
-            (d) =>
-              d.status === 'pending' ||
-              d.status === 'provisioning' ||
-              d.status === 'delivered',
-          );
-          if (active.length > 0) {
-            setBootstrapEntries(active);
-            stopped = true;
-            return;
-          }
-        }
-      } catch {
-        /* network blip */
-      }
-      if (!stopped) setTimeout(() => void poll(), 3000);
-    };
-
-    void poll();
-    return () => {
-      stopped = true;
-    };
-  }, [numericOrderId, hasMetafieldEntries]);
-
-  // ── Merge entries ────────────────────────────────────────────────────────
-  // Prefer metafield entries (authoritative) over bootstrap entries.
-  const baseEntries: DeliveryMetafieldEntry[] =
-    metafieldEntries.length > 0
-      ? metafieldEntries
-      : bootstrapEntries.map((b) => ({
-          status: b.status as DeliveryMetafieldEntry['status'],
-          accessToken: b.accessToken,
-        }));
-
-  // Apply live updates on top, preserving the original accessToken (the
+  // Apply live updates, preserving the original accessToken (the
   // /esim/delivery/:token response doesn't include it).
-  const resolvedEntries = baseEntries.map((e) =>
+  const resolvedEntries = activeEntries.map((e) =>
     e.accessToken && liveMap[e.accessToken]
       ? { ...e, ...liveMap[e.accessToken], accessToken: e.accessToken }
       : e,
