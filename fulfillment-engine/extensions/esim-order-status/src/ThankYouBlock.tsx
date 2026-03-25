@@ -1,6 +1,6 @@
 import {
   reactExtension,
-  useCartLine,
+  useCartLineTarget,
   useAppMetafields,
   BlockStack,
   InlineStack,
@@ -30,7 +30,7 @@ export default reactExtension(
 
 /** Detect whether the current cart line is an eSIM product by inspecting
  *  the merchandise metadata available in the checkout surface. */
-function isEsimMerchandise(cartLine: ReturnType<typeof useCartLine>): boolean {
+function isEsimMerchandise(cartLine: ReturnType<typeof useCartLineTarget>): boolean {
   const title = cartLine?.merchandise?.title ?? '';
   const productType = (cartLine?.merchandise as { product?: { productType?: string } })?.product
     ?.productType ?? '';
@@ -42,7 +42,7 @@ function isEsimMerchandise(cartLine: ReturnType<typeof useCartLine>): boolean {
 }
 
 function ThankYouEsimBlock() {
-  const cartLine = useCartLine();
+  const cartLine = useCartLineTarget();
 
   // Read the order metafield — written by the webhook/worker with delivery state.
   // The value is a JSON map: { "<lineItemId>": { status, lpa, ... }, ... }
