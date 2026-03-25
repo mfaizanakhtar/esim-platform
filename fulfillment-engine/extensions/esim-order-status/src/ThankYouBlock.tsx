@@ -74,10 +74,9 @@ function ThankYouEsimBlock() {
           const match = data.deliveries.find((d) => d.lineItemId === numericLineItemId);
           if (match) {
             setDelivery(match);
-            if (match.status !== 'provisioning') {
-              stopped = true;
-              return;
-            }
+            // Stop this loop — token-level polling takes over for provisioning state
+            stopped = true;
+            return;
           }
         }
       } catch {

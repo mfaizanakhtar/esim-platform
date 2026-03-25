@@ -392,15 +392,25 @@ export default function esimRoutes(
    * Returns status + accessToken (no credentials). The accessToken alone has no
    * useful data until delivery is complete; credentials require a separate token fetch.
    */
+  const OrderDeliveryStatusParamsSchema = z.object({ orderId: z.string().min(1) });
+
   app.get(
     '/esim/order-delivery-status/:orderId',
     async (request: FastifyRequest<{ Params: { orderId: string } }>, reply: FastifyReply) => {
-      const { orderId } = request.params;
+      const parsed = OrderDeliveryStatusParamsSchema.safeParse(request.params);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'Invalid orderId' });
+      }
+      const { orderId } = parsed.data;
+
+      logger.info({ orderId }, 'Order delivery status requested');
 
       const deliveries = await prisma.esimDelivery.findMany({
         where: { orderId },
         select: { lineItemId: true, status: true, accessToken: true },
       });
+
+      logger.info({ orderId, count: deliveries.length }, 'Order delivery status returned');
 
       return reply.send({
         deliveries: deliveries.map((d) => ({

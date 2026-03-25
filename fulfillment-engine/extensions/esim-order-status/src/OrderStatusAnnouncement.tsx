@@ -52,8 +52,9 @@ function EsimOrderStatusAnnouncement() {
   // ── Bootstrap poll ──────────────────────────────────────────────────────
   // When the metafield is missing (typical on first load — the webhook
   // hasn't fired yet), poll the order-status endpoint until we see deliveries.
+  const hasMetafieldEntries = metafieldEntries.length > 0;
   useEffect(() => {
-    if (!numericOrderId || metafieldEntries.length > 0) return;
+    if (!numericOrderId || hasMetafieldEntries) return;
     let stopped = false;
     let attempts = 0;
 
@@ -82,7 +83,7 @@ function EsimOrderStatusAnnouncement() {
     return () => {
       stopped = true;
     };
-  }, [numericOrderId, metafieldEntries.length]);
+  }, [numericOrderId, hasMetafieldEntries]);
 
   // ── Merge entries ────────────────────────────────────────────────────────
   // Prefer metafield entries (authoritative) over bootstrap entries.
