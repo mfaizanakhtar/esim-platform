@@ -499,34 +499,16 @@ describe('cancelShopifyOrder', () => {
         kind: 'SALE',
         gateway: 'shopify_payments',
         maximumRefundable: '9.99',
-      },
-    ],
-  };
-
-  const SUGGESTED_REFUND = {
-    refundLineItems: [{ lineItem: { id: 'gid://shopify/LineItem/1' }, quantity: 1 }],
-    transactions: [
-      {
-        parentId: 'gid://shopify/OrderTransaction/10',
-        kind: 'SALE',
-        gateway: 'shopify_payments',
-        amount: '9.99',
-        maximumRefundable: '9.99',
+        status: 'SUCCESS',
       },
     ],
   };
 
   it('issues a full refund successfully', async () => {
     mockTokenRefresh();
-    // Step 1: order query
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, { data: { order: ORDER_RESPONSE } });
-    // Step 2: suggestedRefund
-    nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
-      .reply(200, { data: { order: { suggestedRefund: SUGGESTED_REFUND } } });
-    // Step 3: refundCreate
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, {
@@ -535,25 +517,6 @@ describe('cancelShopifyOrder', () => {
 
     const client = makeClient();
     await expect(client.cancelShopifyOrder('123')).resolves.toBeUndefined();
-  });
-
-  it('throws when there are no refundable line items', async () => {
-    mockTokenRefresh();
-    nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
-      .reply(200, {
-        data: {
-          order: {
-            lineItems: {
-              edges: [{ node: { id: 'gid://shopify/LineItem/1', refundableQuantity: 0 } }],
-            },
-            transactions: [],
-          },
-        },
-      });
-
-    const client = makeClient();
-    await expect(client.cancelShopifyOrder('123')).rejects.toThrow('no refundable line items');
   });
 
   it('throws when order is not found', async () => {
@@ -566,19 +529,58 @@ describe('cancelShopifyOrder', () => {
     await expect(client.cancelShopifyOrder('bad-order')).rejects.toThrow('Order not found');
   });
 
-  it('throws when suggestedRefund is null', async () => {
+  it('throws when there are no refundable line items', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
-      .reply(200, { data: { order: ORDER_RESPONSE } });
-    nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
-      .reply(200, { data: { order: { suggestedRefund: null } } });
+      .reply(200, {
+        data: {
+          order: {
+            lineItems: {
+              edges: [{ node: { id: 'gid://shopify/LineItem/1', refundableQuantity: 0 } }],
+            },
+            transactions: [
+              {
+                id: 'tx-1',
+                kind: 'SALE',
+                gateway: 'shopify_payments',
+                maximumRefundable: '9.99',
+                status: 'SUCCESS',
+              },
+            ],
+          },
+        },
+      });
 
     const client = makeClient();
-    await expect(client.cancelShopifyOrder('123')).rejects.toThrow(
-      'Could not fetch suggested refund',
-    );
+    await expect(client.cancelShopifyOrder('123')).rejects.toThrow('no refundable line items');
+  });
+
+  it('throws when there are no refundable transactions', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          order: {
+            lineItems: {
+              edges: [{ node: { id: 'gid://shopify/LineItem/1', refundableQuantity: 1 } }],
+            },
+            transactions: [
+              {
+                id: 'tx-1',
+                kind: 'SALE',
+                gateway: 'shopify_payments',
+                maximumRefundable: '0.00',
+                status: 'SUCCESS',
+              },
+            ],
+          },
+        },
+      });
+
+    const client = makeClient();
+    await expect(client.cancelShopifyOrder('123')).rejects.toThrow('no refundable transactions');
   });
 
   it('throws when refundCreate returns userErrors', async () => {
@@ -586,9 +588,6 @@ describe('cancelShopifyOrder', () => {
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, { data: { order: ORDER_RESPONSE } });
-    nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
-      .reply(200, { data: { order: { suggestedRefund: SUGGESTED_REFUND } } });
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, {
