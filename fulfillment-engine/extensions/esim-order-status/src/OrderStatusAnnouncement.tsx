@@ -1,48 +1,108 @@
 import {
   reactExtension,
+  useOrder,
   useAppMetafields,
-  BlockStack,
   InlineStack,
   Text,
   Button,
-  Banner,
+  Modal,
+  BlockStack,
   Divider,
   QRCode,
-  Modal,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
 import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap } from './shared';
+
+// ---------------------------------------------------------------------------
+// Extension entry point
+// ---------------------------------------------------------------------------
 
 export default reactExtension(
   'customer-account.order-status.announcement.render',
   () => <EsimOrderStatusAnnouncement />,
 );
 
+interface OrderDelivery {
+  lineItemId: string;
+  status: string;
+  accessToken?: string;
+}
+
 function EsimOrderStatusAnnouncement() {
+  // Read order ID for bootstrap polling (before metafield is written)
+  const order = useOrder();
+  const numericOrderId = order?.id?.split('/').pop() ?? '';
+
+  // Metafield snapshot (written by webhook after order creation)
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
-
   const tokenMap = parseTokenMap(tokensRaw);
-
-  // Only care about active eSIM entries (not cancelled/failed)
-  const activeEntries = Object.values(tokenMap).filter(
+  const metafieldEntries = Object.values(tokenMap).filter(
     (e) => e.status === 'provisioning' || e.status === 'delivered',
   );
 
-  // Track live state from polling (keyed by accessToken)
+  // Bootstrap entries: polled from backend when metafield isn't written yet
+  const [bootstrapEntries, setBootstrapEntries] = useState<OrderDelivery[]>([]);
+
+  // Live updates from /esim/delivery/:token polling
   const [liveMap, setLiveMap] = useState<Record<string, DeliveryMetafieldEntry>>({});
 
-  // Merge live poll results over the metafield snapshot
-  const resolvedEntries = activeEntries.map((e) =>
+  // ── Bootstrap poll ──────────────────────────────────────────────────────
+  // When the metafield is missing (typical on first load — the webhook
+  // hasn't fired yet), poll the order-status endpoint until we see deliveries.
+  useEffect(() => {
+    if (!numericOrderId || metafieldEntries.length > 0) return;
+    let stopped = false;
+    let attempts = 0;
+
+    const poll = async () => {
+      if (stopped || ++attempts > 30) return;
+      try {
+        const r = await fetch(`${BACKEND}/esim/order-delivery-status/${numericOrderId}`);
+        if (r.ok) {
+          const data = (await r.json()) as { deliveries: OrderDelivery[] };
+          const active = data.deliveries.filter(
+            (d) => d.status === 'provisioning' || d.status === 'delivered',
+          );
+          if (active.length > 0) {
+            setBootstrapEntries(active);
+            stopped = true;
+            return;
+          }
+        }
+      } catch {
+        /* network blip */
+      }
+      if (!stopped) setTimeout(() => void poll(), 3000);
+    };
+
+    void poll();
+    return () => {
+      stopped = true;
+    };
+  }, [numericOrderId, metafieldEntries.length]);
+
+  // ── Merge entries ────────────────────────────────────────────────────────
+  // Prefer metafield entries (authoritative) over bootstrap entries.
+  const baseEntries: DeliveryMetafieldEntry[] =
+    metafieldEntries.length > 0
+      ? metafieldEntries
+      : bootstrapEntries.map((b) => ({
+          status: b.status as DeliveryMetafieldEntry['status'],
+          accessToken: b.accessToken,
+        }));
+
+  // Apply live updates on top
+  const resolvedEntries = baseEntries.map((e) =>
     e.accessToken && liveMap[e.accessToken] ? liveMap[e.accessToken] : e,
   );
 
-  // Find the first provisioning entry to poll
+  // ── Token poll ───────────────────────────────────────────────────────────
+  // For any provisioning entry with an accessToken, poll every 5s.
   const pollingEntry = resolvedEntries.find(
     (e) => e.status === 'provisioning' && e.accessToken,
   );
 
-  // Poll while any entry is still provisioning
   useEffect(() => {
     if (!pollingEntry?.accessToken) return;
     const token = pollingEntry.accessToken;
@@ -62,58 +122,51 @@ function EsimOrderStatusAnnouncement() {
           }
         })
         .catch(() => {
-          /* network blip — retry next tick */
+          /* network blip */
         });
     }, 5000);
 
     return () => clearInterval(interval);
   }, [pollingEntry?.accessToken]);
 
-  // Nothing to show if no active eSIM entries
+  // ── Render ───────────────────────────────────────────────────────────────
   if (resolvedEntries.length === 0) return null;
 
-  const allDelivered = resolvedEntries.every((e) => e.status === 'delivered');
   const anyProvisioning = resolvedEntries.some((e) => e.status === 'provisioning');
+  const allDelivered = resolvedEntries.every((e) => e.status === 'delivered');
 
   if (anyProvisioning) {
+    // Compact single-line — fits announcement banner height on mobile
     return (
-      <Banner status="info" title="Your eSIM is being set up">
-        <Text>It will be ready automatically — usually within a minute.</Text>
-      </Banner>
+      <Text appearance="subdued">
+        eSIM being set up — check back in a moment
+      </Text>
     );
   }
 
   if (allDelivered) {
     return (
-      <BlockStack spacing="base">
-        <Banner status="success" title="Your eSIM is ready!">
-          <BlockStack spacing="base">
-            <Text>Tap below to view your eSIM details and QR code.</Text>
-            <InlineStack spacing="base">
-              {resolvedEntries.map((e, i) =>
-                e.accessToken ? (
-                  <Button
-                    key={e.accessToken}
-                    overlay={
-                      <Modal
-                        id={`esim-modal-${e.accessToken}`}
-                        title={
-                          resolvedEntries.length > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'
-                        }
-                        padding
-                      >
-                        <EsimModalContent entry={e} />
-                      </Modal>
-                    }
-                  >
-                    {resolvedEntries.length > 1 ? `View eSIM ${i + 1}` : 'View eSIM Details'}
-                  </Button>
-                ) : null,
-              )}
-            </InlineStack>
-          </BlockStack>
-        </Banner>
-      </BlockStack>
+      <InlineStack spacing="base" blockAlignment="center">
+        <Text emphasis="bold">Your eSIM is ready!</Text>
+        {resolvedEntries.map((e, i) =>
+          e.accessToken ? (
+            <Button
+              key={e.accessToken}
+              overlay={
+                <Modal
+                  id={`esim-modal-${e.accessToken}`}
+                  title={resolvedEntries.length > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'}
+                  padding
+                >
+                  <EsimModalContent entry={e} />
+                </Modal>
+              }
+            >
+              {resolvedEntries.length > 1 ? `View eSIM ${i + 1}` : 'View eSIM'}
+            </Button>
+          ) : null,
+        )}
+      </InlineStack>
     );
   }
 
@@ -121,7 +174,7 @@ function EsimOrderStatusAnnouncement() {
 }
 
 // ---------------------------------------------------------------------------
-// Modal content — shows full eSIM card (QR, activation code, ICCID)
+// Modal content — full eSIM card (QR code, activation code, ICCID)
 // ---------------------------------------------------------------------------
 
 function EsimModalContent({ entry }: { entry: DeliveryMetafieldEntry }) {

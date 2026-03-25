@@ -3,7 +3,7 @@ api_version = "2025-07"
 [[extensions]]
 uid = "587c72a4-6849-c6c2-4158-af8ec1e3669be06591a1"
 type = "ui_extension"
-name = "eSIM Order Status"
+name = "eSIM Delivery"
 handle = "esim-order-status"
 
   [[extensions.targeting]]
@@ -21,6 +21,11 @@ handle = "esim-order-status"
   [[extensions.targeting]]
   module = "./src/OrderBlock.tsx"
   target = "customer-account.order.action.render"
+
+  [[extensions.targeting]]
+  module = "./src/ThankYouBlock.tsx"
+  target = "purchase.thank-you.cart-line-item.render-after"
+  name = "eSIM Thank You Status"
 
   [extensions.capabilities]
   network_access = true
