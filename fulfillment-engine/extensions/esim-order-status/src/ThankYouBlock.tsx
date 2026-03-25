@@ -7,8 +7,6 @@ import {
   Banner,
   Text,
   Button,
-  QRCode,
-  Divider,
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
@@ -17,6 +15,8 @@ import { BACKEND, PROVISIONING_QUIPS } from './shared';
 // ---------------------------------------------------------------------------
 // Extension entry point — renders under each line item on the post-checkout
 // thank-you page (checkout surface, visible without a customer account).
+// Polls /esim/order-delivery-status for status only (no credentials here —
+// full QR code / activation code are shown in the My Account order page).
 // ---------------------------------------------------------------------------
 
 export default reactExtension(
@@ -27,20 +27,11 @@ export default reactExtension(
 interface OrderDelivery {
   lineItemId: string;
   status: string;
-  accessToken?: string;
-}
-
-interface EsimCredentials {
-  status: string;
-  lpa?: string;
-  activationCode?: string;
-  iccid?: string;
-  usageUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
-// Module-level shared poll registry — deduplicate concurrent order polls
-// across all cart line instances mounting for the same order.
+// Module-level shared poll registry — deduplicate concurrent polls across
+// all cart line instances mounting for the same order.
 // ---------------------------------------------------------------------------
 
 type PollCallback = (deliveries: OrderDelivery[]) => void;
@@ -69,7 +60,7 @@ function subscribeToOrderDeliveries(orderId: string, onResult: PollCallback): ()
         if (r.ok) {
           const data = (await r.json()) as { deliveries: OrderDelivery[] };
           state.callbacks.forEach((cb) => cb(data.deliveries));
-          // Stop once every known delivery has left pending/provisioning
+          // Stop once every delivery has left pending/provisioning
           const allSettled =
             data.deliveries.length > 0 &&
             data.deliveries.every((d) => !['pending', 'provisioning'].includes(d.status));
@@ -109,77 +100,31 @@ function ThankYouEsimBlock() {
   const numericOrderId = orderConfirmation?.order?.id?.split('/').pop() ?? '';
   const numericLineItemId = cartLine?.id?.split('/').pop() ?? '';
 
-  const [delivery, setDelivery] = useState<OrderDelivery | null>(null);
-  const [credentials, setCredentials] = useState<EsimCredentials | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [quipIndex, setQuipIndex] = useState(0);
 
-  // ── Rotate quips while provisioning ─────────────────────────────────────
+  // Rotate quips while provisioning or pending
   useEffect(() => {
-    if (delivery?.status !== 'provisioning') return;
+    if (status !== 'provisioning' && status !== 'pending') return;
     const interval = setInterval(() => {
       setQuipIndex((prev) => (prev + 1) % PROVISIONING_QUIPS.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, [delivery?.status]);
+  }, [status]);
 
-  // ── Step 1: subscribe to shared order poll ───────────────────────────────
-  // All cart line instances for the same order share one poll so we avoid
-  // duplicate requests. The callback filters to this specific line item.
-  // Polling continues through 'pending' status until provisioning starts.
+  // Subscribe to shared order poll — updates status when worker progresses
   useEffect(() => {
     if (!numericOrderId || !numericLineItemId) return;
     return subscribeToOrderDeliveries(numericOrderId, (deliveries) => {
       const match = deliveries.find((d) => d.lineItemId === numericLineItemId);
-      if (match) setDelivery(match);
+      if (match) setStatus(match.status);
     });
   }, [numericOrderId, numericLineItemId]);
 
-  // ── Step 2: once provisioning, poll token endpoint for delivery ──────────
-  useEffect(() => {
-    if (!delivery?.accessToken || delivery.status !== 'provisioning') return;
-    const token = delivery.accessToken;
-    let stopped = false;
-    let attempts = 0;
+  if (!status) return null;
 
-    const interval = setInterval(() => {
-      if (stopped || ++attempts > 80) {
-        clearInterval(interval);
-        return;
-      }
-      void fetch(`${BACKEND}/esim/delivery/${token}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data: EsimCredentials | null) => {
-          if (data && ['delivered', 'failed', 'cancelled'].includes(data.status)) {
-            setDelivery((prev) => (prev ? { ...prev, status: data.status } : prev));
-            if (data.status === 'delivered') setCredentials(data);
-            stopped = true;
-            clearInterval(interval);
-          }
-        })
-        .catch(() => {});
-    }, 5000);
-
-    return () => {
-      stopped = true;
-      clearInterval(interval);
-    };
-  }, [delivery?.accessToken, delivery?.status]);
-
-  // ── Step 3: if already delivered on first find, fetch credentials ────────
-  useEffect(() => {
-    if (!delivery?.accessToken || delivery.status !== 'delivered' || credentials) return;
-    void fetch(`${BACKEND}/esim/delivery/${delivery.accessToken}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: EsimCredentials | null) => {
-        if (data?.status === 'delivered') setCredentials(data);
-      })
-      .catch(() => {});
-  }, [delivery?.accessToken, delivery?.status, credentials]);
-
-  if (!delivery) return null;
-
-  // ── Provisioning (or pending) state ─────────────────────────────────────
-  if (delivery.status === 'provisioning' || delivery.status === 'pending') {
+  // ── Provisioning / pending state ─────────────────────────────────────────
+  if (status === 'provisioning' || status === 'pending') {
     return (
       <BlockStack spacing="tight">
         <Banner status="info">
@@ -190,12 +135,11 @@ function ThankYouEsimBlock() {
             </InlineStack>
             <Text appearance="subdued">{PROVISIONING_QUIPS[quipIndex]}</Text>
             <Text>
-              Once ready, your QR code and activation details will appear right here automatically
-              — no need to refresh.
+              Once ready, your QR code and activation details will appear in your account — no
+              need to refresh this page.
             </Text>
             <Text>
-              Feel free to close this page and check your email instead, or find it anytime in
-              your order history.
+              Feel free to close this page. We'll email you the details once your eSIM is ready.
             </Text>
           </BlockStack>
         </Banner>
@@ -203,69 +147,29 @@ function ThankYouEsimBlock() {
     );
   }
 
-  // ── Delivered — show full eSIM card ──────────────────────────────────────
-  if (delivery.status === 'delivered' && credentials) {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Text size="medium" emphasis="bold">
-          Your eSIM is ready!
-        </Text>
-
-        {credentials.lpa && (
-          <QRCode content={credentials.lpa} accessibilityLabel="eSIM QR code" size="fill" />
-        )}
-
-        <BlockStack spacing="tight">
-          {credentials.activationCode && (
-            <BlockStack spacing="extraTight">
-              <Text appearance="subdued">Activation Code</Text>
-              <Text emphasis="bold">{credentials.activationCode}</Text>
-            </BlockStack>
-          )}
-          {credentials.iccid && (
-            <BlockStack spacing="extraTight">
-              <Text appearance="subdued">ICCID</Text>
-              <Text>{credentials.iccid}</Text>
-            </BlockStack>
-          )}
-        </BlockStack>
-
-        <InlineStack spacing="base">
-          {credentials.lpa && (
-            <Button
-              to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(credentials.lpa)}`}
-              appearance="primary"
-            >
-              Install on iPhone
-            </Button>
-          )}
-          {credentials.usageUrl && (
-            <Button to={credentials.usageUrl} appearance="secondary">
-              View Usage
-            </Button>
-          )}
-        </InlineStack>
-
-        <Text appearance="subdued">
-          {"We've also emailed you a copy — check your inbox if you need it later."}
-        </Text>
-      </BlockStack>
-    );
-  }
-
-  // Delivered but credentials still loading
-  if (delivery.status === 'delivered') {
+  // ── Delivered state ───────────────────────────────────────────────────────
+  if (status === 'delivered') {
     return (
       <BlockStack spacing="tight">
         <Banner status="success">
-          <Text>Your eSIM is ready! Loading details...</Text>
+          <BlockStack spacing="base">
+            <Text emphasis="bold">Your eSIM is ready!</Text>
+            <Text>
+              Check your email for the QR code and activation details. You can also find them in
+              your account order history.
+            </Text>
+          </BlockStack>
         </Banner>
+        <InlineStack spacing="base">
+          <Button to="https://fluxyfi.com/account/orders" appearance="secondary">
+            View in My Account
+          </Button>
+        </InlineStack>
       </BlockStack>
     );
   }
 
-  if (delivery.status === 'failed') {
+  if (status === 'failed') {
     return (
       <BlockStack spacing="tight">
         <Banner status="critical">

@@ -386,17 +386,10 @@ export default function esimRoutes(
 
   /**
    * GET /esim/order-delivery-status/:orderId
-   * Returns eSIM delivery status for all line items in an order.
-   * Used by extensions on the thank-you / order-status page to detect provisioning
-   * before the metafield is written (timing window after checkout).
-   *
-   * Security note: accessToken is included intentionally. Shopify internal order
-   * IDs are large non-sequential numeric IDs (not guessable from human-readable
-   * order numbers), providing sufficient entropy to protect this endpoint in
-   * practice. The accessToken is high-entropy (UUID v4, 2^122 bits) and only
-   * grants status + credentials — it does not allow order modification.
-   * This design is required because the checkout surface has no auth mechanism
-   * to pass a signed proof of order ownership to our backend.
+   * Returns eSIM delivery status (no credentials) for all line items in an order.
+   * Used by the checkout thank-you extension to show provisioning state before
+   * the Shopify order metafield is written (timing gap after checkout).
+   * Intentionally returns status only — no tokens or credentials.
    */
   const OrderDeliveryStatusParamsSchema = z.object({ orderId: z.string().min(1) });
 
@@ -413,7 +406,7 @@ export default function esimRoutes(
 
       const deliveries = await prisma.esimDelivery.findMany({
         where: { orderId },
-        select: { lineItemId: true, status: true, accessToken: true },
+        select: { lineItemId: true, status: true },
       });
 
       logger.info({ orderId, count: deliveries.length }, 'Order delivery status returned');
@@ -422,7 +415,6 @@ export default function esimRoutes(
         deliveries: deliveries.map((d) => ({
           lineItemId: d.lineItemId,
           status: d.status,
-          accessToken: d.accessToken ?? undefined,
         })),
       });
     },
