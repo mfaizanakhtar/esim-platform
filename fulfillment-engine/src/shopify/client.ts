@@ -509,7 +509,10 @@ export class ShopifyClient {
       },
     );
 
-    logger.info({ orderId, refundCreateResponse: refundRes.data?.data?.refundCreate }, 'refundCreate response');
+    logger.info(
+      { orderId, refundCreateResponse: refundRes.data?.data?.refundCreate },
+      'refundCreate response',
+    );
 
     // Check top-level GraphQL errors (permission / syntax errors)
     const graphqlErrors = refundRes.data?.errors;
@@ -531,7 +534,10 @@ export class ShopifyClient {
       throw new Error(`Shopify refundCreate returned no refund ID for order ${orderId}`);
     }
 
-    logger.info({ orderId, refundId: refundResult.refund.id }, 'Shopify refund created successfully');
+    logger.info(
+      { orderId, refundId: refundResult.refund.id },
+      'Shopify refund created successfully',
+    );
   }
 
   /**
