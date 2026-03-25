@@ -389,7 +389,9 @@ export class ShopifyClient {
 
   /**
    * Issue a full refund on a Shopify order (works on fulfilled orders too).
-   * Uses suggestedRefund to get line-item amounts, then refundCreate to apply it.
+   * Step 1: fetch line items + transactions from the order.
+   * Step 2: call suggestedRefund with actual line items to get Shopify-calculated amounts.
+   * Step 3: call refundCreate to apply the refund.
    * Notifies the customer and does not restock (digital goods).
    */
   async cancelShopifyOrder(orderId: string): Promise<void> {
@@ -403,38 +405,24 @@ export class ShopifyClient {
         { headers },
       );
 
-    // Step 1: Get suggested refund (line items + transaction amounts)
-    const suggestedRes = await graphql(
+    // Step 1: Fetch line items (refundable quantities) and transactions
+    const orderRes = await graphql(
       `
-        query suggestedRefund($id: ID!) {
+        query getOrderForRefund($id: ID!) {
           order(id: $id) {
-            suggestedRefund(refundLineItems: [], refundDuties: []) {
-              refundLineItems {
-                lineItem {
+            lineItems(first: 20) {
+              edges {
+                node {
                   id
-                }
-                quantity
-                restockType
-                subtotalSet {
-                  shopMoney {
-                    amount
-                    currencyCode
-                  }
+                  refundableQuantity
                 }
               }
-              transactions {
-                parentId
-                kind
-                gateway
-                amount
-                maximumRefundable
-              }
-              totalCartDiscountAmountSet {
-                shopMoney {
-                  amount
-                  currencyCode
-                }
-              }
+            }
+            transactions(first: 10) {
+              id
+              kind
+              gateway
+              maximumRefundable
             }
           }
         }
@@ -442,14 +430,61 @@ export class ShopifyClient {
       { id: gid },
     );
 
+    const order = orderRes.data?.data?.order;
+    if (!order) {
+      throw new Error(`Order not found: ${orderId}`);
+    }
+
+    const refundableLineItems: { lineItemId: string; quantity: number }[] = (
+      order.lineItems?.edges ?? []
+    )
+      .filter((e: { node: { refundableQuantity: number } }) => e.node.refundableQuantity > 0)
+      .map((e: { node: { id: string; refundableQuantity: number } }) => ({
+        lineItemId: e.node.id,
+        quantity: e.node.refundableQuantity,
+      }));
+
+    // Step 2: Get Shopify-calculated suggested refund amounts for these line items
+    const suggestedRes = await graphql(
+      `
+        query suggestedRefund($id: ID!, $refundLineItems: [RefundLineItemInput!]!) {
+          order(id: $id) {
+            suggestedRefund(refundLineItems: $refundLineItems) {
+              refundLineItems {
+                lineItem {
+                  id
+                }
+                quantity
+              }
+              transactions {
+                parentId
+                kind
+                gateway
+                maximumRefundable
+                amount
+              }
+            }
+          }
+        }
+      `,
+      {
+        id: gid,
+        refundLineItems: refundableLineItems.map((item) => ({
+          lineItemId: item.lineItemId,
+          quantity: item.quantity,
+          restockType: 'NO_RESTOCK',
+        })),
+      },
+    );
+
     const suggested = suggestedRes.data?.data?.order?.suggestedRefund;
     if (!suggested) {
       throw new Error(`Could not fetch suggested refund for order ${orderId}`);
     }
 
-    // Step 2: Apply the refund
+    // Step 3: Apply the refund
     const refundLineItems = suggested.refundLineItems.map(
-      (item: { lineItem: { id: string }; quantity: number; restockType: string }) => ({
+      (item: { lineItem: { id: string }; quantity: number }) => ({
         lineItemId: item.lineItem.id,
         quantity: item.quantity,
         restockType: 'NO_RESTOCK',

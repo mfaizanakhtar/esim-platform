@@ -489,10 +489,22 @@ describe('createDraftOrder', () => {
 // cancelShopifyOrder (refund flow)
 // ---------------------------------------------------------------------------
 describe('cancelShopifyOrder', () => {
-  const SUGGESTED_REFUND = {
-    refundLineItems: [
-      { lineItem: { id: 'gid://shopify/LineItem/1' }, quantity: 1, restockType: 'NO_RESTOCK' },
+  const ORDER_RESPONSE = {
+    lineItems: {
+      edges: [{ node: { id: 'gid://shopify/LineItem/1', refundableQuantity: 1 } }],
+    },
+    transactions: [
+      {
+        id: 'gid://shopify/OrderTransaction/10',
+        kind: 'SALE',
+        gateway: 'shopify_payments',
+        maximumRefundable: '9.99',
+      },
     ],
+  };
+
+  const SUGGESTED_REFUND = {
+    refundLineItems: [{ lineItem: { id: 'gid://shopify/LineItem/1' }, quantity: 1 }],
     transactions: [
       {
         parentId: 'gid://shopify/OrderTransaction/10',
@@ -502,14 +514,19 @@ describe('cancelShopifyOrder', () => {
         maximumRefundable: '9.99',
       },
     ],
-    totalCartDiscountAmountSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
   };
 
   it('issues a full refund successfully', async () => {
     mockTokenRefresh();
+    // Step 1: order query
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: ORDER_RESPONSE } });
+    // Step 2: suggestedRefund
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, { data: { order: { suggestedRefund: SUGGESTED_REFUND } } });
+    // Step 3: refundCreate
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, {
@@ -520,20 +537,36 @@ describe('cancelShopifyOrder', () => {
     await expect(client.cancelShopifyOrder('123')).resolves.toBeUndefined();
   });
 
-  it('throws when suggestedRefund is null', async () => {
+  it('throws when order is not found', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, { data: { order: null } });
 
     const client = makeClient();
-    await expect(client.cancelShopifyOrder('bad-order')).rejects.toThrow(
+    await expect(client.cancelShopifyOrder('bad-order')).rejects.toThrow('Order not found');
+  });
+
+  it('throws when suggestedRefund is null', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: ORDER_RESPONSE } });
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: { suggestedRefund: null } } });
+
+    const client = makeClient();
+    await expect(client.cancelShopifyOrder('123')).rejects.toThrow(
       'Could not fetch suggested refund',
     );
   });
 
   it('throws when refundCreate returns userErrors', async () => {
     mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: ORDER_RESPONSE } });
     nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, { data: { order: { suggestedRefund: SUGGESTED_REFUND } } });
