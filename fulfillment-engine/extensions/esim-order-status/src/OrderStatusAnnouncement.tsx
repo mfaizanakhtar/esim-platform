@@ -11,44 +11,18 @@ import {
   Modal,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface DeliveryMetafieldEntry {
-  status: 'provisioning' | 'delivered' | 'cancelled' | 'failed';
-  accessToken?: string;
-  lpa?: string;
-  activationCode?: string;
-  iccid?: string;
-  usageUrl?: string;
-  isTopup?: boolean;
-}
-
-// ---------------------------------------------------------------------------
-// Extension entry point
-// ---------------------------------------------------------------------------
+import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap } from './shared';
 
 export default reactExtension(
   'customer-account.order-status.announcement.render',
   () => <EsimOrderStatusAnnouncement />,
 );
 
-const BACKEND = 'https://esim-api-production-a56a.up.railway.app';
-
 function EsimOrderStatusAnnouncement() {
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
 
-  let tokenMap: Record<string, DeliveryMetafieldEntry> = {};
-  if (tokensRaw) {
-    try {
-      tokenMap = JSON.parse(tokensRaw) as Record<string, DeliveryMetafieldEntry>;
-    } catch {
-      // Malformed metafield — treat as empty
-    }
-  }
+  const tokenMap = parseTokenMap(tokensRaw);
 
   // Only care about active eSIM entries (not cancelled/failed)
   const activeEntries = Object.values(tokenMap).filter(

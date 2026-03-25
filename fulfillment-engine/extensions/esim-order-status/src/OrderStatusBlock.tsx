@@ -13,21 +13,7 @@ import {
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
 import { CancelSection } from './CancelEsim';
-
-const BACKEND = 'https://esim-api-production-a56a.up.railway.app';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface DeliveryMetafieldEntry {
-  status: 'provisioning' | 'delivered' | 'cancelled' | 'failed';
-  accessToken?: string;
-  lpa?: string;
-  activationCode?: string;
-  iccid?: string;
-  usageUrl?: string;
-}
+import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -49,14 +35,7 @@ function EsimOrderStatusBlock() {
   // Value is a JSON object: { "<lineItemId>": { status, accessToken, lpa, ... }, ... }
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
-  let tokenMap: Record<string, DeliveryMetafieldEntry> = {};
-  if (tokensRaw) {
-    try {
-      tokenMap = JSON.parse(tokensRaw) as Record<string, DeliveryMetafieldEntry>;
-    } catch {
-      // Malformed metafield value; treat as empty
-    }
-  }
+  const tokenMap = parseTokenMap(tokensRaw);
   const entry = lineItemId ? tokenMap[lineItemId] : undefined;
 
   const [cancelled, setCancelled] = useState(false);

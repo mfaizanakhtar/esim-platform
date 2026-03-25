@@ -192,9 +192,12 @@ export default function webhookRoutes(
 
         app.log.info({ deliveryId: delivery.id, orderId, orderName }, 'Created delivery record');
 
-        // Write provisioning state to metafield immediately so the thank-you page
-        // shows "eSIM being set up" before the worker job runs.
-        // Fire-and-forget: never block the webhook response.
+        // Intentional exception to the "no vendor calls in webhook" rule:
+        // Writing the provisioning metafield here (fire-and-forget) lets the
+        // thank-you page show "eSIM being set up" before the worker job starts.
+        // Failures are non-fatal — the extension falls back to empty until the
+        // worker writes the delivered metafield. A brief double-write race with
+        // finalizeDelivery is harmless because metafields are idempotent.
         setImmediate(() => {
           void (async () => {
             try {
