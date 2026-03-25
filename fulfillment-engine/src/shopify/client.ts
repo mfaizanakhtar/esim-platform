@@ -421,8 +421,15 @@ export class ShopifyClient {
               id
               kind
               gateway
-              maximumRefundable
               status
+              amountSet {
+                shopMoney {
+                  amount
+                }
+              }
+              maximumRefundableV2 {
+                amount
+              }
             }
           }
         }
@@ -449,19 +456,26 @@ export class ShopifyClient {
     }
 
     // Build transactions: refund against each SUCCESS sale/capture
-    const transactions = (order.transactions ?? [])
-      .filter(
-        (tx: { kind: string; status: string; maximumRefundable: string }) =>
-          ['SALE', 'CAPTURE'].includes(tx.kind) &&
-          tx.status === 'SUCCESS' &&
-          parseFloat(tx.maximumRefundable ?? '0') > 0,
-      )
-      .map((tx: { id: string; gateway: string; maximumRefundable: string }) => ({
+    logger.info({ orderId, rawTransactions: order.transactions }, 'Order transactions for refund');
+
+    type RawTx = {
+      id: string;
+      kind: string;
+      gateway: string;
+      status: string;
+      amountSet?: { shopMoney?: { amount?: string } };
+      maximumRefundableV2?: { amount?: string };
+    };
+
+    const transactions = ((order.transactions as RawTx[]) ?? [])
+      .filter((tx) => ['SALE', 'CAPTURE'].includes(tx.kind) && tx.status === 'SUCCESS')
+      .map((tx) => ({
         parentId: tx.id,
         kind: 'REFUND',
         gateway: tx.gateway,
-        amount: tx.maximumRefundable,
-      }));
+        amount: tx.maximumRefundableV2?.amount ?? tx.amountSet?.shopMoney?.amount ?? '0',
+      }))
+      .filter((tx) => parseFloat(tx.amount) > 0);
 
     if (transactions.length === 0) {
       throw new Error(`Order ${orderId} has no refundable transactions`);
