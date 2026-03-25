@@ -9,18 +9,22 @@ handle = "esim-order-status"
   [[extensions.targeting]]
   module = "./src/OrderStatusAnnouncement.tsx"
   target = "customer-account.order-status.announcement.render"
+  name = "eSIM Status Banner"
 
   [[extensions.targeting]]
   module = "./src/OrderStatusBlock.tsx"
   target = "customer-account.order-status.cart-line-item.render-after"
+  name = "eSIM QR Code & Credentials (inline)"
 
   [[extensions.targeting]]
   module = "./src/OrderActionMenuItem.tsx"
   target = "customer-account.order.action.menu-item.render"
+  name = "eSIM Action Button Label"
 
   [[extensions.targeting]]
   module = "./src/OrderBlock.tsx"
   target = "customer-account.order.action.render"
+  name = "eSIM Full Details (action sheet)"
 
   [extensions.capabilities]
   network_access = true
