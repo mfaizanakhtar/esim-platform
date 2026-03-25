@@ -456,8 +456,6 @@ export class ShopifyClient {
     }
 
     // Build transactions: refund against each SUCCESS sale/capture
-    logger.info({ orderId, rawTransactions: order.transactions }, 'Order transactions for refund');
-
     type RawTx = {
       id: string;
       kind: string;
