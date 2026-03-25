@@ -537,6 +537,25 @@ describe('cancelShopifyOrder', () => {
     await expect(client.cancelShopifyOrder('123')).resolves.toBeUndefined();
   });
 
+  it('throws when there are no refundable line items', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          order: {
+            lineItems: {
+              edges: [{ node: { id: 'gid://shopify/LineItem/1', refundableQuantity: 0 } }],
+            },
+            transactions: [],
+          },
+        },
+      });
+
+    const client = makeClient();
+    await expect(client.cancelShopifyOrder('123')).rejects.toThrow('no refundable line items');
+  });
+
   it('throws when order is not found', async () => {
     mockTokenRefresh();
     nock(BASE_URL)

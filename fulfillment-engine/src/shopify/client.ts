@@ -410,7 +410,7 @@ export class ShopifyClient {
       `
         query getOrderForRefund($id: ID!) {
           order(id: $id) {
-            lineItems(first: 20) {
+            lineItems(first: 50) {
               edges {
                 node {
                   id
@@ -443,6 +443,10 @@ export class ShopifyClient {
         lineItemId: e.node.id,
         quantity: e.node.refundableQuantity,
       }));
+
+    if (refundableLineItems.length === 0) {
+      throw new Error(`Order ${orderId} has no refundable line items`);
+    }
 
     // Step 2: Get Shopify-calculated suggested refund amounts for these line items
     const suggestedRes = await graphql(
