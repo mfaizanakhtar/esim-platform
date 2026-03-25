@@ -404,10 +404,16 @@ export default function esimRoutes(
 
       logger.info({ orderId }, 'Order delivery status requested');
 
-      const deliveries = await prisma.esimDelivery.findMany({
-        where: { orderId },
-        select: { lineItemId: true, status: true },
-      });
+      let deliveries: { lineItemId: string; status: string }[];
+      try {
+        deliveries = await prisma.esimDelivery.findMany({
+          where: { orderId },
+          select: { lineItemId: true, status: true },
+        });
+      } catch (error) {
+        logger.error({ orderId, err: error }, 'Failed to query order delivery status');
+        return reply.code(500).send({ error: 'Failed to retrieve delivery status' });
+      }
 
       logger.info({ orderId, count: deliveries.length }, 'Order delivery status returned');
 
