@@ -456,6 +456,8 @@ export class ShopifyClient {
     }
 
     // Build transactions: refund against each SUCCESS sale/capture
+    logger.info({ orderId, rawTransactions: order.transactions }, 'raw Shopify transactions');
+
     type RawTx = {
       id: string;
       kind: string;
@@ -478,6 +480,8 @@ export class ShopifyClient {
     if (transactions.length === 0) {
       throw new Error(`Order ${orderId} has no refundable transactions`);
     }
+
+    logger.info({ orderId, refundLineItems, transactions }, 'sending refundCreate');
 
     // Step 2: Apply the refund
     const refundRes = await graphql(
@@ -505,11 +509,35 @@ export class ShopifyClient {
       },
     );
 
-    const userErrors = refundRes.data?.data?.refundCreate?.userErrors ?? [];
+    logger.info(
+      { orderId, refundCreateResponse: refundRes.data?.data?.refundCreate },
+      'refundCreate response',
+    );
+
+    // Check top-level GraphQL errors (permission / syntax errors)
+    const graphqlErrors = refundRes.data?.errors;
+    if (graphqlErrors?.length > 0) {
+      const msg = graphqlErrors.map((e: { message: string }) => e.message).join(', ');
+      throw new Error(`Shopify refund GraphQL errors: ${msg}`);
+    }
+
+    const refundResult = refundRes.data?.data?.refundCreate;
+    const userErrors = refundResult?.userErrors ?? [];
     if (userErrors.length > 0) {
       const errors = userErrors.map((e: { message: string }) => e.message).join(', ');
       throw new Error(`Shopify refund errors: ${errors}`);
     }
+
+    // If no refund ID was returned (but also no errors), something silently failed
+    if (!refundResult?.refund?.id) {
+      logger.error({ orderId, refundResult }, 'refundCreate returned no refund ID');
+      throw new Error(`Shopify refundCreate returned no refund ID for order ${orderId}`);
+    }
+
+    logger.info(
+      { orderId, refundId: refundResult.refund.id },
+      'Shopify refund created successfully',
+    );
   }
 
   /**

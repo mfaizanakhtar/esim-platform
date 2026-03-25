@@ -604,4 +604,39 @@ describe('cancelShopifyOrder', () => {
       'Shopify refund errors: Refund failed',
     );
   });
+
+  it('throws when refundCreate returns no refund ID and no errors (silent failure)', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: ORDER_RESPONSE } });
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: { refundCreate: { refund: null, userErrors: [] } },
+      });
+
+    const client = makeClient();
+    await expect(client.cancelShopifyOrder('123')).rejects.toThrow(
+      'refundCreate returned no refund ID',
+    );
+  });
+
+  it('throws on top-level GraphQL errors from refundCreate', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: ORDER_RESPONSE } });
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        errors: [{ message: 'Access denied for refundCreate field.' }],
+        data: null,
+      });
+
+    const client = makeClient();
+    await expect(client.cancelShopifyOrder('123')).rejects.toThrow(
+      'Shopify refund GraphQL errors: Access denied for refundCreate field.',
+    );
+  });
 });

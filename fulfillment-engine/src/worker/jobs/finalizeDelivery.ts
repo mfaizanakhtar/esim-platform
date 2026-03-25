@@ -76,7 +76,14 @@ export async function finalizeDelivery(
     }),
   );
 
-  const accessToken = randomUUID();
+  // Reuse the access token pre-generated in the webhook so the extension
+  // (which is already polling that token) stays consistent. Fall back to a
+  // fresh UUID for legacy deliveries created before this logic was deployed.
+  const preFetched = await prisma.esimDelivery.findUnique({
+    where: { id: args.deliveryId },
+    select: { accessToken: true },
+  });
+  const accessToken = preFetched?.accessToken ?? randomUUID();
 
   // First-wins write: whoever flips to delivered runs side effects.
   const writeResult = await prisma.esimDelivery.updateMany({

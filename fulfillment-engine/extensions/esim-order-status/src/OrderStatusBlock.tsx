@@ -11,21 +11,9 @@ import {
   Badge,
   QRCode,
 } from '@shopify/ui-extensions-react/customer-account';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CancelSection } from './CancelEsim';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface DeliveryMetafieldEntry {
-  status: 'provisioning' | 'delivered' | 'cancelled' | 'failed';
-  accessToken?: string;
-  lpa?: string;
-  activationCode?: string;
-  iccid?: string;
-  usageUrl?: string;
-}
+import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -47,31 +35,53 @@ function EsimOrderStatusBlock() {
   // Value is a JSON object: { "<lineItemId>": { status, accessToken, lpa, ... }, ... }
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
-  let tokenMap: Record<string, DeliveryMetafieldEntry> = {};
-  if (tokensRaw) {
-    try {
-      tokenMap = JSON.parse(tokensRaw) as Record<string, DeliveryMetafieldEntry>;
-    } catch {
-      // Malformed metafield value; treat as empty
-    }
-  }
+  const tokenMap = parseTokenMap(tokensRaw);
   const entry = lineItemId ? tokenMap[lineItemId] : undefined;
 
   const [cancelled, setCancelled] = useState(false);
+  const [liveEntry, setLiveEntry] = useState<DeliveryMetafieldEntry | null>(null);
+  const resolvedEntry = liveEntry ?? entry;
+
+  // Poll the backend every 5s while status is provisioning so the card
+  // auto-updates to delivered without requiring a page reload.
+  useEffect(() => {
+    if (!resolvedEntry?.accessToken || resolvedEntry.status !== 'provisioning') return;
+    let attempts = 0;
+    const interval = setInterval(() => {
+      if (++attempts > 120) {
+        clearInterval(interval);
+        return;
+      }
+      void fetch(`${BACKEND}/esim/delivery/${resolvedEntry.accessToken}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: DeliveryMetafieldEntry | null) => {
+          if (data && ['delivered', 'failed', 'cancelled'].includes(data.status)) {
+            setLiveEntry(data);
+            clearInterval(interval);
+          }
+        })
+        .catch(() => {
+          /* network blip — retry next tick */
+        });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [resolvedEntry?.accessToken, resolvedEntry?.status]);
 
   // Don't render anything if this line item has no eSIM entry
-  if (!entry) return null;
+  if (!resolvedEntry) return null;
 
-  if (entry.status === 'provisioning') {
+  if (resolvedEntry.status === 'provisioning') {
     return (
       <BlockStack spacing="base">
         <Divider />
-        <Text appearance="subdued">Setting up your eSIM...</Text>
+        <Banner status="info" title="Your eSIM is being set up">
+          <Text>It will appear here automatically — usually within a minute.</Text>
+        </Banner>
       </BlockStack>
     );
   }
 
-  if (entry.status === 'failed') {
+  if (resolvedEntry.status === 'failed') {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -82,7 +92,7 @@ function EsimOrderStatusBlock() {
     );
   }
 
-  if (entry.status === 'cancelled' || cancelled) {
+  if (resolvedEntry.status === 'cancelled' || cancelled) {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -91,7 +101,7 @@ function EsimOrderStatusBlock() {
     );
   }
 
-  if (entry.status !== 'delivered') {
+  if (resolvedEntry.status !== 'delivered') {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -108,37 +118,39 @@ function EsimOrderStatusBlock() {
         Your eSIM
       </Text>
 
-      {entry.lpa && <QRCode content={entry.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
+      {resolvedEntry.lpa && (
+        <QRCode content={resolvedEntry.lpa} accessibilityLabel="eSIM QR code" size="fill" />
+      )}
 
       <BlockStack spacing="tight">
         <InlineStack spacing="base">
           <Text appearance="subdued">Activation Code</Text>
-          <Text emphasis="bold">{entry.activationCode}</Text>
+          <Text emphasis="bold">{resolvedEntry.activationCode}</Text>
         </InlineStack>
         <InlineStack spacing="base">
           <Text appearance="subdued">ICCID</Text>
-          <Text>{entry.iccid}</Text>
+          <Text>{resolvedEntry.iccid}</Text>
         </InlineStack>
       </BlockStack>
 
       <InlineStack spacing="base">
-        {entry.lpa && (
+        {resolvedEntry.lpa && (
           <Button
-            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(entry.lpa)}`}
+            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(resolvedEntry.lpa)}`}
             appearance="primary"
           >
             Install on iPhone
           </Button>
         )}
-        {entry.usageUrl && (
-          <Button to={entry.usageUrl} appearance="secondary">
+        {resolvedEntry.usageUrl && (
+          <Button to={resolvedEntry.usageUrl} appearance="secondary">
             View Usage
           </Button>
         )}
       </InlineStack>
 
       <CancelSection
-        accessToken={entry.accessToken}
+        accessToken={resolvedEntry.accessToken}
         cancelled={cancelled}
         onCancelled={() => setCancelled(true)}
       />

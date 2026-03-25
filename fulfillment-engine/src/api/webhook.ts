@@ -1,9 +1,11 @@
+import { randomUUID } from 'crypto';
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import prisma from '~/db/prisma';
 import { encrypt } from '~/utils/crypto';
 import { verifyShopifyWebhook } from '~/shopify/webhooks';
 import { getJobQueue } from '~/queue/jobQueue';
+import { getShopifyClient } from '~/shopify/client';
 
 const ShopifyLineItemSchema = z.object({
   id: z.coerce.number(),
@@ -169,6 +171,9 @@ export default function webhookRoutes(
         const iccidProp = lineItem.properties?.find((p) => p.name === '_iccid');
         const topupIccid = iccidProp?.value ? encrypt(iccidProp.value) : null;
 
+        // Pre-generate the access token so the extension can start polling immediately
+        const accessToken = randomUUID();
+
         // Create delivery record
         const delivery = await prisma.esimDelivery.create({
           data: {
@@ -181,10 +186,34 @@ export default function webhookRoutes(
             status: 'pending',
             topupIccid,
             sku: lineItem.sku ?? null,
+            accessToken,
           },
         });
 
         app.log.info({ deliveryId: delivery.id, orderId, orderName }, 'Created delivery record');
+
+        // Intentional exception to the "no vendor calls in webhook" rule:
+        // Writing the provisioning metafield here (fire-and-forget) lets the
+        // thank-you page show "eSIM being set up" before the worker job starts.
+        // Failures are non-fatal — the extension falls back to empty until the
+        // worker writes the delivered metafield. A brief double-write race with
+        // finalizeDelivery is harmless because metafields are idempotent.
+        setImmediate(() => {
+          void (async () => {
+            try {
+              const shopify = getShopifyClient();
+              await shopify.writeDeliveryMetafield(orderId, lineItemId, {
+                status: 'provisioning',
+                accessToken,
+              });
+            } catch (err) {
+              app.log.warn(
+                { deliveryId: delivery.id, err },
+                'Failed to write provisioning metafield (non-fatal)',
+              );
+            }
+          })();
+        });
 
         // Enqueue provisioning job with retry policy
         await queue.send(
