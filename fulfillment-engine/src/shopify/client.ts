@@ -388,52 +388,112 @@ export class ShopifyClient {
   }
 
   /**
-   * Cancel a Shopify order and issue a full refund.
-   * Used by the eSIM cancel flow after the vendor has confirmed the eSIM is not yet activated.
+   * Issue a full refund on a Shopify order (works on fulfilled orders too).
+   * Uses suggestedRefund to get line-item amounts, then refundCreate to apply it.
+   * Notifies the customer and does not restock (digital goods).
    */
   async cancelShopifyOrder(orderId: string): Promise<void> {
     const token = await this.getAccessToken();
+    const gid = `gid://shopify/Order/${orderId}`;
+    const headers = { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token };
+    const graphql = (query: string, variables: Record<string, unknown>) =>
+      axios.post(
+        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        { query, variables },
+        { headers },
+      );
 
-    const mutation = `
-      mutation orderCancel($orderId: ID!, $reason: OrderCancelReason!, $refund: Boolean!, $restock: Boolean!, $notifyCustomer: Boolean!) {
-        orderCancel(orderId: $orderId, reason: $reason, refund: $refund, restock: $restock, notifyCustomer: $notifyCustomer) {
-          orderCancelUserErrors {
-            field
-            message
-          }
-          job {
-            id
+    // Step 1: Get suggested refund (line items + transaction amounts)
+    const suggestedRes = await graphql(
+      `
+        query suggestedRefund($id: ID!) {
+          order(id: $id) {
+            suggestedRefund(refundLineItems: [], refundDuties: []) {
+              refundLineItems {
+                lineItem {
+                  id
+                }
+                quantity
+                restockType
+                subtotalSet {
+                  shopMoney {
+                    amount
+                    currencyCode
+                  }
+                }
+              }
+              transactions {
+                parentId
+                kind
+                gateway
+                amount
+                maximumRefundable
+              }
+              totalCartDiscountAmountSet {
+                shopMoney {
+                  amount
+                  currencyCode
+                }
+              }
+            }
           }
         }
-      }
-    `;
+      `,
+      { id: gid },
+    );
 
-    const response = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+    const suggested = suggestedRes.data?.data?.order?.suggestedRefund;
+    if (!suggested) {
+      throw new Error(`Could not fetch suggested refund for order ${orderId}`);
+    }
+
+    // Step 2: Apply the refund
+    const refundLineItems = suggested.refundLineItems.map(
+      (item: { lineItem: { id: string }; quantity: number; restockType: string }) => ({
+        lineItemId: item.lineItem.id,
+        quantity: item.quantity,
+        restockType: 'NO_RESTOCK',
+      }),
+    );
+
+    const transactions = suggested.transactions.map(
+      (tx: { parentId: string; gateway: string; amount: string; maximumRefundable: string }) => ({
+        parentId: tx.parentId,
+        kind: 'REFUND',
+        gateway: tx.gateway,
+        amount: tx.maximumRefundable ?? tx.amount,
+      }),
+    );
+
+    const refundRes = await graphql(
+      `
+        mutation refundCreate($input: RefundInput!) {
+          refundCreate(input: $input) {
+            refund {
+              id
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `,
       {
-        query: mutation,
-        variables: {
-          orderId: `gid://shopify/Order/${orderId}`,
-          reason: 'CUSTOMER',
-          refund: true,
-          restock: false,
-          notifyCustomer: true,
-        },
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': token,
+        input: {
+          orderId: gid,
+          notify: true,
+          note: 'eSIM cancelled at customer request',
+          refundLineItems,
+          transactions,
         },
       },
     );
 
-    const result = response.data?.data?.orderCancel;
-    if (result?.orderCancelUserErrors?.length > 0) {
-      const errors = result.orderCancelUserErrors
-        .map((e: { message: string }) => e.message)
-        .join(', ');
-      throw new Error(`Shopify order cancel errors: ${errors}`);
+    const userErrors = refundRes.data?.data?.refundCreate?.userErrors ?? [];
+    if (userErrors.length > 0) {
+      const errors = userErrors.map((e: { message: string }) => e.message).join(', ');
+      throw new Error(`Shopify refund errors: ${errors}`);
     }
   }
 

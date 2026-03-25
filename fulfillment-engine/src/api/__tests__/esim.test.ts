@@ -244,6 +244,31 @@ describe('POST /esim/delivery/:token/cancel', () => {
     expect(res.json()).toMatchObject({ ok: true, alreadyDone: true });
   });
 
+  it('returns 502 when Shopify refund fails', async () => {
+    vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(makeDelivery());
+    mockQueryEsimOrder.mockResolvedValue({
+      success: true,
+      orders: [
+        {
+          orderNum: 'vendor-ref-1',
+          packages: [{ iccid: '8901000000000001', usedMb: 0, beginDate: null }],
+        },
+      ],
+    });
+    mockCancelOrder.mockResolvedValue({ success: true, message: 'ok' });
+    mockCancelShopifyOrder.mockRejectedValue(new Error('Shopify refund errors: some error'));
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/esim/delivery/test-uuid-token/cancel',
+      headers: JSON_HEADERS,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ error: 'shopify_cancel_failed' });
+    expect(res.json().message).not.toContain('vendor');
+  });
+
   it('returns 409 if TGT eSIM profileStatus is set', async () => {
     vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(makeDelivery({ provider: 'tgt' }));
     mockQueryOrders.mockResolvedValue({

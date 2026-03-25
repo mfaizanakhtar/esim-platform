@@ -484,3 +484,70 @@ describe('createDraftOrder', () => {
     ).rejects.toThrow('no invoiceUrl');
   });
 });
+
+// ---------------------------------------------------------------------------
+// cancelShopifyOrder (refund flow)
+// ---------------------------------------------------------------------------
+describe('cancelShopifyOrder', () => {
+  const SUGGESTED_REFUND = {
+    refundLineItems: [
+      { lineItem: { id: 'gid://shopify/LineItem/1' }, quantity: 1, restockType: 'NO_RESTOCK' },
+    ],
+    transactions: [
+      {
+        parentId: 'gid://shopify/OrderTransaction/10',
+        kind: 'SALE',
+        gateway: 'shopify_payments',
+        amount: '9.99',
+        maximumRefundable: '9.99',
+      },
+    ],
+    totalCartDiscountAmountSet: { shopMoney: { amount: '0.00', currencyCode: 'USD' } },
+  };
+
+  it('issues a full refund successfully', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: { suggestedRefund: SUGGESTED_REFUND } } });
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: { refundCreate: { refund: { id: 'gid://shopify/Refund/99' }, userErrors: [] } },
+      });
+
+    const client = makeClient();
+    await expect(client.cancelShopifyOrder('123')).resolves.toBeUndefined();
+  });
+
+  it('throws when suggestedRefund is null', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: null } });
+
+    const client = makeClient();
+    await expect(client.cancelShopifyOrder('bad-order')).rejects.toThrow(
+      'Could not fetch suggested refund',
+    );
+  });
+
+  it('throws when refundCreate returns userErrors', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: { suggestedRefund: SUGGESTED_REFUND } } });
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          refundCreate: { refund: null, userErrors: [{ field: 'base', message: 'Refund failed' }] },
+        },
+      });
+
+    const client = makeClient();
+    await expect(client.cancelShopifyOrder('123')).rejects.toThrow(
+      'Shopify refund errors: Refund failed',
+    );
+  });
+});
