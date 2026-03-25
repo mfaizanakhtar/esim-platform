@@ -7,6 +7,10 @@ name = "eSIM Order Status"
 handle = "esim-order-status"
 
   [[extensions.targeting]]
+  module = "./src/OrderStatusAnnouncement.tsx"
+  target = "customer-account.order-status.announcement.render"
+
+  [[extensions.targeting]]
   module = "./src/OrderStatusBlock.tsx"
   target = "customer-account.order-status.cart-line-item.render-after"
 

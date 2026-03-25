@@ -1,9 +1,11 @@
+import { randomUUID } from 'crypto';
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import prisma from '~/db/prisma';
 import { encrypt } from '~/utils/crypto';
 import { verifyShopifyWebhook } from '~/shopify/webhooks';
 import { getJobQueue } from '~/queue/jobQueue';
+import { getShopifyClient } from '~/shopify/client';
 
 const ShopifyLineItemSchema = z.object({
   id: z.coerce.number(),
@@ -169,6 +171,9 @@ export default function webhookRoutes(
         const iccidProp = lineItem.properties?.find((p) => p.name === '_iccid');
         const topupIccid = iccidProp?.value ? encrypt(iccidProp.value) : null;
 
+        // Pre-generate the access token so the extension can start polling immediately
+        const accessToken = randomUUID();
+
         // Create delivery record
         const delivery = await prisma.esimDelivery.create({
           data: {
@@ -181,10 +186,31 @@ export default function webhookRoutes(
             status: 'pending',
             topupIccid,
             sku: lineItem.sku ?? null,
+            accessToken,
           },
         });
 
         app.log.info({ deliveryId: delivery.id, orderId, orderName }, 'Created delivery record');
+
+        // Write provisioning state to metafield immediately so the thank-you page
+        // shows "eSIM being set up" before the worker job runs.
+        // Fire-and-forget: never block the webhook response.
+        setImmediate(() => {
+          void (async () => {
+            try {
+              const shopify = getShopifyClient();
+              await shopify.writeDeliveryMetafield(orderId, lineItemId, {
+                status: 'provisioning',
+                accessToken,
+              });
+            } catch (err) {
+              app.log.warn(
+                { deliveryId: delivery.id, err },
+                'Failed to write provisioning metafield (non-fatal)',
+              );
+            }
+          })();
+        });
 
         // Enqueue provisioning job with retry policy
         await queue.send(
