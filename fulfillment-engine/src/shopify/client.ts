@@ -389,9 +389,8 @@ export class ShopifyClient {
 
   /**
    * Issue a full refund on a Shopify order (works on fulfilled orders too).
-   * Step 1: fetch line items + transactions from the order.
-   * Step 2: call suggestedRefund with actual line items to get Shopify-calculated amounts.
-   * Step 3: call refundCreate to apply the refund.
+   * Step 1: fetch the order's SALE/CAPTURE transactions and refundable line items.
+   * Step 2: call refundCreate directly with transaction amounts (no suggestedRefund needed).
    * Notifies the customer and does not restock (digital goods).
    */
   async cancelShopifyOrder(orderId: string): Promise<void> {
@@ -405,7 +404,7 @@ export class ShopifyClient {
         { headers },
       );
 
-    // Step 1: Fetch line items (refundable quantities) and transactions
+    // Step 1: Fetch transactions and refundable line items
     const orderRes = await graphql(
       `
         query getOrderForRefund($id: ID!) {
@@ -423,6 +422,7 @@ export class ShopifyClient {
               kind
               gateway
               maximumRefundable
+              status
             }
           }
         }
@@ -435,75 +435,39 @@ export class ShopifyClient {
       throw new Error(`Order not found: ${orderId}`);
     }
 
-    const refundableLineItems: { lineItemId: string; quantity: number }[] = (
-      order.lineItems?.edges ?? []
-    )
+    // Build refund line items (no restock — digital goods)
+    const refundLineItems = (order.lineItems?.edges ?? [])
       .filter((e: { node: { refundableQuantity: number } }) => e.node.refundableQuantity > 0)
       .map((e: { node: { id: string; refundableQuantity: number } }) => ({
         lineItemId: e.node.id,
         quantity: e.node.refundableQuantity,
+        restockType: 'NO_RESTOCK',
       }));
 
-    if (refundableLineItems.length === 0) {
+    if (refundLineItems.length === 0) {
       throw new Error(`Order ${orderId} has no refundable line items`);
     }
 
-    // Step 2: Get Shopify-calculated suggested refund amounts for these line items
-    const suggestedRes = await graphql(
-      `
-        query suggestedRefund($id: ID!, $refundLineItems: [RefundLineItemInput!]!) {
-          order(id: $id) {
-            suggestedRefund(refundLineItems: $refundLineItems) {
-              refundLineItems {
-                lineItem {
-                  id
-                }
-                quantity
-              }
-              transactions {
-                parentId
-                kind
-                gateway
-                maximumRefundable
-                amount
-              }
-            }
-          }
-        }
-      `,
-      {
-        id: gid,
-        refundLineItems: refundableLineItems.map((item) => ({
-          lineItemId: item.lineItemId,
-          quantity: item.quantity,
-          restockType: 'NO_RESTOCK',
-        })),
-      },
-    );
-
-    const suggested = suggestedRes.data?.data?.order?.suggestedRefund;
-    if (!suggested) {
-      throw new Error(`Could not fetch suggested refund for order ${orderId}`);
-    }
-
-    // Step 3: Apply the refund
-    const refundLineItems = suggested.refundLineItems.map(
-      (item: { lineItem: { id: string }; quantity: number }) => ({
-        lineItemId: item.lineItem.id,
-        quantity: item.quantity,
-        restockType: 'NO_RESTOCK',
-      }),
-    );
-
-    const transactions = suggested.transactions.map(
-      (tx: { parentId: string; gateway: string; amount: string; maximumRefundable: string }) => ({
-        parentId: tx.parentId,
+    // Build transactions: refund against each SUCCESS sale/capture
+    const transactions = (order.transactions ?? [])
+      .filter(
+        (tx: { kind: string; status: string; maximumRefundable: string }) =>
+          ['SALE', 'CAPTURE'].includes(tx.kind) &&
+          tx.status === 'SUCCESS' &&
+          parseFloat(tx.maximumRefundable ?? '0') > 0,
+      )
+      .map((tx: { id: string; gateway: string; maximumRefundable: string }) => ({
+        parentId: tx.id,
         kind: 'REFUND',
         gateway: tx.gateway,
-        amount: tx.maximumRefundable ?? tx.amount,
-      }),
-    );
+        amount: tx.maximumRefundable,
+      }));
 
+    if (transactions.length === 0) {
+      throw new Error(`Order ${orderId} has no refundable transactions`);
+    }
+
+    // Step 2: Apply the refund
     const refundRes = await graphql(
       `
         mutation refundCreate($input: RefundInput!) {
