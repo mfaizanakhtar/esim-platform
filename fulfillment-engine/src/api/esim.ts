@@ -205,8 +205,7 @@ export default function esimRoutes(
           logger.error({ deliveryId: delivery.id, err: error }, 'Failed to cancel Shopify order');
           return reply.code(502).send({
             error: 'shopify_cancel_failed',
-            message:
-              'eSIM was deactivated with vendor but Shopify order cancellation failed. Please contact support.',
+            message: 'Refund could not be processed automatically. Please contact support.',
           });
         }
       }
