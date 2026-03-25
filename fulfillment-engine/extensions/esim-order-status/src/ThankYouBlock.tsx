@@ -11,21 +11,8 @@ import {
   Divider,
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
-import { useState, useEffect, useRef } from 'react';
-import { BACKEND } from './shared';
-
-const PROVISIONING_QUIPS = [
-  'Beep boop... waking up your SIM...',
-  'Negotiating with cell towers worldwide...',
-  'Teaching tiny electrons to carry your data...',
-  'Convincing satellites you\'re a VIP...',
-  'Pinging networks in 47 countries...',
-  'Bribing the signal gods...',
-  'Almost there — pinky promise...',
-  'Spinning up the hamster wheels...',
-  'Your eSIM is putting on its shoes...',
-  'Whispering to antennas around the globe...',
-];
+import { useState, useEffect } from 'react';
+import { BACKEND, PROVISIONING_QUIPS } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point — renders under each line item on the post-checkout
@@ -62,14 +49,12 @@ function ThankYouEsimBlock() {
   const [delivery, setDelivery] = useState<OrderDelivery | null>(null);
   const [credentials, setCredentials] = useState<EsimCredentials | null>(null);
   const [quipIndex, setQuipIndex] = useState(0);
-  const quipIndexRef = useRef(0);
 
   // ── Rotate quips while provisioning ─────────────────────────────────────
   useEffect(() => {
     if (delivery?.status !== 'provisioning') return;
     const interval = setInterval(() => {
-      quipIndexRef.current = (quipIndexRef.current + 1) % PROVISIONING_QUIPS.length;
-      setQuipIndex(quipIndexRef.current);
+      setQuipIndex((prev) => (prev + 1) % PROVISIONING_QUIPS.length);
     }, 3000);
     return () => clearInterval(interval);
   }, [delivery?.status]);

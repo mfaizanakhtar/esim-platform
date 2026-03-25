@@ -9,9 +9,10 @@ import {
   BlockStack,
   Divider,
   QRCode,
+  Spinner,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
-import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap } from './shared';
+import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap, PROVISIONING_QUIPS } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -46,6 +47,7 @@ function EsimOrderStatusAnnouncement() {
 
   // Live updates from /esim/delivery/:token polling
   const [liveMap, setLiveMap] = useState<Record<string, DeliveryMetafieldEntry>>({});
+  const [quipIndex, setQuipIndex] = useState(0);
 
   // ── Bootstrap poll ──────────────────────────────────────────────────────
   // When the metafield is missing (typical on first load — the webhook
@@ -129,18 +131,28 @@ function EsimOrderStatusAnnouncement() {
     return () => clearInterval(interval);
   }, [pollingEntry?.accessToken]);
 
+  // ── Quip rotation ────────────────────────────────────────────────────────
+  const anyProvisioning = resolvedEntries.some((e) => e.status === 'provisioning');
+  useEffect(() => {
+    if (!anyProvisioning) return;
+    const interval = setInterval(() => {
+      setQuipIndex((prev) => (prev + 1) % PROVISIONING_QUIPS.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [anyProvisioning]);
+
   // ── Render ───────────────────────────────────────────────────────────────
   if (resolvedEntries.length === 0) return null;
 
-  const anyProvisioning = resolvedEntries.some((e) => e.status === 'provisioning');
   const allDelivered = resolvedEntries.every((e) => e.status === 'delivered');
 
   if (anyProvisioning) {
-    // Compact single-line — fits announcement banner height on mobile
+    // Compact — fits the limited announcement banner height on mobile
     return (
-      <Text appearance="subdued">
-        eSIM being set up — check back in a moment
-      </Text>
+      <InlineStack spacing="base" blockAlignment="center">
+        <Spinner size="small" />
+        <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
+      </InlineStack>
     );
   }
 
