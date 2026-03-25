@@ -384,5 +384,33 @@ export default function esimRoutes(
     },
   );
 
+  /**
+   * GET /esim/order-delivery-status/:orderId
+   * Returns eSIM delivery status for all line items in an order.
+   * Used by extensions on the thank-you / order-status page to detect provisioning
+   * before the metafield is written (timing window after checkout).
+   * Returns status + accessToken (no credentials). The accessToken alone has no
+   * useful data until delivery is complete; credentials require a separate token fetch.
+   */
+  app.get(
+    '/esim/order-delivery-status/:orderId',
+    async (request: FastifyRequest<{ Params: { orderId: string } }>, reply: FastifyReply) => {
+      const { orderId } = request.params;
+
+      const deliveries = await prisma.esimDelivery.findMany({
+        where: { orderId },
+        select: { lineItemId: true, status: true, accessToken: true },
+      });
+
+      return reply.send({
+        deliveries: deliveries.map((d) => ({
+          lineItemId: d.lineItemId,
+          status: d.status,
+          accessToken: d.accessToken ?? undefined,
+        })),
+      });
+    },
+  );
+
   done();
 }
