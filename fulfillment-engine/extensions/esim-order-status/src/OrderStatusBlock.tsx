@@ -10,10 +10,11 @@ import {
   Divider,
   Badge,
   QRCode,
+  Spinner,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
 import { CancelSection } from './CancelEsim';
-import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap } from './shared';
+import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap, PROVISIONING_QUIPS } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -40,7 +41,18 @@ function EsimOrderStatusBlock() {
 
   const [cancelled, setCancelled] = useState(false);
   const [liveEntry, setLiveEntry] = useState<DeliveryMetafieldEntry | null>(null);
+  const [quipIndex, setQuipIndex] = useState(0);
+
   const resolvedEntry = liveEntry ?? entry;
+
+  // Rotate quips while provisioning
+  useEffect(() => {
+    if (resolvedEntry?.status !== 'provisioning') return;
+    const interval = setInterval(() => {
+      setQuipIndex((prev) => (prev + 1) % PROVISIONING_QUIPS.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [resolvedEntry?.status]);
 
   // Poll the backend every 5s while status is provisioning so the card
   // auto-updates to delivered without requiring a page reload.
@@ -74,8 +86,18 @@ function EsimOrderStatusBlock() {
     return (
       <BlockStack spacing="base">
         <Divider />
-        <Banner status="info" title="Your eSIM is being set up">
-          <Text>It will appear here automatically — usually within a minute.</Text>
+        <Banner status="info">
+          <BlockStack spacing="base">
+            <InlineStack spacing="base" blockAlignment="center">
+              <Spinner size="small" />
+              <Text emphasis="bold">Your eSIM is being set up</Text>
+            </InlineStack>
+            <Text appearance="subdued">{PROVISIONING_QUIPS[quipIndex]}</Text>
+            <Text>
+              Once ready, your QR code and activation details will appear right here automatically
+              — no need to refresh.
+            </Text>
+          </BlockStack>
         </Banner>
       </BlockStack>
     );
@@ -123,14 +145,18 @@ function EsimOrderStatusBlock() {
       )}
 
       <BlockStack spacing="tight">
-        <InlineStack spacing="base">
-          <Text appearance="subdued">Activation Code</Text>
-          <Text emphasis="bold">{resolvedEntry.activationCode}</Text>
-        </InlineStack>
-        <InlineStack spacing="base">
-          <Text appearance="subdued">ICCID</Text>
-          <Text>{resolvedEntry.iccid}</Text>
-        </InlineStack>
+        {resolvedEntry.activationCode && (
+          <BlockStack spacing="extraTight">
+            <Text appearance="subdued">Activation Code</Text>
+            <Text emphasis="bold">{resolvedEntry.activationCode}</Text>
+          </BlockStack>
+        )}
+        {resolvedEntry.iccid && (
+          <BlockStack spacing="extraTight">
+            <Text appearance="subdued">ICCID</Text>
+            <Text>{resolvedEntry.iccid}</Text>
+          </BlockStack>
+        )}
       </BlockStack>
 
       <InlineStack spacing="base">

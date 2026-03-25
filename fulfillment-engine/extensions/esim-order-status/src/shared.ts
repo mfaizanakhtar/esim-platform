@@ -1,4 +1,4 @@
-// Shared types and constants for eSIM order status extension components
+// Shared types, constants, and utilities for eSIM order status extension components
 
 export interface DeliveryMetafieldEntry {
   status: 'provisioning' | 'delivered' | 'cancelled' | 'failed';
@@ -11,6 +11,19 @@ export interface DeliveryMetafieldEntry {
 }
 
 export const BACKEND = 'https://esim-api-production-a56a.up.railway.app';
+
+export const PROVISIONING_QUIPS = [
+  'Beep boop... waking up your SIM...',
+  'Negotiating with cell towers worldwide...',
+  'Teaching tiny electrons to carry your data...',
+  "Convincing satellites you're a VIP...",
+  'Pinging networks in 47 countries...',
+  'Bribing the signal gods...',
+  'Almost there — pinky promise...',
+  'Spinning up the hamster wheels...',
+  'Your eSIM is putting on its shoes...',
+  'Whispering to antennas around the globe...',
+];
 
 /**
  * Parse the esim.delivery_tokens metafield JSON into a map of
