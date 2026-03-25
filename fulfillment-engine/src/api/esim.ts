@@ -389,8 +389,14 @@ export default function esimRoutes(
    * Returns eSIM delivery status for all line items in an order.
    * Used by extensions on the thank-you / order-status page to detect provisioning
    * before the metafield is written (timing window after checkout).
-   * Returns status + accessToken (no credentials). The accessToken alone has no
-   * useful data until delivery is complete; credentials require a separate token fetch.
+   *
+   * Security note: accessToken is included intentionally. Shopify internal order
+   * IDs are large non-sequential numeric IDs (not guessable from human-readable
+   * order numbers), providing sufficient entropy to protect this endpoint in
+   * practice. The accessToken is high-entropy (UUID v4, 2^122 bits) and only
+   * grants status + credentials — it does not allow order modification.
+   * This design is required because the checkout surface has no auth mechanism
+   * to pass a signed proof of order ownership to our backend.
    */
   const OrderDeliveryStatusParamsSchema = z.object({ orderId: z.string().min(1) });
 

@@ -38,6 +38,69 @@ interface EsimCredentials {
   usageUrl?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Module-level shared poll registry — deduplicate concurrent order polls
+// across all cart line instances mounting for the same order.
+// ---------------------------------------------------------------------------
+
+type PollCallback = (deliveries: OrderDelivery[]) => void;
+
+const activeOrderPolls = new Map<
+  string,
+  { callbacks: Set<PollCallback>; stopped: boolean }
+>();
+
+function subscribeToOrderDeliveries(orderId: string, onResult: PollCallback): () => void {
+  if (!activeOrderPolls.has(orderId)) {
+    const state: { callbacks: Set<PollCallback>; stopped: boolean } = {
+      callbacks: new Set(),
+      stopped: false,
+    };
+    activeOrderPolls.set(orderId, state);
+
+    let attempts = 0;
+    const poll = async () => {
+      if (state.stopped || ++attempts > 40) {
+        activeOrderPolls.delete(orderId);
+        return;
+      }
+      try {
+        const r = await fetch(`${BACKEND}/esim/order-delivery-status/${orderId}`);
+        if (r.ok) {
+          const data = (await r.json()) as { deliveries: OrderDelivery[] };
+          state.callbacks.forEach((cb) => cb(data.deliveries));
+          // Stop once every known delivery has left pending/provisioning
+          const allSettled =
+            data.deliveries.length > 0 &&
+            data.deliveries.every((d) => !['pending', 'provisioning'].includes(d.status));
+          if (allSettled) {
+            state.stopped = true;
+            activeOrderPolls.delete(orderId);
+            return;
+          }
+        }
+      } catch {
+        /* network blip — retry */
+      }
+      if (!state.stopped) setTimeout(() => void poll(), 3000);
+    };
+
+    void poll();
+  }
+
+  const state = activeOrderPolls.get(orderId)!;
+  state.callbacks.add(onResult);
+  return () => {
+    state.callbacks.delete(onResult);
+    if (state.callbacks.size === 0) {
+      state.stopped = true;
+      activeOrderPolls.delete(orderId);
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------
+
 function ThankYouEsimBlock() {
   const orderConfirmation = useOrderConfirmation();
   const cartLine = useCartLine();
@@ -59,39 +122,19 @@ function ThankYouEsimBlock() {
     return () => clearInterval(interval);
   }, [delivery?.status]);
 
-  // ── Step 1: find our delivery by order + line item ID ────────────────────
+  // ── Step 1: subscribe to shared order poll ───────────────────────────────
+  // All cart line instances for the same order share one poll so we avoid
+  // duplicate requests. The callback filters to this specific line item.
+  // Polling continues through 'pending' status until provisioning starts.
   useEffect(() => {
-    if (!numericOrderId) return;
-    let stopped = false;
-    let attempts = 0;
-
-    const poll = async () => {
-      if (stopped || ++attempts > 40) return;
-      try {
-        const r = await fetch(`${BACKEND}/esim/order-delivery-status/${numericOrderId}`);
-        if (r.ok) {
-          const data = (await r.json()) as { deliveries: OrderDelivery[] };
-          const match = data.deliveries.find((d) => d.lineItemId === numericLineItemId);
-          if (match) {
-            setDelivery(match);
-            // Stop this loop — token-level polling takes over for provisioning state
-            stopped = true;
-            return;
-          }
-        }
-      } catch {
-        /* network blip */
-      }
-      if (!stopped) setTimeout(() => void poll(), 3000);
-    };
-
-    void poll();
-    return () => {
-      stopped = true;
-    };
+    if (!numericOrderId || !numericLineItemId) return;
+    return subscribeToOrderDeliveries(numericOrderId, (deliveries) => {
+      const match = deliveries.find((d) => d.lineItemId === numericLineItemId);
+      if (match) setDelivery(match);
+    });
   }, [numericOrderId, numericLineItemId]);
 
-  // ── Step 2: once we have an accessToken, poll for delivery completion ────
+  // ── Step 2: once provisioning, poll token endpoint for delivery ──────────
   useEffect(() => {
     if (!delivery?.accessToken || delivery.status !== 'provisioning') return;
     const token = delivery.accessToken;
@@ -122,7 +165,7 @@ function ThankYouEsimBlock() {
     };
   }, [delivery?.accessToken, delivery?.status]);
 
-  // ── Step 3: if already delivered when we first find it, fetch credentials
+  // ── Step 3: if already delivered on first find, fetch credentials ────────
   useEffect(() => {
     if (!delivery?.accessToken || delivery.status !== 'delivered' || credentials) return;
     void fetch(`${BACKEND}/esim/delivery/${delivery.accessToken}`)
@@ -135,8 +178,8 @@ function ThankYouEsimBlock() {
 
   if (!delivery) return null;
 
-  // ── Provisioning state ───────────────────────────────────────────────────
-  if (delivery.status === 'provisioning') {
+  // ── Provisioning (or pending) state ─────────────────────────────────────
+  if (delivery.status === 'provisioning' || delivery.status === 'pending') {
     return (
       <BlockStack spacing="tight">
         <Banner status="info">
@@ -160,7 +203,7 @@ function ThankYouEsimBlock() {
     );
   }
 
-  // ── Delivered state — show full eSIM card ────────────────────────────────
+  // ── Delivered — show full eSIM card ──────────────────────────────────────
   if (delivery.status === 'delivered' && credentials) {
     return (
       <BlockStack spacing="base">
@@ -205,13 +248,13 @@ function ThankYouEsimBlock() {
         </InlineStack>
 
         <Text appearance="subdued">
-          We've also emailed you a copy — check your inbox if you need it later.
+          {"We've also emailed you a copy — check your inbox if you need it later."}
         </Text>
       </BlockStack>
     );
   }
 
-  // Delivered but credentials still loading — show brief placeholder
+  // Delivered but credentials still loading
   if (delivery.status === 'delivered') {
     return (
       <BlockStack spacing="tight">

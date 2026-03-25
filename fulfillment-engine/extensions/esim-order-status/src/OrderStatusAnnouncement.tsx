@@ -65,7 +65,10 @@ function EsimOrderStatusAnnouncement() {
         if (r.ok) {
           const data = (await r.json()) as { deliveries: OrderDelivery[] };
           const active = data.deliveries.filter(
-            (d) => d.status === 'provisioning' || d.status === 'delivered',
+            (d) =>
+              d.status === 'pending' ||
+              d.status === 'provisioning' ||
+              d.status === 'delivered',
           );
           if (active.length > 0) {
             setBootstrapEntries(active);
@@ -95,10 +98,33 @@ function EsimOrderStatusAnnouncement() {
           accessToken: b.accessToken,
         }));
 
-  // Apply live updates on top
+  // Apply live updates on top, preserving the original accessToken (the
+  // /esim/delivery/:token response doesn't include it).
   const resolvedEntries = baseEntries.map((e) =>
-    e.accessToken && liveMap[e.accessToken] ? liveMap[e.accessToken] : e,
+    e.accessToken && liveMap[e.accessToken]
+      ? { ...e, ...liveMap[e.accessToken], accessToken: e.accessToken }
+      : e,
   );
+
+  // ── Hydrate delivered bootstrap entries ─────────────────────────────────
+  // Bootstrap entries only carry status + accessToken (no credentials).
+  // If an entry is already delivered when first seen, fetch credentials now
+  // so the modal has QR code / activation code / ICCID to show.
+  useEffect(() => {
+    const toHydrate = resolvedEntries.filter(
+      (e) => e.status === 'delivered' && e.accessToken && !e.lpa,
+    );
+    for (const e of toHydrate) {
+      const token = e.accessToken!;
+      void fetch(`${BACKEND}/esim/delivery/${token}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: DeliveryMetafieldEntry | null) => {
+          if (data) setLiveMap((prev) => ({ ...prev, [token]: data }));
+        })
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolvedEntries.map((e) => e.accessToken).join(',')]);
 
   // ── Token poll ───────────────────────────────────────────────────────────
   // For any provisioning entry with an accessToken, poll every 5s.
