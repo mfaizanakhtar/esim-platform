@@ -397,7 +397,7 @@ export default function esimRoutes(
 
       const delivery = await prisma.esimDelivery.findFirst({
         where: { orderId },
-        select: { status: true },
+        select: { status: true, accessToken: true },
         orderBy: { createdAt: 'desc' },
       });
 
@@ -405,7 +405,14 @@ export default function esimRoutes(
         return reply.send({ status: null });
       }
 
-      return reply.send({ status: delivery.status });
+      // Include the access token only when delivered so the extension can
+      // fetch full credentials from /esim/delivery/:token for the modal.
+      return reply.send({
+        status: delivery.status,
+        ...(delivery.status === 'delivered' && delivery.accessToken
+          ? { accessToken: delivery.accessToken }
+          : {}),
+      });
     },
   );
 
