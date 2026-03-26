@@ -161,6 +161,19 @@ describe('createFulfillment', () => {
     expect(result.status).toBe('SUCCESS');
   });
 
+  it('succeeds even when the fulfillment event call fails', async () => {
+    mockTokenRefresh();
+    mockFulfillmentOrderQuery();
+    mockFulfillmentMutation();
+    // Simulate event call failing with a network error
+    nock(BASE_URL).post('/admin/api/2026-01/graphql.json').replyWithError('connection reset');
+
+    const client = makeClient();
+    const result = (await client.createFulfillment('54321')) as { id: string; status: string };
+    expect(result.id).toBe('gid://shopify/Fulfillment/999');
+    expect(result.status).toBe('SUCCESS');
+  });
+
   it('throws when the GraphQL query returns top-level errors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)

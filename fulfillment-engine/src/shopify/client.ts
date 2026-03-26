@@ -285,41 +285,57 @@ export class ShopifyClient {
     const fulfillmentId = result?.fulfillment?.id;
 
     // Mark as delivered immediately — eSIMs are digital goods with instant delivery.
+    // Non-fatal: a failure here does not prevent the fulfillment from being recorded.
     if (fulfillmentId) {
-      const eventMutation = `
-        mutation fulfillmentEventCreate($fulfillmentEvent: FulfillmentEventInput!) {
-          fulfillmentEventCreate(fulfillmentEvent: $fulfillmentEvent) {
-            fulfillmentEvent { id status }
-            userErrors { field message }
+      try {
+        const eventMutation = `
+          mutation fulfillmentEventCreate($fulfillmentEvent: FulfillmentEventInput!) {
+            fulfillmentEventCreate(fulfillmentEvent: $fulfillmentEvent) {
+              fulfillmentEvent { id status }
+              userErrors { field message }
+            }
           }
-        }
-      `;
+        `;
 
-      const eventResponse = await axios.post(
-        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
-        {
-          query: eventMutation,
-          variables: {
-            fulfillmentEvent: {
-              fulfillmentId,
-              status: 'DELIVERED',
-              happenedAt: new Date().toISOString(),
+        const eventResponse = await axios.post(
+          `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+          {
+            query: eventMutation,
+            variables: {
+              fulfillmentEvent: {
+                fulfillmentId,
+                status: 'DELIVERED',
+                happenedAt: new Date().toISOString(),
+              },
             },
           },
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Shopify-Access-Token': token,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Shopify-Access-Token': token,
+            },
           },
-        },
-      );
+        );
 
-      const eventResult = eventResponse.data?.data?.fulfillmentEventCreate;
-      if (eventResult?.userErrors?.length > 0) {
+        const graphqlErrors = eventResponse.data?.errors;
+        if (graphqlErrors?.length > 0) {
+          logger.warn(
+            { fulfillmentId, errors: graphqlErrors },
+            'fulfillmentEventCreate top-level GraphQL errors (non-fatal)',
+          );
+        } else {
+          const eventResult = eventResponse.data?.data?.fulfillmentEventCreate;
+          if (eventResult?.userErrors?.length > 0) {
+            logger.warn(
+              { fulfillmentId, errors: eventResult.userErrors },
+              'fulfillmentEventCreate userErrors (non-fatal)',
+            );
+          }
+        }
+      } catch (error) {
         logger.warn(
-          { errors: eventResult.userErrors },
-          'Failed to set fulfillment event to DELIVERED (non-fatal)',
+          { fulfillmentId, err: error },
+          'Failed to create DELIVERED fulfillment event (non-fatal)',
         );
       }
     }
