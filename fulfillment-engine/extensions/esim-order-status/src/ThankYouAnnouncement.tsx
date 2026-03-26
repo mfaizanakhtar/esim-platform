@@ -1,24 +1,31 @@
 import {
   reactExtension,
   useApi,
+  useAppMetafields,
   useSubscription,
   InlineStack,
   Text,
   Button,
+  Modal,
+  BlockStack,
+  Divider,
+  QRCode,
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
-import { PROVISIONING_QUIPS, BACKEND } from './shared';
+import { PROVISIONING_QUIPS, BACKEND, type DeliveryMetafieldEntry, parseTokenMap } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point — compact announcement bar at the top of the
-// thank-you page.
+// thank-you page. Matches the order-status announcement pattern exactly:
+//   provisioning → [spinner] [rotating quip]
+//   delivered    → "Your eSIM is ready!" + "View eSIM" → Modal (if credentials
+//                  are in the metafield), else "View in My Account" link.
 //
-// useAppMetafields is not reactive in the checkout surface — it's a snapshot
-// at render time (before the webhook fires and writes the metafield).
-// Instead we poll GET /esim/order-status/:orderId every 5s to track status.
-// No credentials are returned — full eSIM details live in the authenticated
-// customer-account order-status page.
+// Status is polled immediately via GET /esim/order-status/:orderId (fast, no
+// 2s delay). Credentials come from useAppMetafields subscription — if Shopify
+// pushes the updated metafield value after the webhook writes it, the modal
+// becomes available automatically.
 // ---------------------------------------------------------------------------
 
 export default reactExtension(
@@ -29,17 +36,27 @@ export default reactExtension(
 type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
 
 function ThankYouAnnouncementBlock() {
-  // Get the confirmed order ID from the order confirmation API
+  // ── Order ID from confirmation API ────────────────────────────────────────
   const api = useApi<'purchase.thank-you.announcement.render'>();
   const orderConfirmation = useSubscription(
     (api as unknown as { orderConfirmation: Parameters<typeof useSubscription>[0] }).orderConfirmation,
   ) as { order?: { id?: string } } | null;
   const numericOrderId = orderConfirmation?.order?.id?.split('/').pop() ?? '';
 
+  // ── Credentials from metafield subscription ───────────────────────────────
+  // These arrive reactively once the webhook writes the metafield.
+  const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
+  const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
+  const tokenMap = parseTokenMap(tokensRaw);
+  const deliveredEntry = Object.values(tokenMap).find(
+    (e): e is DeliveryMetafieldEntry & { lpa: string } =>
+      e.status === 'delivered' && typeof e.lpa === 'string' && e.lpa.length > 0,
+  );
+
+  // ── Status via polling ────────────────────────────────────────────────────
   const [status, setStatus] = useState<EsimStatus>(null);
   const [quipIndex, setQuipIndex] = useState(0);
 
-  // ── Poll /esim/order-status/:orderId ─────────────────────────────────────
   useEffect(() => {
     if (!numericOrderId) return;
     let attempts = 0;
@@ -51,7 +68,7 @@ function ThankYouAnnouncementBlock() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data: { status: EsimStatus } | null) => {
           if (!data || stopped) return;
-          setStatus(data.status);
+          if (data.status) setStatus(data.status);
           if (['delivered', 'failed', 'cancelled'].includes(data.status ?? '')) {
             stopped = true;
             return;
@@ -63,12 +80,9 @@ function ThankYouAnnouncementBlock() {
         });
     };
 
-    // Wait 2s before first poll to give webhook time to fire and write to DB
-    const initial = setTimeout(poll, 2000);
-    return () => {
-      stopped = true;
-      clearTimeout(initial);
-    };
+    // Poll immediately — no delay
+    poll();
+    return () => { stopped = true; };
   }, [numericOrderId]);
 
   // ── Quip rotation ─────────────────────────────────────────────────────────
@@ -81,10 +95,9 @@ function ThankYouAnnouncementBlock() {
     return () => clearInterval(interval);
   }, [isProvisioning]);
 
-  // Nothing to show until we get a status from the backend
   if (!status || status === 'failed' || status === 'cancelled') return null;
 
-  // ── Provisioning — compact single row ─────────────────────────────────────
+  // ── Provisioning ─────────────────────────────────────────────────────────
   if (isProvisioning) {
     return (
       <InlineStack spacing="base" blockAlignment="center">
@@ -94,7 +107,25 @@ function ThankYouAnnouncementBlock() {
     );
   }
 
-  // ── Delivered ─────────────────────────────────────────────────────────────
+  // ── Delivered with credentials in metafield → modal ───────────────────────
+  if (status === 'delivered' && deliveredEntry) {
+    return (
+      <InlineStack spacing="base" blockAlignment="center">
+        <Text emphasis="bold">Your eSIM is ready!</Text>
+        <Button
+          overlay={
+            <Modal id="esim-thankyou-announcement-modal" title="eSIM Details" padding>
+              <EsimModalContent entry={deliveredEntry} />
+            </Modal>
+          }
+        >
+          View eSIM
+        </Button>
+      </InlineStack>
+    );
+  }
+
+  // ── Delivered but credentials not yet in metafield → link fallback ─────────
   if (status === 'delivered') {
     return (
       <InlineStack spacing="base" blockAlignment="center">
@@ -107,4 +138,49 @@ function ThankYouAnnouncementBlock() {
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Modal content — QR code, activation code, ICCID, install buttons
+// ---------------------------------------------------------------------------
+
+function EsimModalContent({ entry }: { entry: DeliveryMetafieldEntry }) {
+  return (
+    <BlockStack spacing="base">
+      {entry.lpa && <QRCode content={entry.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
+
+      <BlockStack spacing="tight">
+        {entry.activationCode && (
+          <BlockStack spacing="extraTight">
+            <Text appearance="subdued">Activation Code</Text>
+            <Text emphasis="bold">{entry.activationCode}</Text>
+          </BlockStack>
+        )}
+        {entry.iccid && (
+          <BlockStack spacing="extraTight">
+            <Text appearance="subdued">ICCID</Text>
+            <Text>{entry.iccid}</Text>
+          </BlockStack>
+        )}
+      </BlockStack>
+
+      <Divider />
+
+      <InlineStack spacing="base">
+        {entry.lpa && (
+          <Button
+            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(entry.lpa)}`}
+            appearance="primary"
+          >
+            Install on iPhone
+          </Button>
+        )}
+        {entry.usageUrl && (
+          <Button to={entry.usageUrl} appearance="secondary">
+            View Usage
+          </Button>
+        )}
+      </InlineStack>
+    </BlockStack>
+  );
 }
