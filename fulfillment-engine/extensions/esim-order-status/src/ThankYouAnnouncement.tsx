@@ -41,7 +41,7 @@ function ThankYouAnnouncementBlock() {
       void fetch(`${BACKEND}/esim/delivery/${accessToken}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data: DeliveryMetafieldEntry | null) => {
-          if (data && !stopped) setCredentials(data);
+          if (data) setCredentials(data);
         })
         .catch(() => {});
     };
@@ -113,10 +113,8 @@ function ThankYouAnnouncementBlock() {
   if (status === 'delivered') {
     return (
       <InlineStack spacing="base" blockAlignment="center">
-        <Text emphasis="bold">Your eSIM is ready!</Text>
-        <Button to="https://fluxyfi.com/account/orders" appearance="plain">
-          View in My Account
-        </Button>
+        <Spinner size="small" />
+        <Text emphasis="bold">Your eSIM is ready — loading details…</Text>
       </InlineStack>
     );
   }
