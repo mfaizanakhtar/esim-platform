@@ -384,5 +384,30 @@ export default function esimRoutes(
     },
   );
 
+  /**
+   * GET /esim/order-status/:orderId
+   * Returns the eSIM provisioning status for the thank-you page extension.
+   * Returns only status — no credentials or access tokens.
+   * Used by the checkout UI extension which cannot receive metafield updates reactively.
+   */
+  app.get(
+    '/esim/order-status/:orderId',
+    async (request: FastifyRequest<{ Params: { orderId: string } }>, reply: FastifyReply) => {
+      const { orderId } = request.params;
+
+      const delivery = await prisma.esimDelivery.findFirst({
+        where: { orderId },
+        select: { status: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!delivery) {
+        return reply.send({ status: null });
+      }
+
+      return reply.send({ status: delivery.status });
+    },
+  );
+
   done();
 }
