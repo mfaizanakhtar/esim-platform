@@ -1,6 +1,7 @@
 import {
   reactExtension,
   useAppMetafields,
+  View,
   InlineStack,
   Text,
   Button,
@@ -91,38 +92,42 @@ function EsimOrderStatusAnnouncement() {
   const allDelivered = resolvedEntries.every((e) => e.status === 'delivered');
 
   if (anyProvisioning) {
-    // Compact — fits the limited announcement banner height on mobile
     return (
-      <InlineStack spacing="base" blockAlignment="center">
-        <Spinner size="small" />
-        <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
-      </InlineStack>
+      <View position={{ type: 'sticky', blockStart: 0 }}>
+        <InlineStack spacing="base" blockAlignment="center">
+          <Spinner size="small" />
+          <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
+        </InlineStack>
+      </View>
     );
   }
 
   if (allDelivered) {
     return (
-      <InlineStack spacing="base" blockAlignment="center">
-        <Text emphasis="bold">Your eSIM is ready!</Text>
-        {resolvedEntries.map((e, i) =>
-          e.accessToken ? (
-            <Button
-              key={e.accessToken}
-              overlay={
-                <Modal
-                  id={`esim-modal-${e.accessToken}`}
-                  title={resolvedEntries.length > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'}
-                  padding
-                >
-                  <EsimModalContent entry={e} />
-                </Modal>
-              }
-            >
-              {resolvedEntries.length > 1 ? `View eSIM ${i + 1}` : 'View eSIM'}
-            </Button>
-          ) : null,
-        )}
-      </InlineStack>
+      <View position={{ type: 'sticky', blockStart: 0 }}>
+        <InlineStack spacing="base" blockAlignment="center">
+          <Text emphasis="bold" appearance="success">{'✓ Your eSIM is ready!'}</Text>
+          {resolvedEntries.map((e, i) =>
+            e.accessToken ? (
+              <Button
+                key={e.accessToken}
+                appearance="primary"
+                overlay={
+                  <Modal
+                    id={`esim-modal-${e.accessToken}`}
+                    title={resolvedEntries.length > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'}
+                    padding
+                  >
+                    <EsimModalContent entry={e} />
+                  </Modal>
+                }
+              >
+                {resolvedEntries.length > 1 ? `View eSIM ${i + 1}` : 'View eSIM'}
+              </Button>
+            ) : null,
+          )}
+        </InlineStack>
+      </View>
     );
   }
 
