@@ -23,6 +23,11 @@ handle = "esim-order-status"
   target = "customer-account.order.action.render"
 
   [[extensions.targeting]]
+  module = "./src/ThankYouAnnouncement.tsx"
+  target = "purchase.thank-you.announcement.render"
+  name = "eSIM Thank You Announcement"
+
+  [[extensions.targeting]]
   module = "./src/ThankYouBlock.tsx"
   target = "purchase.thank-you.cart-line-item.render-after"
   name = "eSIM Thank You Status"
