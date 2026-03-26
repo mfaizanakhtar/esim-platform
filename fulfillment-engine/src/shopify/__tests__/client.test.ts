@@ -119,14 +119,30 @@ describe('createFulfillment', () => {
       });
   }
 
-  function mockFulfillmentMutation(userErrors: unknown[] = []): nock.Scope {
+  function mockFulfillmentMutation(
+    userErrors: unknown[] = [],
+    fulfillmentId = 'gid://shopify/Fulfillment/999',
+  ): nock.Scope {
     return nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, {
         data: {
           fulfillmentCreate: {
-            fulfillment: { id: 'gid://shopify/Fulfillment/999', status: 'SUCCESS' },
+            fulfillment: { id: fulfillmentId, status: 'SUCCESS' },
             userErrors,
+          },
+        },
+      });
+  }
+
+  function mockFulfillmentEventMutation(): nock.Scope {
+    return nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          fulfillmentEventCreate: {
+            fulfillmentEvent: { id: 'gid://shopify/FulfillmentEvent/1', status: 'DELIVERED' },
+            userErrors: [],
           },
         },
       });
@@ -136,10 +152,24 @@ describe('createFulfillment', () => {
     mockTokenRefresh();
     mockFulfillmentOrderQuery();
     mockFulfillmentMutation();
+    mockFulfillmentEventMutation();
 
     const client = makeClient();
     const result = (await client.createFulfillment('54321')) as { id: string; status: string };
 
+    expect(result.id).toBe('gid://shopify/Fulfillment/999');
+    expect(result.status).toBe('SUCCESS');
+  });
+
+  it('succeeds even when the fulfillment event call fails', async () => {
+    mockTokenRefresh();
+    mockFulfillmentOrderQuery();
+    mockFulfillmentMutation();
+    // Simulate event call failing with a network error
+    nock(BASE_URL).post('/admin/api/2026-01/graphql.json').replyWithError('connection reset');
+
+    const client = makeClient();
+    const result = (await client.createFulfillment('54321')) as { id: string; status: string };
     expect(result.id).toBe('gid://shopify/Fulfillment/999');
     expect(result.status).toBe('SUCCESS');
   });
@@ -223,6 +253,7 @@ describe('createFulfillment', () => {
           },
         },
       });
+    mockFulfillmentEventMutation();
 
     const client = makeClient();
     const result = (await client.createFulfillment('54321')) as { id: string };
