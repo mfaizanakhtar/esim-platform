@@ -282,6 +282,48 @@ export class ShopifyClient {
       throw new Error(`Shopify fulfillment errors: ${errors}`);
     }
 
+    const fulfillmentId = result?.fulfillment?.id;
+
+    // Mark as delivered immediately — eSIMs are digital goods with instant delivery.
+    if (fulfillmentId) {
+      const eventMutation = `
+        mutation fulfillmentEventCreate($fulfillmentEvent: FulfillmentEventInput!) {
+          fulfillmentEventCreate(fulfillmentEvent: $fulfillmentEvent) {
+            fulfillmentEvent { id status }
+            userErrors { field message }
+          }
+        }
+      `;
+
+      const eventResponse = await axios.post(
+        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        {
+          query: eventMutation,
+          variables: {
+            fulfillmentEvent: {
+              fulfillmentId,
+              status: 'DELIVERED',
+              happenedAt: new Date().toISOString(),
+            },
+          },
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': token,
+          },
+        },
+      );
+
+      const eventResult = eventResponse.data?.data?.fulfillmentEventCreate;
+      if (eventResult?.userErrors?.length > 0) {
+        logger.warn(
+          { errors: eventResult.userErrors },
+          'Failed to set fulfillment event to DELIVERED (non-fatal)',
+        );
+      }
+    }
+
     return result?.fulfillment;
   }
 

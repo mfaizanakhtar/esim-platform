@@ -119,14 +119,30 @@ describe('createFulfillment', () => {
       });
   }
 
-  function mockFulfillmentMutation(userErrors: unknown[] = []): nock.Scope {
+  function mockFulfillmentMutation(
+    userErrors: unknown[] = [],
+    fulfillmentId = 'gid://shopify/Fulfillment/999',
+  ): nock.Scope {
     return nock(BASE_URL)
       .post('/admin/api/2026-01/graphql.json')
       .reply(200, {
         data: {
           fulfillmentCreate: {
-            fulfillment: { id: 'gid://shopify/Fulfillment/999', status: 'SUCCESS' },
+            fulfillment: { id: fulfillmentId, status: 'SUCCESS' },
             userErrors,
+          },
+        },
+      });
+  }
+
+  function mockFulfillmentEventMutation(): nock.Scope {
+    return nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          fulfillmentEventCreate: {
+            fulfillmentEvent: { id: 'gid://shopify/FulfillmentEvent/1', status: 'DELIVERED' },
+            userErrors: [],
           },
         },
       });
@@ -136,6 +152,7 @@ describe('createFulfillment', () => {
     mockTokenRefresh();
     mockFulfillmentOrderQuery();
     mockFulfillmentMutation();
+    mockFulfillmentEventMutation();
 
     const client = makeClient();
     const result = (await client.createFulfillment('54321')) as { id: string; status: string };
@@ -223,6 +240,7 @@ describe('createFulfillment', () => {
           },
         },
       });
+    mockFulfillmentEventMutation();
 
     const client = makeClient();
     const result = (await client.createFulfillment('54321')) as { id: string };
