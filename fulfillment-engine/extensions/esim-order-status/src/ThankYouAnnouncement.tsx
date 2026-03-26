@@ -2,6 +2,7 @@ import {
   reactExtension,
   useApi,
   useSubscription,
+  useCartLines,
   InlineStack,
   Text,
   Button,
@@ -21,12 +22,25 @@ export default reactExtension(
 
 type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
 
+function isEsimLine(line: ReturnType<typeof useCartLines>[number]): boolean {
+  const title = line?.merchandise?.title ?? '';
+  const productType =
+    (line?.merchandise as { product?: { productType?: string } })?.product?.productType ?? '';
+  return (
+    title.toLowerCase().includes('esim') ||
+    title.toLowerCase().includes('e-sim') ||
+    productType.toLowerCase().includes('esim')
+  );
+}
+
 function ThankYouAnnouncementBlock() {
   const api = useApi<'purchase.thank-you.announcement.render'>();
   const orderConfirmation = useSubscription(
     (api as unknown as { orderConfirmation: Parameters<typeof useSubscription>[0] }).orderConfirmation,
   ) as { order?: { id?: string } } | null;
   const numericOrderId = orderConfirmation?.order?.id?.split('/').pop() ?? '';
+  const cartLines = useCartLines();
+  const looksLikeEsimOrder = cartLines.some(isEsimLine);
 
   const [status, setStatus] = useState<EsimStatus>(null);
   const [credentials, setCredentials] = useState<DeliveryMetafieldEntry | null>(null);
@@ -82,9 +96,10 @@ function ThankYouAnnouncementBlock() {
     return () => clearInterval(interval);
   }, [isProvisioning]);
 
-  if (!status || status === 'failed' || status === 'cancelled') return null;
+  if (status === 'failed' || status === 'cancelled') return null;
 
-  if (isProvisioning) {
+  // Show spinner immediately if cart looks like an eSIM order, even before first poll returns
+  if (isProvisioning || (!status && looksLikeEsimOrder)) {
     return (
       <InlineStack spacing="base" blockAlignment="center">
         <Spinner size="small" />
