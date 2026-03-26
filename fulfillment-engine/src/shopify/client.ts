@@ -474,6 +474,7 @@ export class ShopifyClient {
         kind: 'REFUND',
         gateway: tx.gateway,
         amount: tx.maximumRefundableV2?.amount ?? tx.amountSet?.shopMoney?.amount ?? '0',
+        orderId: gid,
       }))
       .filter((tx) => parseFloat(tx.amount) > 0);
 
