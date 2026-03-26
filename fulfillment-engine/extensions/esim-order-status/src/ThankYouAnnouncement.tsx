@@ -1,6 +1,5 @@
 import {
   reactExtension,
-  useCartLines,
   useAppMetafields,
   InlineStack,
   Text,
@@ -19,6 +18,11 @@ import { PROVISIONING_QUIPS, type DeliveryMetafieldEntry, parseTokenMap } from '
 // thank-you page. Matches the order-status announcement exactly:
 //   provisioning → [spinner] [rotating quip]
 //   delivered    → "Your eSIM is ready!" + "View eSIM" → Modal
+//
+// useAppMetafields is subscription-based: it re-renders automatically when
+// the webhook writes the provisioning metafield (within ~1-2s of checkout).
+// No cart-line detection needed — if there is no eSIM on this order the
+// metafield will simply never be written and the component stays hidden.
 // ---------------------------------------------------------------------------
 
 export default reactExtension(
@@ -26,32 +30,20 @@ export default reactExtension(
   () => <ThankYouAnnouncementBlock />,
 );
 
-function isEsimLine(line: { merchandise?: { title?: string; product?: { productType?: string } } }): boolean {
-  const title = line?.merchandise?.title ?? '';
-  const productType = line?.merchandise?.product?.productType ?? '';
-  return (
-    title.toLowerCase().includes('esim') ||
-    title.toLowerCase().includes('e-sim') ||
-    productType.toLowerCase().includes('esim')
-  );
-}
-
 function ThankYouAnnouncementBlock() {
-  const cartLines = useCartLines();
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
   const tokenMap = parseTokenMap(tokensRaw);
 
-  const looksLikeEsim = cartLines.some((line) => isEsimLine(line as Parameters<typeof isEsimLine>[0]));
   const activeEntries = Object.values(tokenMap).filter(
     (e) => e.status === 'provisioning' || e.status === 'pending' || e.status === 'delivered',
   );
 
-  const [quipIndex, setQuipIndex] = useState(0);
+  const anyProvisioning = activeEntries.some(
+    (e) => e.status === 'provisioning' || e.status === 'pending',
+  );
 
-  const anyProvisioning =
-    activeEntries.some((e) => e.status === 'provisioning' || e.status === 'pending') ||
-    (activeEntries.length === 0 && looksLikeEsim);
+  const [quipIndex, setQuipIndex] = useState(0);
 
   // ── Quip rotation ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -62,8 +54,8 @@ function ThankYouAnnouncementBlock() {
     return () => clearInterval(interval);
   }, [anyProvisioning]);
 
-  // Nothing to show for non-eSIM orders
-  if (activeEntries.length === 0 && !looksLikeEsim) return null;
+  // Nothing to show until the webhook writes the metafield
+  if (activeEntries.length === 0) return null;
 
   // ── Provisioning — compact single row ─────────────────────────────────────
   if (anyProvisioning) {
