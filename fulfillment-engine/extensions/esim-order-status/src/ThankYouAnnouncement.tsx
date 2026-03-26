@@ -1,7 +1,6 @@
 import {
   reactExtension,
   useApi,
-  useAppMetafields,
   useSubscription,
   InlineStack,
   Text,
@@ -13,20 +12,7 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
-import { PROVISIONING_QUIPS, BACKEND, type DeliveryMetafieldEntry, parseTokenMap } from './shared';
-
-// ---------------------------------------------------------------------------
-// Extension entry point — compact announcement bar at the top of the
-// thank-you page. Matches the order-status announcement pattern exactly:
-//   provisioning → [spinner] [rotating quip]
-//   delivered    → "Your eSIM is ready!" + "View eSIM" → Modal (if credentials
-//                  are in the metafield), else "View in My Account" link.
-//
-// Status is polled immediately via GET /esim/order-status/:orderId (fast, no
-// 2s delay). Credentials come from useAppMetafields subscription — if Shopify
-// pushes the updated metafield value after the webhook writes it, the modal
-// becomes available automatically.
-// ---------------------------------------------------------------------------
+import { PROVISIONING_QUIPS, BACKEND, type DeliveryMetafieldEntry } from './shared';
 
 export default reactExtension(
   'purchase.thank-you.announcement.render',
@@ -36,25 +22,14 @@ export default reactExtension(
 type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
 
 function ThankYouAnnouncementBlock() {
-  // ── Order ID from confirmation API ────────────────────────────────────────
   const api = useApi<'purchase.thank-you.announcement.render'>();
   const orderConfirmation = useSubscription(
     (api as unknown as { orderConfirmation: Parameters<typeof useSubscription>[0] }).orderConfirmation,
   ) as { order?: { id?: string } } | null;
   const numericOrderId = orderConfirmation?.order?.id?.split('/').pop() ?? '';
 
-  // ── Credentials from metafield subscription ───────────────────────────────
-  // These arrive reactively once the webhook writes the metafield.
-  const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
-  const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
-  const tokenMap = parseTokenMap(tokensRaw);
-  const deliveredEntry = Object.values(tokenMap).find(
-    (e): e is DeliveryMetafieldEntry & { lpa: string } =>
-      e.status === 'delivered' && typeof e.lpa === 'string' && e.lpa.length > 0,
-  );
-
-  // ── Status via polling ────────────────────────────────────────────────────
   const [status, setStatus] = useState<EsimStatus>(null);
+  const [credentials, setCredentials] = useState<DeliveryMetafieldEntry | null>(null);
   const [quipIndex, setQuipIndex] = useState(0);
 
   useEffect(() => {
@@ -62,14 +37,28 @@ function ThankYouAnnouncementBlock() {
     let attempts = 0;
     let stopped = false;
 
+    const fetchCredentials = (accessToken: string) => {
+      void fetch(`${BACKEND}/esim/delivery/${accessToken}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: DeliveryMetafieldEntry | null) => {
+          if (data && !stopped) setCredentials(data);
+        })
+        .catch(() => {});
+    };
+
     const poll = () => {
       if (stopped || ++attempts > 120) return;
       void fetch(`${BACKEND}/esim/order-status/${numericOrderId}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((data: { status: EsimStatus } | null) => {
+        .then((data: { status: EsimStatus; accessToken?: string } | null) => {
           if (!data || stopped) return;
           if (data.status) setStatus(data.status);
-          if (['delivered', 'failed', 'cancelled'].includes(data.status ?? '')) {
+          if (data.status === 'delivered') {
+            stopped = true;
+            if (data.accessToken) fetchCredentials(data.accessToken);
+            return;
+          }
+          if (data.status === 'failed' || data.status === 'cancelled') {
             stopped = true;
             return;
           }
@@ -80,12 +69,10 @@ function ThankYouAnnouncementBlock() {
         });
     };
 
-    // Poll immediately — no delay
     poll();
     return () => { stopped = true; };
   }, [numericOrderId]);
 
-  // ── Quip rotation ─────────────────────────────────────────────────────────
   const isProvisioning = status === 'provisioning' || status === 'pending';
   useEffect(() => {
     if (!isProvisioning) return;
@@ -97,7 +84,6 @@ function ThankYouAnnouncementBlock() {
 
   if (!status || status === 'failed' || status === 'cancelled') return null;
 
-  // ── Provisioning ─────────────────────────────────────────────────────────
   if (isProvisioning) {
     return (
       <InlineStack spacing="base" blockAlignment="center">
@@ -107,15 +93,14 @@ function ThankYouAnnouncementBlock() {
     );
   }
 
-  // ── Delivered with credentials in metafield → modal ───────────────────────
-  if (status === 'delivered' && deliveredEntry) {
+  if (status === 'delivered' && credentials?.lpa) {
     return (
       <InlineStack spacing="base" blockAlignment="center">
         <Text emphasis="bold">Your eSIM is ready!</Text>
         <Button
           overlay={
             <Modal id="esim-thankyou-announcement-modal" title="eSIM Details" padding>
-              <EsimModalContent entry={deliveredEntry} />
+              <EsimModalContent entry={credentials} />
             </Modal>
           }
         >
@@ -125,7 +110,6 @@ function ThankYouAnnouncementBlock() {
     );
   }
 
-  // ── Delivered but credentials not yet in metafield → link fallback ─────────
   if (status === 'delivered') {
     return (
       <InlineStack spacing="base" blockAlignment="center">
@@ -140,15 +124,10 @@ function ThankYouAnnouncementBlock() {
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Modal content — QR code, activation code, ICCID, install buttons
-// ---------------------------------------------------------------------------
-
 function EsimModalContent({ entry }: { entry: DeliveryMetafieldEntry }) {
   return (
     <BlockStack spacing="base">
       {entry.lpa && <QRCode content={entry.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
-
       <BlockStack spacing="tight">
         {entry.activationCode && (
           <BlockStack spacing="extraTight">
@@ -163,9 +142,7 @@ function EsimModalContent({ entry }: { entry: DeliveryMetafieldEntry }) {
           </BlockStack>
         )}
       </BlockStack>
-
       <Divider />
-
       <InlineStack spacing="base">
         {entry.lpa && (
           <Button
