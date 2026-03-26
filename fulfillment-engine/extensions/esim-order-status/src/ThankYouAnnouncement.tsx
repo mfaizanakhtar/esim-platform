@@ -2,7 +2,6 @@ import {
   reactExtension,
   useApi,
   useSubscription,
-  View,
   InlineStack,
   Text,
   Button,
@@ -87,43 +86,37 @@ function ThankYouAnnouncementBlock() {
 
   if (isProvisioning || !status) {
     return (
-      <View position={{ type: 'sticky', blockStart: 0 }}>
-        <InlineStack spacing="base" blockAlignment="center">
-          <Spinner size="small" />
-          <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
-        </InlineStack>
-      </View>
+      <InlineStack spacing="base" blockAlignment="center">
+        <Spinner size="small" />
+        <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
+      </InlineStack>
     );
   }
 
   if (status === 'delivered' && credentials?.lpa) {
     return (
-      <View position={{ type: 'sticky', blockStart: 0 }}>
-        <InlineStack spacing="base" blockAlignment="center">
-          <Text emphasis="bold" appearance="success">{'✓ Your eSIM is ready!'}</Text>
-          <Button
-            appearance="primary"
-            overlay={
-              <Modal id="esim-thankyou-announcement-modal" title="eSIM Details" padding>
-                <EsimModalContent entry={credentials} />
-              </Modal>
-            }
-          >
-            View eSIM
-          </Button>
-        </InlineStack>
-      </View>
+      <InlineStack spacing="base" blockAlignment="center">
+        <Text emphasis="bold" appearance="success">{'✓ Your eSIM is ready!'}</Text>
+        <Button
+          appearance="primary"
+          overlay={
+            <Modal id="esim-thankyou-announcement-modal" title="eSIM Details" padding>
+              <EsimModalContent entry={credentials} />
+            </Modal>
+          }
+        >
+          View eSIM
+        </Button>
+      </InlineStack>
     );
   }
 
   if (status === 'delivered') {
     return (
-      <View position={{ type: 'sticky', blockStart: 0 }}>
-        <InlineStack spacing="base" blockAlignment="center">
-          <Spinner size="small" />
-          <Text emphasis="bold">Your eSIM is ready — loading details…</Text>
-        </InlineStack>
-      </View>
+      <InlineStack spacing="base" blockAlignment="center">
+        <Spinner size="small" />
+        <Text emphasis="bold">Your eSIM is ready — loading details…</Text>
+      </InlineStack>
     );
   }
 

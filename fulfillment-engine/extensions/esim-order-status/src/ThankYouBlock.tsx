@@ -7,6 +7,7 @@ import {
   Banner,
   Text,
   Button,
+  Link,
   QRCode,
   Divider,
   Spinner,
@@ -158,10 +159,8 @@ function ThankYouEsimBlock() {
         </InlineStack>
 
         <Text appearance="subdued">
-          {"We've also emailed you a copy. You can always find your eSIM details in "}
-          <Button to="https://fluxyfi.com/account/orders" appearance="plain">
-            your orders
-          </Button>
+          {"We've also emailed you a copy — find it anytime in "}
+          <Link to="https://fluxyfi.com/account/orders">your account orders</Link>
           {'.'}
         </Text>
       </BlockStack>
