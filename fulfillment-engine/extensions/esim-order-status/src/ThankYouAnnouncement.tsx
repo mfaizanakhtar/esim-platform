@@ -1,28 +1,24 @@
 import {
   reactExtension,
-  useAppMetafields,
+  useApi,
+  useSubscription,
   InlineStack,
   Text,
   Button,
-  Modal,
-  BlockStack,
-  Divider,
-  QRCode,
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
-import { PROVISIONING_QUIPS, type DeliveryMetafieldEntry, parseTokenMap } from './shared';
+import { PROVISIONING_QUIPS, BACKEND } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point — compact announcement bar at the top of the
-// thank-you page. Matches the order-status announcement exactly:
-//   provisioning → [spinner] [rotating quip]
-//   delivered    → "Your eSIM is ready!" + "View eSIM" → Modal
+// thank-you page.
 //
-// useAppMetafields is subscription-based: it re-renders automatically when
-// the webhook writes the provisioning metafield (within ~1-2s of checkout).
-// No cart-line detection needed — if there is no eSIM on this order the
-// metafield will simply never be written and the component stays hidden.
+// useAppMetafields is not reactive in the checkout surface — it's a snapshot
+// at render time (before the webhook fires and writes the metafield).
+// Instead we poll GET /esim/order-status/:orderId every 5s to track status.
+// No credentials are returned — full eSIM details live in the authenticated
+// customer-account order-status page.
 // ---------------------------------------------------------------------------
 
 export default reactExtension(
@@ -30,35 +26,66 @@ export default reactExtension(
   () => <ThankYouAnnouncementBlock />,
 );
 
+type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
+
 function ThankYouAnnouncementBlock() {
-  const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
-  const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
-  const tokenMap = parseTokenMap(tokensRaw);
+  // Get the confirmed order ID from the order confirmation API
+  const api = useApi<'purchase.thank-you.announcement.render'>();
+  const orderConfirmation = useSubscription(
+    (api as unknown as { orderConfirmation: Parameters<typeof useSubscription>[0] }).orderConfirmation,
+  ) as { order?: { id?: string } } | null;
+  const numericOrderId = orderConfirmation?.order?.id?.split('/').pop() ?? '';
 
-  const activeEntries = Object.values(tokenMap).filter(
-    (e) => e.status === 'provisioning' || e.status === 'pending' || e.status === 'delivered',
-  );
-
-  const anyProvisioning = activeEntries.some(
-    (e) => e.status === 'provisioning' || e.status === 'pending',
-  );
-
+  const [status, setStatus] = useState<EsimStatus>(null);
   const [quipIndex, setQuipIndex] = useState(0);
 
-  // ── Quip rotation ─────────────────────────────────────────────────────────
+  // ── Poll /esim/order-status/:orderId ─────────────────────────────────────
   useEffect(() => {
-    if (!anyProvisioning) return;
+    if (!numericOrderId) return;
+    let attempts = 0;
+    let stopped = false;
+
+    const poll = () => {
+      if (stopped || ++attempts > 120) return;
+      void fetch(`${BACKEND}/esim/order-status/${numericOrderId}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { status: EsimStatus } | null) => {
+          if (!data || stopped) return;
+          setStatus(data.status);
+          if (['delivered', 'failed', 'cancelled'].includes(data.status ?? '')) {
+            stopped = true;
+            return;
+          }
+          setTimeout(poll, 5000);
+        })
+        .catch(() => {
+          if (!stopped) setTimeout(poll, 5000);
+        });
+    };
+
+    // Wait 2s before first poll to give webhook time to fire and write to DB
+    const initial = setTimeout(poll, 2000);
+    return () => {
+      stopped = true;
+      clearTimeout(initial);
+    };
+  }, [numericOrderId]);
+
+  // ── Quip rotation ─────────────────────────────────────────────────────────
+  const isProvisioning = status === 'provisioning' || status === 'pending';
+  useEffect(() => {
+    if (!isProvisioning) return;
     const interval = setInterval(() => {
       setQuipIndex((prev) => (prev + 1) % PROVISIONING_QUIPS.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, [anyProvisioning]);
+  }, [isProvisioning]);
 
-  // Nothing to show until the webhook writes the metafield
-  if (activeEntries.length === 0) return null;
+  // Nothing to show until we get a status from the backend
+  if (!status || status === 'failed' || status === 'cancelled') return null;
 
   // ── Provisioning — compact single row ─────────────────────────────────────
-  if (anyProvisioning) {
+  if (isProvisioning) {
     return (
       <InlineStack spacing="base" blockAlignment="center">
         <Spinner size="small" />
@@ -67,76 +94,17 @@ function ThankYouAnnouncementBlock() {
     );
   }
 
-  const deliveredEntries = activeEntries.filter((e) => e.status === 'delivered');
-  if (deliveredEntries.length === 0) return null;
-
-  // ── Delivered — "Your eSIM is ready!" + View eSIM → Modal ─────────────────
-  return (
-    <InlineStack spacing="base" blockAlignment="center">
-      <Text emphasis="bold">Your eSIM is ready!</Text>
-      {deliveredEntries.map((e, i) =>
-        e.lpa ? (
-          <Button
-            key={e.iccid ?? i}
-            overlay={
-              <Modal
-                id={`esim-thankyou-modal-${e.iccid ?? i}`}
-                title={deliveredEntries.length > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'}
-                padding
-              >
-                <EsimModalContent entry={e} />
-              </Modal>
-            }
-          >
-            {deliveredEntries.length > 1 ? `View eSIM ${i + 1}` : 'View eSIM'}
-          </Button>
-        ) : null,
-      )}
-    </InlineStack>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Modal content — full eSIM card (QR code, activation code, ICCID)
-// ---------------------------------------------------------------------------
-
-function EsimModalContent({ entry }: { entry: DeliveryMetafieldEntry }) {
-  return (
-    <BlockStack spacing="base">
-      {entry.lpa && <QRCode content={entry.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
-
-      <BlockStack spacing="tight">
-        {entry.activationCode && (
-          <BlockStack spacing="extraTight">
-            <Text appearance="subdued">Activation Code</Text>
-            <Text emphasis="bold">{entry.activationCode}</Text>
-          </BlockStack>
-        )}
-        {entry.iccid && (
-          <BlockStack spacing="extraTight">
-            <Text appearance="subdued">ICCID</Text>
-            <Text>{entry.iccid}</Text>
-          </BlockStack>
-        )}
-      </BlockStack>
-
-      <Divider />
-
-      <InlineStack spacing="base">
-        {entry.lpa && (
-          <Button
-            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(entry.lpa)}`}
-            appearance="primary"
-          >
-            Install on iPhone
-          </Button>
-        )}
-        {entry.usageUrl && (
-          <Button to={entry.usageUrl} appearance="secondary">
-            View Usage
-          </Button>
-        )}
+  // ── Delivered ─────────────────────────────────────────────────────────────
+  if (status === 'delivered') {
+    return (
+      <InlineStack spacing="base" blockAlignment="center">
+        <Text emphasis="bold">Your eSIM is ready!</Text>
+        <Button to="https://fluxyfi.com/account/orders" appearance="plain">
+          View in My Account
+        </Button>
       </InlineStack>
-    </BlockStack>
-  );
+    );
+  }
+
+  return null;
 }
