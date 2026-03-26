@@ -158,7 +158,11 @@ function ThankYouEsimBlock() {
         </InlineStack>
 
         <Text appearance="subdued">
-          {"We've also emailed you a copy — check your inbox if you need it later."}
+          {"We've also emailed you a copy. You can always find your eSIM details in "}
+          <Button to="https://fluxyfi.com/account/orders" appearance="plain">
+            your orders
+          </Button>
+          {'.'}
         </Text>
       </BlockStack>
     );
