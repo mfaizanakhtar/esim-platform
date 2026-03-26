@@ -2,24 +2,23 @@ import {
   reactExtension,
   useCartLines,
   useAppMetafields,
-  BlockStack,
   InlineStack,
-  Banner,
   Text,
   Button,
-  QRCode,
+  Modal,
+  BlockStack,
   Divider,
+  QRCode,
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
 import { PROVISIONING_QUIPS, type DeliveryMetafieldEntry, parseTokenMap } from './shared';
 
 // ---------------------------------------------------------------------------
-// Extension entry point — renders at the top of the thank-you page as a
-// prominent announcement block (always visible, outside collapsed sections).
-//
-// Shows QR code inline when credentials are available; falls back to a
-// "View in My Account" link if not. Shows provisioning spinner while waiting.
+// Extension entry point — compact announcement bar at the top of the
+// thank-you page. Matches the order-status announcement exactly:
+//   provisioning → [spinner] [rotating quip]
+//   delivered    → "Your eSIM is ready!" + "View eSIM" → Modal
 // ---------------------------------------------------------------------------
 
 export default reactExtension(
@@ -44,16 +43,17 @@ function ThankYouAnnouncementBlock() {
   const tokenMap = parseTokenMap(tokensRaw);
 
   const looksLikeEsim = cartLines.some((line) => isEsimLine(line as Parameters<typeof isEsimLine>[0]));
-  const entries = Object.values(tokenMap).filter(
+  const activeEntries = Object.values(tokenMap).filter(
     (e) => e.status === 'provisioning' || e.status === 'pending' || e.status === 'delivered',
   );
 
-  const anyProvisioning =
-    entries.some((e) => e.status === 'provisioning' || e.status === 'pending') ||
-    (entries.length === 0 && looksLikeEsim);
-
   const [quipIndex, setQuipIndex] = useState(0);
 
+  const anyProvisioning =
+    activeEntries.some((e) => e.status === 'provisioning' || e.status === 'pending') ||
+    (activeEntries.length === 0 && looksLikeEsim);
+
+  // ── Quip rotation ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!anyProvisioning) return;
     const interval = setInterval(() => {
@@ -62,105 +62,89 @@ function ThankYouAnnouncementBlock() {
     return () => clearInterval(interval);
   }, [anyProvisioning]);
 
-  // Nothing to render for non-eSIM orders
-  if (entries.length === 0 && !looksLikeEsim) return null;
+  // Nothing to show for non-eSIM orders
+  if (activeEntries.length === 0 && !looksLikeEsim) return null;
 
-  // ── Provisioning ──────────────────────────────────────────────────────────
+  // ── Provisioning — compact single row ─────────────────────────────────────
   if (anyProvisioning) {
     return (
-      <Banner status="info">
-        <BlockStack spacing="base">
-          <InlineStack spacing="base" blockAlignment="center">
-            <Spinner size="small" />
-            <Text emphasis="bold">Your eSIM is being set up</Text>
-          </InlineStack>
-          <Text appearance="subdued">{PROVISIONING_QUIPS[quipIndex]}</Text>
-          <Text>
-            Once ready, your QR code and activation details will appear right here — no need to
-            refresh.
-          </Text>
-          <Text>
-            {"Feel free to close this page. We'll also email you the details once your eSIM is ready."}
-          </Text>
-        </BlockStack>
-      </Banner>
+      <InlineStack spacing="base" blockAlignment="center">
+        <Spinner size="small" />
+        <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
+      </InlineStack>
     );
   }
 
-  const deliveredEntries = entries.filter(
-    (e): e is DeliveryMetafieldEntry & { lpa: string } =>
-      e.status === 'delivered' && typeof e.lpa === 'string' && e.lpa.length > 0,
-  );
+  const deliveredEntries = activeEntries.filter((e) => e.status === 'delivered');
+  if (deliveredEntries.length === 0) return null;
 
-  // ── Delivered with credentials — show QR inline ───────────────────────────
-  if (deliveredEntries.length > 0) {
-    return (
-      <BlockStack spacing="base">
-        <Divider />
-        <Text size="medium" emphasis="bold">
-          {deliveredEntries.length > 1 ? 'Your eSIMs are ready!' : 'Your eSIM is ready!'}
-        </Text>
-
-        {deliveredEntries.map((e, i) => (
-          <BlockStack key={e.iccid ?? i} spacing="base">
-            {deliveredEntries.length > 1 && (
-              <Text emphasis="bold">eSIM {i + 1}</Text>
-            )}
-            <QRCode content={e.lpa} accessibilityLabel="eSIM QR code" size="fill" />
-
-            <BlockStack spacing="tight">
-              {e.activationCode && (
-                <BlockStack spacing="extraTight">
-                  <Text appearance="subdued">Activation Code</Text>
-                  <Text emphasis="bold">{e.activationCode}</Text>
-                </BlockStack>
-              )}
-              {e.iccid && (
-                <BlockStack spacing="extraTight">
-                  <Text appearance="subdued">ICCID</Text>
-                  <Text>{e.iccid}</Text>
-                </BlockStack>
-              )}
-            </BlockStack>
-
-            <InlineStack spacing="base">
-              <Button
-                to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(e.lpa)}`}
-                appearance="primary"
-              >
-                Install on iPhone
-              </Button>
-              {e.usageUrl && (
-                <Button to={e.usageUrl} appearance="secondary">
-                  View Usage
-                </Button>
-              )}
-            </InlineStack>
-
-            {i < deliveredEntries.length - 1 && <Divider />}
-          </BlockStack>
-        ))}
-
-        <Text appearance="subdued">
-          {"We've also emailed you a copy — check your inbox if you need it later."}
-        </Text>
-      </BlockStack>
-    );
-  }
-
-  // ── Delivered but credentials not yet available ───────────────────────────
+  // ── Delivered — "Your eSIM is ready!" + View eSIM → Modal ─────────────────
   return (
-    <Banner status="success">
-      <BlockStack spacing="base">
-        <Text emphasis="bold">Your eSIM is ready!</Text>
-        <Text>
-          Check your email for the QR code and activation details, or view them in your account
-          order history.
-        </Text>
-        <Button to="https://fluxyfi.com/account/orders" appearance="secondary">
-          View in My Account
-        </Button>
+    <InlineStack spacing="base" blockAlignment="center">
+      <Text emphasis="bold">Your eSIM is ready!</Text>
+      {deliveredEntries.map((e, i) =>
+        e.lpa ? (
+          <Button
+            key={e.iccid ?? i}
+            overlay={
+              <Modal
+                id={`esim-thankyou-modal-${e.iccid ?? i}`}
+                title={deliveredEntries.length > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'}
+                padding
+              >
+                <EsimModalContent entry={e} />
+              </Modal>
+            }
+          >
+            {deliveredEntries.length > 1 ? `View eSIM ${i + 1}` : 'View eSIM'}
+          </Button>
+        ) : null,
+      )}
+    </InlineStack>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Modal content — full eSIM card (QR code, activation code, ICCID)
+// ---------------------------------------------------------------------------
+
+function EsimModalContent({ entry }: { entry: DeliveryMetafieldEntry }) {
+  return (
+    <BlockStack spacing="base">
+      {entry.lpa && <QRCode content={entry.lpa} accessibilityLabel="eSIM QR code" size="fill" />}
+
+      <BlockStack spacing="tight">
+        {entry.activationCode && (
+          <BlockStack spacing="extraTight">
+            <Text appearance="subdued">Activation Code</Text>
+            <Text emphasis="bold">{entry.activationCode}</Text>
+          </BlockStack>
+        )}
+        {entry.iccid && (
+          <BlockStack spacing="extraTight">
+            <Text appearance="subdued">ICCID</Text>
+            <Text>{entry.iccid}</Text>
+          </BlockStack>
+        )}
       </BlockStack>
-    </Banner>
+
+      <Divider />
+
+      <InlineStack spacing="base">
+        {entry.lpa && (
+          <Button
+            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(entry.lpa)}`}
+            appearance="primary"
+          >
+            Install on iPhone
+          </Button>
+        )}
+        {entry.usageUrl && (
+          <Button to={entry.usageUrl} appearance="secondary">
+            View Usage
+          </Button>
+        )}
+      </InlineStack>
+    </BlockStack>
   );
 }
