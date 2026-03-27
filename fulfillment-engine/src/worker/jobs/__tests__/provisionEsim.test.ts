@@ -95,6 +95,7 @@ vi.mock('~/shopify/client', () => ({
 import prisma from '~/db/prisma';
 import { finalizeDelivery } from '~/worker/jobs/finalizeDelivery';
 import { handleProvision } from '~/worker/jobs/provisionEsim';
+import { VendorError } from '~/utils/errors';
 
 describe('provisionEsim Worker Job', () => {
   beforeEach(() => {
@@ -593,6 +594,61 @@ describe('provisionEsim Worker Job', () => {
       await expect(
         handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-AU-3GB-TGT' }),
       ).rejects.toThrow('TGT API unavailable');
+
+      expect(prisma.esimDelivery.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'failed' }),
+        }),
+      );
+    });
+  });
+
+  describe('Provider Failover', () => {
+    it('falls over to second provider when first throws VendorError', async () => {
+      const mockDelivery = createMockDelivery({ customerEmail: null });
+      const primaryMapping = createMockMapping({ provider: 'firoam', priority: 1 });
+      const fallbackMapping = createMockMapping({ provider: 'firoam', priority: 2 });
+
+      const mockFiRoamResult = {
+        raw: { code: 0, data: { orderNum: 'EP-FALLBACK-001' } },
+        canonical: {
+          vendorId: 'EP-FALLBACK-001',
+          lpa: 'LPA:1$smdp.io$fallback-code',
+          activationCode: 'fallback-code',
+          iccid: '8901000000000000099',
+        },
+        db: { id: 'esim-order-fallback' },
+      };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
+        primaryMapping,
+        fallbackMapping,
+      ]);
+      // First call fails with VendorError; second call succeeds
+      mockAddEsimOrder
+        .mockRejectedValueOnce(new VendorError('Primary provider unavailable'))
+        .mockResolvedValueOnce(mockFiRoamResult);
+
+      const result = await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
+
+      expect(result).toEqual({ ok: true });
+      expect(mockAddEsimOrder).toHaveBeenCalledTimes(2);
+    });
+
+    it('rethrows VendorError when all providers fail', async () => {
+      const mockDelivery = createMockDelivery();
+      const onlyMapping = createMockMapping({ provider: 'firoam', priority: 1 });
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([onlyMapping]);
+      mockAddEsimOrder.mockRejectedValue(new VendorError('Vendor down'));
+
+      await expect(
+        handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' }),
+      ).rejects.toThrow('Vendor down');
 
       expect(prisma.esimDelivery.update).toHaveBeenCalledWith(
         expect.objectContaining({
