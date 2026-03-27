@@ -314,7 +314,7 @@ export function SkuMappings() {
                       <div className="flex items-center gap-2 pl-4">
                         <span className="capitalize text-sm">{mapping.provider}</span>
                         {mapping.priorityLocked && (
-                          <Lock className="h-3 w-3 text-amber-500" title="Priority locked" />
+                          <Lock className="h-3 w-3 text-amber-500" aria-label="Priority locked" />
                         )}
                       </div>
                     </td>
