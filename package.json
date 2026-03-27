@@ -11,5 +11,8 @@
     "theme:pull": "sh -c 'set -a; . shopify/.env.shopify; set +a; shopify theme pull --path=shopify'",
     "theme:push": "sh -c 'set -a; . shopify/.env.shopify; set +a; shopify theme push --path=shopify --allow-live --nodelete'",
     "theme:dev": "sh -c 'set -a; . shopify/.env.shopify; set +a; shopify theme dev --path=shopify'"
+  },
+  "dependencies": {
+    "openai": "^6.33.0"
   }
 }

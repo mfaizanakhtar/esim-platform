@@ -9,6 +9,7 @@ import type { EsimDelivery, ProviderSkuMapping } from '@prisma/client';
 // ---------------------------------------------------------------------------
 const adminMocks = vi.hoisted(() => {
   process.env.ADMIN_API_KEY = 'test-admin-key';
+  process.env.OPENAI_API_KEY = 'test-openai-key';
   return {
     mockJobSend: vi.fn().mockResolvedValue('job-id-admin'),
     mockSendDeliveryEmail: vi.fn(),
@@ -16,6 +17,8 @@ const adminMocks = vi.hoisted(() => {
     mockTgtListProducts: vi.fn(),
     mockFiroamGetSkus: vi.fn(),
     mockFiroamGetPackages: vi.fn(),
+    mockGetAllVariants: vi.fn(),
+    mockOpenAiCreate: vi.fn(),
   };
 });
 
@@ -34,6 +37,7 @@ vi.mock('~/db/prisma', () => ({
     },
     providerSkuMapping: {
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
@@ -78,6 +82,22 @@ vi.mock('~/services/email', () => ({
 vi.mock('~/utils/crypto', () => ({
   decrypt: adminMocks.mockDecrypt,
   encrypt: vi.fn(),
+}));
+
+vi.mock('~/shopify/client', () => ({
+  getShopifyClient: vi.fn(() => ({
+    getAllVariants: adminMocks.mockGetAllVariants,
+  })),
+}));
+
+vi.mock('openai', () => ({
+  default: class MockOpenAI {
+    chat = {
+      completions: {
+        create: adminMocks.mockOpenAiCreate,
+      },
+    };
+  },
 }));
 
 // ---------------------------------------------------------------------------
@@ -718,6 +738,7 @@ describe('Admin Routes', () => {
 
     it('creates a mapping and returns 201', async () => {
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.providerSkuMapping.create).mockResolvedValue(
         makeMapping({ shopifySku: 'ESIM-NEW-001', providerSku: '120:apiCode:14094' }),
       );
@@ -734,6 +755,7 @@ describe('Admin Routes', () => {
 
     it('creates a daypass mapping with optional fields', async () => {
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.providerSkuMapping.create).mockResolvedValue(
         makeMapping({ packageType: 'daypass', daysCount: 7 }),
       );
@@ -769,6 +791,7 @@ describe('Admin Routes', () => {
 
     it('defaults isActive to true when not specified', async () => {
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.providerSkuMapping.create).mockResolvedValue(makeMapping());
 
       await app.inject({
@@ -787,6 +810,7 @@ describe('Admin Routes', () => {
 
     it('sets isActive=false when explicitly passed', async () => {
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.providerSkuMapping.create).mockResolvedValue(
         makeMapping({ isActive: false }),
       );
@@ -1408,6 +1432,7 @@ describe('Admin Routes', () => {
         }),
       );
       vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
       vi.mocked(prisma.providerSkuMapping.create).mockResolvedValue(
         makeMapping({
           providerCatalogId: 'cat-firoam-001',
@@ -1586,6 +1611,250 @@ describe('Admin Routes', () => {
           }),
         }),
       );
+    });
+  });
+
+  // ── PUT /sku-mappings/reorder ─────────────────────────────────────────────
+
+  describe('PUT /sku-mappings/reorder', () => {
+    it('reorders mappings by assigning priority = index + 1', async () => {
+      vi.mocked(prisma.providerSkuMapping.update).mockResolvedValue(makeMapping());
+      // $transaction mock — prisma.$transaction is not mocked yet; add it dynamically
+      const prismaMock = prisma as unknown as { $transaction: ReturnType<typeof vi.fn> };
+      prismaMock.$transaction = vi.fn().mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/sku-mappings/reorder',
+        headers: JSON_HEADERS,
+        payload: { shopifySku: 'ESIM-USA-10GB', orderedIds: ['map-001', 'map-002'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().ok).toBe(true);
+    });
+
+    it('returns 400 when shopifySku is missing', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/sku-mappings/reorder',
+        headers: JSON_HEADERS,
+        payload: { orderedIds: ['map-001'] },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 when orderedIds is not an array', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/sku-mappings/reorder',
+        headers: JSON_HEADERS,
+        payload: { shopifySku: 'ESIM-USA-10GB', orderedIds: 'map-001' },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  // ── POST /sku-mappings/smart-pricing ────────────────────────────────────────
+
+  describe('POST /sku-mappings/smart-pricing', () => {
+    it('returns ok with updated/skipped counts', async () => {
+      // Two unlocked mappings with catalog prices — should be reordered
+      const m1 = makeMapping({
+        id: 'map-001',
+        provider: 'firoam',
+        priority: 2,
+        providerCatalogId: 'cat-1',
+      });
+      const m2 = makeMapping({
+        id: 'map-002',
+        provider: 'tgt',
+        priority: 1,
+        providerCatalogId: 'cat-2',
+      });
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
+        { ...m1, catalogEntry: { netPrice: 5.0 } },
+        { ...m2, catalogEntry: { netPrice: 3.0 } },
+      ] as never);
+      const prismaMock = prisma as unknown as { $transaction: ReturnType<typeof vi.fn> };
+      prismaMock.$transaction = vi.fn().mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/smart-pricing',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().ok).toBe(true);
+      expect(typeof res.json().updated).toBe('number');
+    });
+
+    it('skips all groups with only one unlocked mapping', async () => {
+      const m = makeMapping({ providerCatalogId: 'cat-1' });
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
+        { ...m, catalogEntry: { netPrice: 5.0 } },
+      ] as never);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/smart-pricing',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().skipped).toBe(1);
+      expect(res.json().updated).toBe(0);
+    });
+  });
+
+  // ── GET /shopify-skus ────────────────────────────────────────────────────
+
+  describe('GET /shopify-skus', () => {
+    it('returns all Shopify variants', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        {
+          sku: 'ESIM-US-1GB',
+          variantId: 'gid://shopify/ProductVariant/1',
+          productTitle: 'US eSIM',
+          variantTitle: '1GB',
+        },
+        {
+          sku: 'ESIM-JP-5GB',
+          variantId: 'gid://shopify/ProductVariant/2',
+          productTitle: 'Japan eSIM',
+          variantTitle: '5GB',
+        },
+      ]);
+
+      const res = await app.inject({ method: 'GET', url: '/shopify-skus', headers: AUTH });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().skus).toHaveLength(2);
+    });
+
+    it('filters out already-mapped SKUs when unmappedOnly=true', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-US-1GB', variantId: 'gid://1', productTitle: 'US', variantTitle: '1GB' },
+        { sku: 'ESIM-JP-5GB', variantId: 'gid://2', productTitle: 'JP', variantTitle: '5GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
+        makeMapping({ shopifySku: 'ESIM-US-1GB' }),
+      ]);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/shopify-skus?unmappedOnly=true',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().skus).toHaveLength(1);
+      expect(res.json().skus[0].sku).toBe('ESIM-JP-5GB');
+    });
+
+    it('returns 502 when Shopify is unavailable', async () => {
+      adminMocks.mockGetAllVariants.mockRejectedValue(new Error('Shopify down'));
+
+      const res = await app.inject({ method: 'GET', url: '/shopify-skus', headers: AUTH });
+
+      expect(res.statusCode).toBe(502);
+    });
+  });
+
+  // ── POST /sku-mappings/ai-map ─────────────────────────────────────────────
+
+  describe('POST /sku-mappings/ai-map', () => {
+    it('returns draft mappings from OpenAI', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp-1gb', productName: 'Japan 1GB 3 Days', region: 'JP' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'ESIM-JP-1GB',
+                    catalogId: 'cat-jp-1gb',
+                    confidence: 0.9,
+                    reason: 'Exact match',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().drafts).toHaveLength(1);
+      expect(res.json().drafts[0].shopifySku).toBe('ESIM-JP-1GB');
+      expect(res.json().drafts[0].confidence).toBe(0.9);
+    });
+
+    it('returns empty drafts when no SKUs to map', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().drafts).toHaveLength(0);
+    });
+
+    it('returns 500 when OPENAI_API_KEY is not set', async () => {
+      const savedKey = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { shopifySkus: ['ESIM-JP-1GB'] },
+      });
+
+      expect(res.statusCode).toBe(500);
+      process.env.OPENAI_API_KEY = savedKey;
+    });
+
+    it('uses provided shopifySkus list instead of fetching from Shopify', async () => {
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp-1gb', productName: 'Japan 1GB' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify({ mappings: [] }) } }],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { shopifySkus: ['ESIM-JP-1GB', 'ESIM-US-5GB'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // Shopify getAllVariants should NOT have been called
+      expect(adminMocks.mockGetAllVariants).not.toHaveBeenCalled();
     });
   });
 });

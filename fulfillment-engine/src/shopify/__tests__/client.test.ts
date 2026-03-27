@@ -671,3 +671,98 @@ describe('cancelShopifyOrder', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// getAllVariants
+// ---------------------------------------------------------------------------
+describe('getAllVariants', () => {
+  it('returns all variants with non-empty SKUs', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariants: {
+            pageInfo: { hasNextPage: false, endCursor: null },
+            edges: [
+              {
+                node: {
+                  id: 'gid://shopify/ProductVariant/1',
+                  sku: 'ESIM-US-1GB',
+                  title: '1GB',
+                  product: { title: 'US eSIM' },
+                },
+              },
+              {
+                node: {
+                  id: 'gid://shopify/ProductVariant/2',
+                  sku: '',
+                  title: 'Default Title',
+                  product: { title: 'Gift Card' },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.getAllVariants();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].sku).toBe('ESIM-US-1GB');
+    expect(result[0].variantId).toBe('gid://shopify/ProductVariant/1');
+    expect(result[0].productTitle).toBe('US eSIM');
+  });
+
+  it('paginates through multiple pages', async () => {
+    mockTokenRefresh();
+    // First page
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariants: {
+            pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
+            edges: [
+              {
+                node: {
+                  id: 'gid://shopify/ProductVariant/10',
+                  sku: 'ESIM-JP-1GB',
+                  title: '1GB',
+                  product: { title: 'Japan eSIM' },
+                },
+              },
+            ],
+          },
+        },
+      });
+    // Second page
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariants: {
+            pageInfo: { hasNextPage: false, endCursor: 'cursor-2' },
+            edges: [
+              {
+                node: {
+                  id: 'gid://shopify/ProductVariant/11',
+                  sku: 'ESIM-JP-5GB',
+                  title: '5GB',
+                  product: { title: 'Japan eSIM' },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.getAllVariants();
+
+    expect(result).toHaveLength(2);
+    expect(result[0].sku).toBe('ESIM-JP-1GB');
+    expect(result[1].sku).toBe('ESIM-JP-5GB');
+  });
+});
