@@ -5,6 +5,7 @@ import { Login } from '@/pages/Login';
 import { Deliveries } from '@/pages/Deliveries';
 import { DeliveryDetail } from '@/pages/DeliveryDetail';
 import { SkuMappings } from '@/pages/SkuMappings';
+import { AiMap } from '@/pages/AiMap';
 import { Catalog } from '@/pages/Catalog';
 
 export function App() {
@@ -17,6 +18,7 @@ export function App() {
           <Route path="/deliveries" element={<Deliveries />} />
           <Route path="/deliveries/:id" element={<DeliveryDetail />} />
           <Route path="/sku-mappings" element={<SkuMappings />} />
+          <Route path="/sku-mappings/ai-map" element={<AiMap />} />
           <Route path="/catalog" element={<Catalog />} />
         </Route>
       </Route>

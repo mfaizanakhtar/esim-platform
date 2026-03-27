@@ -74,8 +74,30 @@ export interface SkuMapping {
   packageType: SkuMappingPackageType | null;
   daysCount: number | null;
   isActive: boolean;
+  priority: number;
+  priorityLocked: boolean;
+  mappingLocked: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ShopifySku {
+  sku: string;
+  variantId: string;
+  productTitle: string;
+  variantTitle: string;
+}
+
+export interface AiMappingDraft {
+  shopifySku: string;
+  catalogId: string;
+  productName: string;
+  region: string;
+  dataAmount: string;
+  validity: string;
+  netPrice: number | null;
+  confidence: number;
+  reason: string;
 }
 
 export interface CatalogItem {

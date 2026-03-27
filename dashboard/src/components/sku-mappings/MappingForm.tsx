@@ -17,6 +17,8 @@ const schema = z.object({
   daysCount: z.number().optional(),
   providerConfigJson: z.string().optional(),
   isActive: z.boolean().default(true),
+  priorityLocked: z.boolean().default(false),
+  mappingLocked: z.boolean().default(false),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -66,8 +68,10 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
             ? JSON.stringify(initial.providerConfig, null, 2)
             : '',
           isActive: initial.isActive,
+          priorityLocked: initial.priorityLocked ?? false,
+          mappingLocked: initial.mappingLocked ?? false,
         }
-      : { packageType: 'fixed', isActive: true },
+      : { packageType: 'fixed', isActive: true, priorityLocked: false, mappingLocked: false },
   });
 
   const provider = watch('provider') as 'firoam' | 'tgt' | undefined;
@@ -123,8 +127,10 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
               ? JSON.stringify(initial.providerConfig, null, 2)
               : '',
             isActive: initial.isActive,
+            priorityLocked: initial.priorityLocked ?? false,
+            mappingLocked: initial.mappingLocked ?? false,
           }
-        : { packageType: 'fixed', isActive: true },
+        : { packageType: 'fixed', isActive: true, priorityLocked: false, mappingLocked: false },
     );
     setSelectedItem(null);
   }, [initial, reset]);
@@ -401,6 +407,20 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
         <input {...register('isActive')} type="checkbox" id="isActive" />
         <label htmlFor="isActive" className="text-sm font-medium">
           Active
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input {...register('priorityLocked')} type="checkbox" id="priorityLocked" />
+        <label htmlFor="priorityLocked" className="text-sm font-medium">
+          Lock priority (exclude from smart pricing reorder)
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input {...register('mappingLocked')} type="checkbox" id="mappingLocked" />
+        <label htmlFor="mappingLocked" className="text-sm font-medium">
+          Lock mapping (prevent edits and deactivation)
         </label>
       </div>
 

@@ -15,6 +15,9 @@ interface CreateSkuMappingInput {
   daysCount?: number;
   providerConfig?: Record<string, unknown>;
   isActive?: boolean;
+  priority?: number;
+  priorityLocked?: boolean;
+  mappingLocked?: boolean;
 }
 
 interface UpdateSkuMappingInput extends Partial<CreateSkuMappingInput> {
@@ -78,6 +81,48 @@ export function useDeleteSkuMapping() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiClient.delete<{ ok: boolean }>(`/sku-mappings/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+    },
+  });
+}
+
+export function useReorderMappings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shopifySku, orderedIds }: { shopifySku: string; orderedIds: string[] }) =>
+      apiClient.put<{ ok: boolean }>('/sku-mappings/reorder', { shopifySku, orderedIds }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+    },
+  });
+}
+
+export function useSmartPricing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (shopifySku?: string) =>
+      apiClient.post<{ updated: number; skipped: number; changes: unknown[] }>(
+        '/sku-mappings/smart-pricing',
+        shopifySku ? { shopifySku } : {},
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+    },
+  });
+}
+
+export function useBulkCreateMappings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (inputs: CreateSkuMappingInput[]) => {
+      const results: SkuMapping[] = [];
+      for (const input of inputs) {
+        const result = await apiClient.post<SkuMapping>('/sku-mappings', input);
+        results.push(result);
+      }
+      return results;
+    },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
     },
