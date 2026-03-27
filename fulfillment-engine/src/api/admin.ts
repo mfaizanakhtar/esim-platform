@@ -6,6 +6,9 @@ import { sendDeliveryEmail, type EsimPayload } from '~/services/email';
 import { decrypt } from '~/utils/crypto';
 import TgtClient from '~/vendor/tgtClient';
 import FiRoamClient from '~/vendor/firoamClient';
+import { getShopifyClient } from '~/shopify/client';
+import { logger } from '~/utils/logger';
+import OpenAI from 'openai';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
@@ -267,7 +270,7 @@ export default function adminRoutes(
     const [mappings, total] = await Promise.all([
       prisma.providerSkuMapping.findMany({
         where,
-        orderBy: { shopifySku: 'asc' },
+        orderBy: [{ shopifySku: 'asc' }, { priority: 'asc' }],
         take: limit,
         skip: offset,
       }),
@@ -381,6 +384,19 @@ export default function adminRoutes(
       });
     }
 
+    // Default priority to max existing priority for this shopifySku + 1
+    let priority: number;
+    if (typeof body.priority === 'number') {
+      priority = body.priority;
+    } else {
+      const maxRow = await prisma.providerSkuMapping.findFirst({
+        where: { shopifySku },
+        orderBy: { priority: 'desc' },
+        select: { priority: true },
+      });
+      priority = (maxRow?.priority ?? 0) + 1;
+    }
+
     const mapping = await prisma.providerSkuMapping.create({
       data: {
         shopifySku,
@@ -398,6 +414,9 @@ export default function adminRoutes(
             ? (body.providerConfig as Prisma.InputJsonValue)
             : Prisma.JsonNull,
         isActive: body.isActive !== false,
+        priority,
+        priorityLocked: body.priorityLocked === true,
+        mappingLocked: body.mappingLocked === true,
       },
     });
 
@@ -486,6 +505,9 @@ export default function adminRoutes(
     if (typeof body.packageType === 'string') updateData.packageType = body.packageType;
     if (typeof body.daysCount === 'number') updateData.daysCount = body.daysCount;
     if (typeof body.isActive === 'boolean') updateData.isActive = body.isActive;
+    if (typeof body.priority === 'number') updateData.priority = body.priority;
+    if (typeof body.priorityLocked === 'boolean') updateData.priorityLocked = body.priorityLocked;
+    if (typeof body.mappingLocked === 'boolean') updateData.mappingLocked = body.mappingLocked;
     if (body.providerConfig !== undefined) {
       updateData.providerConfig =
         body.providerConfig && typeof body.providerConfig === 'object'
@@ -524,6 +546,347 @@ export default function adminRoutes(
 
     app.log.info(`[Admin] Deactivated SKU mapping: ${id} (${existing.shopifySku})`);
     return reply.send({ ok: true, message: `SKU mapping ${existing.shopifySku} deactivated` });
+  });
+
+  // ---------------------------------------------------------------------------
+  // SKU Mapping Priority Reorder
+  // ---------------------------------------------------------------------------
+
+  /**
+   * PUT /admin/sku-mappings/reorder
+   * Atomically reorder priorities for all mappings under a shopifySku.
+   * Body: { shopifySku: string, orderedIds: string[] }
+   * Assigns priority = index + 1 for each id in orderedIds order.
+   */
+  app.put('/sku-mappings/reorder', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = request.body as Record<string, unknown>;
+    const { shopifySku } = body;
+    const orderedIds = body.orderedIds;
+
+    if (!shopifySku || typeof shopifySku !== 'string') {
+      return reply.code(400).send({ error: 'shopifySku is required' });
+    }
+    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string')) {
+      return reply.code(400).send({ error: 'orderedIds must be an array of strings' });
+    }
+
+    await prisma.$transaction(
+      orderedIds.map((id: string, idx: number) =>
+        prisma.providerSkuMapping.update({
+          where: { id },
+          data: { priority: idx + 1 },
+        }),
+      ),
+    );
+
+    app.log.info(`[Admin] Reordered ${orderedIds.length} mappings for SKU: ${shopifySku}`);
+    return reply.send({ ok: true });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Smart Pricing — auto-reorder by catalog netPrice
+  // ---------------------------------------------------------------------------
+
+  /**
+   * POST /admin/sku-mappings/smart-pricing
+   * Reorders provider priority for each shopifySku group by ascending netPrice from catalog.
+   * Rows with priorityLocked=true are skipped.
+   * Body: { shopifySku?: string }  — if omitted, runs for ALL SKUs
+   */
+  app.post('/sku-mappings/smart-pricing', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = (request.body || {}) as { shopifySku?: string };
+
+    // Fetch active mappings grouped by shopifySku
+    const where: Record<string, unknown> = { isActive: true };
+    if (body.shopifySku) where.shopifySku = body.shopifySku;
+
+    const mappings = await prisma.providerSkuMapping.findMany({
+      where,
+      orderBy: [{ shopifySku: 'asc' }, { priority: 'asc' }],
+      include: {
+        catalogEntry: { select: { netPrice: true } },
+      },
+    });
+
+    // Group by shopifySku
+    const groups = new Map<string, typeof mappings>();
+    for (const m of mappings) {
+      const arr = groups.get(m.shopifySku) ?? [];
+      arr.push(m);
+      groups.set(m.shopifySku, arr);
+    }
+
+    let updated = 0;
+    let skipped = 0;
+    const changes: Array<{
+      shopifySku: string;
+      provider: string;
+      oldPriority: number;
+      newPriority: number;
+    }> = [];
+
+    for (const [sku, group] of groups) {
+      const unlocked = group.filter((m) => !m.priorityLocked && m.catalogEntry?.netPrice != null);
+      const locked = group.filter((m) => m.priorityLocked || m.catalogEntry?.netPrice == null);
+
+      if (unlocked.length <= 1) {
+        skipped += group.length;
+        continue; // nothing to reorder
+      }
+
+      // Sort unlocked by netPrice ascending
+      unlocked.sort((a, b) => {
+        const pa = Number(a.catalogEntry!.netPrice!);
+        const pb = Number(b.catalogEntry!.netPrice!);
+        return pa - pb;
+      });
+
+      // Assign new priorities: unlocked get 1..N, locked keep their current priority (interleaved later if needed)
+      // Simple approach: unlocked get sequential priorities starting from 1; locked keep theirs
+      const updates: Array<{ id: string; priority: number }> = [];
+      let nextPriority = 1;
+      for (const m of unlocked) {
+        // Skip locked priority slots
+        while (locked.some((l) => l.priority === nextPriority)) nextPriority++;
+        if (m.priority !== nextPriority) {
+          updates.push({ id: m.id, priority: nextPriority });
+          changes.push({
+            shopifySku: sku,
+            provider: m.provider,
+            oldPriority: m.priority,
+            newPriority: nextPriority,
+          });
+        }
+        nextPriority++;
+      }
+
+      if (updates.length > 0) {
+        await prisma.$transaction(
+          updates.map(({ id, priority }) =>
+            prisma.providerSkuMapping.update({ where: { id }, data: { priority } }),
+          ),
+        );
+        updated += updates.length;
+      }
+      skipped += locked.length;
+    }
+
+    logger.info({ updated, skipped, changes }, 'Smart pricing run complete');
+    return reply.send({ ok: true, updated, skipped, changes });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Shopify SKU Discovery
+  // ---------------------------------------------------------------------------
+
+  /**
+   * GET /admin/shopify-skus
+   * Fetch all product variant SKUs from Shopify.
+   * Query: unmappedOnly=true — exclude SKUs already in ProviderSkuMapping
+   */
+  app.get('/shopify-skus', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const query = request.query as { unmappedOnly?: string };
+    const unmappedOnly = query.unmappedOnly === 'true';
+
+    let allVariants: Array<{
+      sku: string;
+      variantId: string;
+      productTitle: string;
+      variantTitle: string;
+    }>;
+    try {
+      const shopify = getShopifyClient();
+      allVariants = await shopify.getAllVariants();
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to fetch Shopify variants');
+      return reply.code(502).send({ error: 'shopify_unavailable' });
+    }
+
+    if (unmappedOnly) {
+      const mappedSkus = await prisma.providerSkuMapping.findMany({
+        select: { shopifySku: true },
+        distinct: ['shopifySku'],
+      });
+      const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
+      const filtered = allVariants.filter((v) => !mappedSet.has(v.sku));
+      return reply.send({ skus: filtered });
+    }
+
+    return reply.send({ skus: allVariants });
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI Bulk Mapping
+  // ---------------------------------------------------------------------------
+
+  /**
+   * POST /admin/sku-mappings/ai-map
+   * Bulk AI mapping: uses OpenAI to suggest catalog matches for Shopify SKUs.
+   * Returns draft mappings — does NOT save to DB. Admin reviews and approves.
+   *
+   * Body: { shopifySkus?: string[], provider?: string, unmappedOnly?: boolean }
+   */
+  app.post('/sku-mappings/ai-map', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) {
+      return reply.code(500).send({ error: 'OPENAI_API_KEY not configured' });
+    }
+
+    const body = (request.body || {}) as {
+      shopifySkus?: string[];
+      provider?: string;
+      unmappedOnly?: boolean;
+    };
+
+    // 1. Determine the list of Shopify SKUs to map
+    let shopifySkus: Array<{ sku: string; productTitle: string; variantTitle: string }>;
+
+    if (Array.isArray(body.shopifySkus) && body.shopifySkus.length > 0) {
+      shopifySkus = body.shopifySkus.map((sku) => ({ sku, productTitle: '', variantTitle: '' }));
+    } else {
+      // Fetch from Shopify
+      try {
+        const shopify = getShopifyClient();
+        const variants = await shopify.getAllVariants();
+        shopifySkus = variants;
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to fetch Shopify variants for AI mapping');
+        return reply.code(502).send({ error: 'shopify_unavailable' });
+      }
+
+      if (body.unmappedOnly !== false) {
+        const mappedSkus = await prisma.providerSkuMapping.findMany({
+          select: { shopifySku: true },
+          distinct: ['shopifySku'],
+        });
+        const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
+        shopifySkus = shopifySkus.filter((v) => !mappedSet.has(v.sku));
+      }
+    }
+
+    if (shopifySkus.length === 0) {
+      return reply.send({ drafts: [] });
+    }
+
+    // 2. Fetch provider catalog entries
+    const catalogWhere: Record<string, unknown> = { isActive: true };
+    if (body.provider) catalogWhere.provider = body.provider;
+
+    const catalogEntries = (await providerSkuCatalog.findMany({
+      where: catalogWhere,
+      orderBy: { productName: 'asc' },
+    })) as Array<{
+      id: string;
+      provider: string;
+      productCode: string;
+      productName: string;
+      region: string | null;
+      dataAmount: string | null;
+      validity: string | null;
+      netPrice: unknown;
+    }>;
+
+    if (catalogEntries.length === 0) {
+      return reply.send({ drafts: [], message: 'No catalog entries found for the given provider' });
+    }
+
+    // 3. Call OpenAI in batches of 50 SKUs
+    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+    const BATCH_SIZE = 50;
+    const allDrafts: Array<{
+      shopifySku: string;
+      catalogId: string;
+      productName: string;
+      region: string | null;
+      dataAmount: string | null;
+      validity: string | null;
+      netPrice: unknown;
+      provider: string;
+      confidence: number;
+      reason: string;
+    }> = [];
+
+    const catalogCompact = catalogEntries.map((e) => ({
+      id: e.id,
+      provider: e.provider,
+      productName: e.productName,
+      region: e.region,
+      dataAmount: e.dataAmount,
+      validity: e.validity,
+      netPrice: e.netPrice,
+    }));
+
+    for (let i = 0; i < shopifySkus.length; i += BATCH_SIZE) {
+      const batch = shopifySkus.slice(i, i + BATCH_SIZE);
+      const skuList = batch.map((v) => ({
+        sku: v.sku,
+        displayName: [v.productTitle, v.variantTitle].filter(Boolean).join(' - ') || v.sku,
+      }));
+
+      const systemPrompt =
+        'You are an eSIM product matcher. Match each Shopify SKU to the best provider catalog entry based on region, data amount, and validity. Return only JSON.';
+
+      const userPrompt = `Match these Shopify SKUs to catalog entries:
+SKUs: ${JSON.stringify(skuList)}
+
+Catalog: ${JSON.stringify(catalogCompact)}
+
+Return JSON: { "mappings": [{ "shopifySku": string, "catalogId": string, "confidence": number (0-1), "reason": string }] }
+Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
+
+      try {
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+          response_format: { type: 'json_object' },
+          temperature: 0.1,
+        });
+
+        const raw = completion.choices[0]?.message?.content;
+        if (!raw) continue;
+
+        const parsed = JSON.parse(raw) as {
+          mappings?: Array<{
+            shopifySku: string;
+            catalogId: string;
+            confidence: number;
+            reason: string;
+          }>;
+        };
+
+        for (const match of parsed.mappings ?? []) {
+          const entry = catalogEntries.find((e) => e.id === match.catalogId);
+          if (!entry) continue;
+          allDrafts.push({
+            shopifySku: match.shopifySku,
+            catalogId: match.catalogId,
+            productName: entry.productName,
+            region: entry.region,
+            dataAmount: entry.dataAmount,
+            validity: entry.validity,
+            netPrice: entry.netPrice,
+            provider: entry.provider,
+            confidence: match.confidence,
+            reason: match.reason,
+          });
+        }
+      } catch (err) {
+        logger.error({ err, batch: skuList }, 'OpenAI batch failed');
+      }
+    }
+
+    return reply.send({ drafts: allDrafts });
   });
 
   // ---------------------------------------------------------------------------

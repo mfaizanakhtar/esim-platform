@@ -755,6 +755,79 @@ export class ShopifyClient {
   async initialize(): Promise<void> {
     await this.getAccessToken();
   }
+
+  /**
+   * Fetch all product variants with non-empty SKUs from Shopify.
+   * Paginates through up to `maxVariants` results (default 1000).
+   * Returns { sku, variantId, productTitle, variantTitle }[]
+   */
+  async getAllVariants(
+    maxVariants = 1000,
+  ): Promise<
+    Array<{ sku: string; variantId: string; productTitle: string; variantTitle: string }>
+  > {
+    const token = await this.getAccessToken();
+    const results: Array<{
+      sku: string;
+      variantId: string;
+      productTitle: string;
+      variantTitle: string;
+    }> = [];
+    let cursor: string | null = null;
+
+    const gqlQuery = `
+      query getAllVariants($first: Int!, $after: String) {
+        productVariants(first: $first, after: $after) {
+          pageInfo { hasNextPage endCursor }
+          edges {
+            node {
+              id
+              sku
+              title
+              product { title }
+            }
+          }
+        }
+      }
+    `;
+
+    while (results.length < maxVariants) {
+      const pageSize = Math.min(250, maxVariants - results.length);
+      const variantResp = (await axios.post(
+        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        { query: gqlQuery, variables: { first: pageSize, after: cursor } },
+        { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+      )) as {
+        data: {
+          data: {
+            productVariants: {
+              pageInfo: { hasNextPage: boolean; endCursor: string };
+              edges: Array<{
+                node: { id: string; sku: string; title: string; product: { title: string } };
+              }>;
+            };
+          };
+        };
+      };
+
+      const pv = variantResp.data?.data?.productVariants;
+      for (const edge of pv?.edges ?? []) {
+        const node = edge.node;
+        if (!node.sku) continue; // skip variants with no SKU
+        results.push({
+          sku: node.sku,
+          variantId: node.id,
+          productTitle: node.product?.title ?? '',
+          variantTitle: node.title ?? '',
+        });
+      }
+
+      if (!pv?.pageInfo?.hasNextPage) break;
+      cursor = pv.pageInfo.endCursor;
+    }
+
+    return results;
+  }
 }
 
 // Singleton instance
