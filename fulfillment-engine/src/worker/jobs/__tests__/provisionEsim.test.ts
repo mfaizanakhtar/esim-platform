@@ -29,7 +29,7 @@ vi.mock('~/db/prisma', () => ({
       update: vi.fn(),
     },
     providerSkuMapping: {
-      findUnique: vi.fn(),
+      findMany: vi.fn(),
     },
   },
 }));
@@ -131,7 +131,7 @@ describe('provisionEsim Worker Job', () => {
       const completedDelivery = createMockDelivery({ status: 'fulfilled' });
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(completedDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
 
       // Currently the code doesn't check for fulfilled status before SKU mapping
       // This test verifies current behavior - it will throw "No provider mapping found"
@@ -173,24 +173,24 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
 
       await expect(
         handleProvision({ deliveryId: 'delivery-123', sku: 'UNKNOWN-SKU' }),
       ).rejects.toThrow('No provider mapping found for SKU: UNKNOWN-SKU');
     });
 
-    it('should throw error if SKU mapping is inactive', async () => {
+    it('should throw error if SKU mapping is inactive (returns no active mappings)', async () => {
       const mockDelivery = createMockDelivery();
-      const inactiveMapping = createMockMapping({ isActive: false });
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(inactiveMapping);
+      // Inactive mappings are filtered out by the query (where: { isActive: true })
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
 
       await expect(
         handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' }),
-      ).rejects.toThrow('SKU mapping is inactive: ESIM-USA-10GB');
+      ).rejects.toThrow('No provider mapping found for SKU: ESIM-USA-10GB');
     });
 
     it('should throw error for unsupported provider', async () => {
@@ -199,7 +199,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(invalidMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([invalidMapping]);
 
       await expect(
         handleProvision({ deliveryId: 'delivery-123', sku: 'SOME-SKU' }),
@@ -214,7 +214,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(invalidMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([invalidMapping]);
 
       await expect(
         handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' }),
@@ -238,7 +238,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
 
       await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
@@ -272,7 +272,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
 
       await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-ASIA-5GB' });
@@ -309,7 +309,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
 
       // Mock the FiRoam addEsimOrder response
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
@@ -352,7 +352,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
       mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
 
       await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
@@ -493,7 +493,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
       mockTgtProvision.mockResolvedValue({
         pending: true,
         vendorOrderId: 'SE-CALLBACK-123',
@@ -523,7 +523,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
       mockTgtProvision.mockResolvedValue({
         pending: true,
         vendorOrderId: 'SE-HYBRID-456',
@@ -555,7 +555,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
       mockTgtProvision.mockResolvedValue({
         pending: true,
         vendorOrderId: 'SE-POLL-789',
@@ -587,7 +587,7 @@ describe('provisionEsim Worker Job', () => {
 
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
       vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
-      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(mockMapping);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
       mockTgtProvision.mockRejectedValue(new Error('TGT API unavailable'));
 
       await expect(

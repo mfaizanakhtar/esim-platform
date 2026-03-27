@@ -91,7 +91,9 @@ async function main() {
 
   for (const mapping of mappings) {
     const result = await prisma.providerSkuMapping.upsert({
-      where: { shopifySku: mapping.shopifySku },
+      where: {
+        shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+      },
       update: mapping,
       create: mapping,
     });
