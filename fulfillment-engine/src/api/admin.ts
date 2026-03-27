@@ -371,10 +371,14 @@ export default function adminRoutes(
       return reply.code(400).send({ error: 'Could not determine providerSku' });
     }
 
-    // Check for duplicate shopifySku
-    const existing = await prisma.providerSkuMapping.findUnique({ where: { shopifySku } });
+    // Check for duplicate (shopifySku, provider) combination
+    const existing = await prisma.providerSkuMapping.findUnique({
+      where: { shopifySku_provider: { shopifySku, provider } },
+    });
     if (existing) {
-      return reply.code(409).send({ error: `SKU mapping already exists for: ${shopifySku}` });
+      return reply.code(409).send({
+        error: `SKU mapping already exists for: ${shopifySku} (provider: ${provider})`,
+      });
     }
 
     const mapping = await prisma.providerSkuMapping.create({

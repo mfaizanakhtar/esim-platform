@@ -73,40 +73,64 @@ export async function handleProvision(data: ProvisionJobData) {
       resolvedProvider = 'firoam';
       esimResult = await provisionViaDirectPayload(data.orderPayload);
     } else {
-      // Primary path: resolve SKU mapping → dispatch to the correct vendor provider.
+      // Primary path: resolve SKU mappings → try each provider in priority order (failover).
       const sku = data.sku;
       if (!sku) throw new JobDataError('Missing SKU in job data');
 
-      const mapping = await prisma.providerSkuMapping.findUnique({ where: { shopifySku: sku } });
-      if (!mapping) throw new MappingError(`No provider mapping found for SKU: ${sku}`);
-      if (!mapping.isActive) throw new MappingError(`SKU mapping is inactive: ${sku}`);
+      const mappings = await prisma.providerSkuMapping.findMany({
+        where: { shopifySku: sku, isActive: true },
+        orderBy: { priority: 'asc' },
+      });
+      if (mappings.length === 0)
+        throw new MappingError(`No provider mapping found for SKU: ${sku}`);
 
-      resolvedProvider = mapping.provider;
-      mappingInfo = {
-        name: mapping.name || undefined,
-        region: mapping.region || undefined,
-        dataAmount: mapping.dataAmount || undefined,
-        validity: mapping.validity || undefined,
-      };
+      let lastError: unknown;
+      for (const mapping of mappings) {
+        try {
+          logger.info(
+            { provider: mapping.provider, sku: mapping.providerSku, priority: mapping.priority },
+            'Trying provider',
+          );
+          const provider = getProvider(mapping.provider);
+          esimResult = await provider.provision(
+            {
+              providerSku: mapping.providerSku,
+              providerCatalogId: mapping.providerCatalogId,
+              providerConfig: mapping.providerConfig as Record<string, unknown> | null,
+              packageType: mapping.packageType,
+              daysCount: mapping.daysCount,
+            },
+            {
+              customerEmail: delivery.customerEmail ?? '',
+              quantity: 1,
+              deliveryId,
+              topupIccid: delivery.topupIccid ? decrypt(delivery.topupIccid) : undefined,
+            },
+          );
+          resolvedProvider = mapping.provider;
+          mappingInfo = {
+            name: mapping.name || undefined,
+            region: mapping.region || undefined,
+            dataAmount: mapping.dataAmount || undefined,
+            validity: mapping.validity || undefined,
+          };
+          break; // success — stop trying further providers
+        } catch (err) {
+          lastError = err;
+          // Non-retryable errors (bad config, missing data) — fail immediately, don't try next
+          if (!(err instanceof VendorError)) throw err;
+          const isLast = mapping === mappings[mappings.length - 1];
+          if (isLast) break; // will re-throw below
+          logger.warn(
+            { provider: mapping.provider, sku, priority: mapping.priority, err },
+            'Provider failed, trying next in priority order',
+          );
+        }
+      }
 
-      logger.info({ provider: mapping.provider, sku: mapping.providerSku }, 'Using provider');
-
-      const provider = getProvider(mapping.provider);
-      esimResult = await provider.provision(
-        {
-          providerSku: mapping.providerSku,
-          providerCatalogId: mapping.providerCatalogId,
-          providerConfig: mapping.providerConfig as Record<string, unknown> | null,
-          packageType: mapping.packageType,
-          daysCount: mapping.daysCount,
-        },
-        {
-          customerEmail: delivery.customerEmail ?? '',
-          quantity: 1,
-          deliveryId,
-          topupIccid: delivery.topupIccid ? decrypt(delivery.topupIccid) : undefined,
-        },
-      );
+      if (!esimResult!) {
+        throw lastError ?? new MappingError(`All providers failed for SKU: ${sku}`);
+      }
     }
 
     if (esimResult.pending) {

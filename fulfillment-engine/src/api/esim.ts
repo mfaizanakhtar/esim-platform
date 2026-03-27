@@ -260,7 +260,7 @@ export default function esimRoutes(
       }
 
       const sourceMapping = await prisma.providerSkuMapping.findUnique({
-        where: { shopifySku: delivery.sku },
+        where: { shopifySku_provider: { shopifySku: delivery.sku, provider: delivery.provider } },
       });
 
       if (!sourceMapping?.region) {
@@ -337,7 +337,7 @@ export default function esimRoutes(
       }
 
       const sourceMapping = await prisma.providerSkuMapping.findUnique({
-        where: { shopifySku: delivery.sku },
+        where: { shopifySku_provider: { shopifySku: delivery.sku, provider: delivery.provider } },
       });
       if (!sourceMapping?.region) {
         return reply.code(400).send({ error: 'topup_source_mapping_missing' });

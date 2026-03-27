@@ -1229,7 +1229,9 @@ async function main() {
   for (const mapping of batch1) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -2452,7 +2454,9 @@ async function main() {
   for (const mapping of batch2) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -3675,7 +3679,9 @@ async function main() {
   for (const mapping of batch3) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -4898,7 +4904,9 @@ async function main() {
   for (const mapping of batch4) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -6121,7 +6129,9 @@ async function main() {
   for (const mapping of batch5) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -7344,7 +7354,9 @@ async function main() {
   for (const mapping of batch6) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -8567,7 +8579,9 @@ async function main() {
   for (const mapping of batch7) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -9790,7 +9804,9 @@ async function main() {
   for (const mapping of batch8) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -11013,7 +11029,9 @@ async function main() {
   for (const mapping of batch9) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -12236,7 +12254,9 @@ async function main() {
   for (const mapping of batch10) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -13459,7 +13479,9 @@ async function main() {
   for (const mapping of batch11) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -14682,7 +14704,9 @@ async function main() {
   for (const mapping of batch12) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -15905,7 +15929,9 @@ async function main() {
   for (const mapping of batch13) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -17128,7 +17154,9 @@ async function main() {
   for (const mapping of batch14) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -18351,7 +18379,9 @@ async function main() {
   for (const mapping of batch15) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -19574,7 +19604,9 @@ async function main() {
   for (const mapping of batch16) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -20797,7 +20829,9 @@ async function main() {
   for (const mapping of batch17) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -22020,7 +22054,9 @@ async function main() {
   for (const mapping of batch18) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -23243,7 +23279,9 @@ async function main() {
   for (const mapping of batch19) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -24466,7 +24504,9 @@ async function main() {
   for (const mapping of batch20) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -25689,7 +25729,9 @@ async function main() {
   for (const mapping of batch21) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -26912,7 +26954,9 @@ async function main() {
   for (const mapping of batch22) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -28135,7 +28179,9 @@ async function main() {
   for (const mapping of batch23) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -29358,7 +29404,9 @@ async function main() {
   for (const mapping of batch24) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -30581,7 +30629,9 @@ async function main() {
   for (const mapping of batch25) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -31804,7 +31854,9 @@ async function main() {
   for (const mapping of batch26) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -33027,7 +33079,9 @@ async function main() {
   for (const mapping of batch27) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -34250,7 +34304,9 @@ async function main() {
   for (const mapping of batch28) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -35473,7 +35529,9 @@ async function main() {
   for (const mapping of batch29) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -36696,7 +36754,9 @@ async function main() {
   for (const mapping of batch30) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -37919,7 +37979,9 @@ async function main() {
   for (const mapping of batch31) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -39142,7 +39204,9 @@ async function main() {
   for (const mapping of batch32) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -40365,7 +40429,9 @@ async function main() {
   for (const mapping of batch33) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -41588,7 +41654,9 @@ async function main() {
   for (const mapping of batch34) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -42811,7 +42879,9 @@ async function main() {
   for (const mapping of batch35) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -44034,7 +44104,9 @@ async function main() {
   for (const mapping of batch36) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -45257,7 +45329,9 @@ async function main() {
   for (const mapping of batch37) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -46480,7 +46554,9 @@ async function main() {
   for (const mapping of batch38) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -47703,7 +47779,9 @@ async function main() {
   for (const mapping of batch39) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -48926,7 +49004,9 @@ async function main() {
   for (const mapping of batch40) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -50149,7 +50229,9 @@ async function main() {
   for (const mapping of batch41) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -51372,7 +51454,9 @@ async function main() {
   for (const mapping of batch42) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -52595,7 +52679,9 @@ async function main() {
   for (const mapping of batch43) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -53818,7 +53904,9 @@ async function main() {
   for (const mapping of batch44) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -55041,7 +55129,9 @@ async function main() {
   for (const mapping of batch45) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -56264,7 +56354,9 @@ async function main() {
   for (const mapping of batch46) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -57487,7 +57579,9 @@ async function main() {
   for (const mapping of batch47) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -58710,7 +58804,9 @@ async function main() {
   for (const mapping of batch48) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -59933,7 +60029,9 @@ async function main() {
   for (const mapping of batch49) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -61156,7 +61254,9 @@ async function main() {
   for (const mapping of batch50) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -62379,7 +62479,9 @@ async function main() {
   for (const mapping of batch51) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -63602,7 +63704,9 @@ async function main() {
   for (const mapping of batch52) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -64825,7 +64929,9 @@ async function main() {
   for (const mapping of batch53) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -66048,7 +66154,9 @@ async function main() {
   for (const mapping of batch54) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -67271,7 +67379,9 @@ async function main() {
   for (const mapping of batch55) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -68494,7 +68604,9 @@ async function main() {
   for (const mapping of batch56) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -69717,7 +69829,9 @@ async function main() {
   for (const mapping of batch57) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -70940,7 +71054,9 @@ async function main() {
   for (const mapping of batch58) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -72163,7 +72279,9 @@ async function main() {
   for (const mapping of batch59) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -73386,7 +73504,9 @@ async function main() {
   for (const mapping of batch60) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -74609,7 +74729,9 @@ async function main() {
   for (const mapping of batch61) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -75832,7 +75954,9 @@ async function main() {
   for (const mapping of batch62) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -77055,7 +77179,9 @@ async function main() {
   for (const mapping of batch63) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -78278,7 +78404,9 @@ async function main() {
   for (const mapping of batch64) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -79501,7 +79629,9 @@ async function main() {
   for (const mapping of batch65) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -80724,7 +80854,9 @@ async function main() {
   for (const mapping of batch66) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -81947,7 +82079,9 @@ async function main() {
   for (const mapping of batch67) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -83170,7 +83304,9 @@ async function main() {
   for (const mapping of batch68) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -84393,7 +84529,9 @@ async function main() {
   for (const mapping of batch69) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -85616,7 +85754,9 @@ async function main() {
   for (const mapping of batch70) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -86839,7 +86979,9 @@ async function main() {
   for (const mapping of batch71) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -88062,7 +88204,9 @@ async function main() {
   for (const mapping of batch72) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -89285,7 +89429,9 @@ async function main() {
   for (const mapping of batch73) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
@@ -89980,7 +90126,9 @@ async function main() {
   for (const mapping of batch74) {
     try {
       const result = await prisma.providerSkuMapping.upsert({
-        where: { shopifySku: mapping.shopifySku },
+        where: {
+          shopifySku_provider: { shopifySku: mapping.shopifySku, provider: mapping.provider },
+        },
         update: mapping,
         create: mapping,
       });
