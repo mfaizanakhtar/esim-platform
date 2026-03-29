@@ -1679,17 +1679,18 @@ describe('Admin Routes', () => {
 
   describe('POST /sku-mappings/smart-pricing', () => {
     it('returns ok with updated/skipped counts', async () => {
-      // Two unlocked mappings with catalog prices — should be reordered
+      // m1 is currently priority 1 (higher priority) but is MORE expensive —
+      // smart pricing should reorder so the cheaper m2 becomes priority 1
       const m1 = makeMapping({
         id: 'map-001',
         provider: 'firoam',
-        priority: 2,
+        priority: 1,
         providerCatalogId: 'cat-1',
       });
       const m2 = makeMapping({
         id: 'map-002',
         provider: 'tgt',
-        priority: 1,
+        priority: 2,
         providerCatalogId: 'cat-2',
       });
       vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
@@ -1916,6 +1917,20 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().drafts).toHaveLength(0);
     });
+
+    it('returns 502 when Shopify fetch fails', async () => {
+      adminMocks.mockGetAllVariants.mockRejectedValue(new Error('Shopify timeout'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toBe('shopify_unavailable');
+    });
   });
 
   // ── POST /sku-mappings/bulk ───────────────────────────────────────────────
@@ -2071,6 +2086,57 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       const body = res.json<{ created: number; failed: number }>();
       expect(body.failed).toBe(1);
+    });
+
+    it('replaces existing mapping when forceReplace=true', async () => {
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(tgtCatalogEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(makeMapping());
+      vi.mocked(prisma.providerSkuMapping.update).mockResolvedValue(makeMapping());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          forceReplace: true,
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-tgt-1' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.created).toBe(1);
+      expect(body.failed).toBe(0);
+      expect(prisma.providerSkuMapping.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { shopifySku_provider: { shopifySku: 'ESIM-AU-3GB', provider: 'tgt' } },
+        }),
+      );
+    });
+
+    it('records failure when create throws a non-Error value', async () => {
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(tgtCatalogEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.create).mockRejectedValue('db connection lost');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-tgt-1' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.failed).toBe(1);
+      expect(body.created).toBe(0);
     });
 
     it('returns 401 without admin key', async () => {

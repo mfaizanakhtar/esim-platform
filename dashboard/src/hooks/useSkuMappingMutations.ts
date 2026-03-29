@@ -121,8 +121,13 @@ interface BulkCreateResult {
 export function useBulkCreateMappings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (inputs: CreateSkuMappingInput[]) =>
-      apiClient.post<BulkCreateResult>('/sku-mappings/bulk', { mappings: inputs }),
+    mutationFn: ({
+      inputs,
+      forceReplace = false,
+    }: {
+      inputs: CreateSkuMappingInput[];
+      forceReplace?: boolean;
+    }) => apiClient.post<BulkCreateResult>('/sku-mappings/bulk', { mappings: inputs, forceReplace }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
     },

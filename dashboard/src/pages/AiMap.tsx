@@ -38,6 +38,7 @@ export function AiMap() {
   const providers = providersData?.providers ?? [];
 
   const [providerFilter, setProviderFilter] = useState('');
+  const [forceReplace, setForceReplace] = useState(false);
   const [unmappedOnly, setUnmappedOnly] = useState(true);
 
   // Steps: configure | running | review | done
@@ -90,12 +91,15 @@ export function AiMap() {
       validity: d.validity,
       isActive: true,
     }));
-    bulkCreate.mutate(inputs, {
-      onSuccess: (result) => {
-        setCreatedCount(result.created);
-        setStep('done');
+    bulkCreate.mutate(
+      { inputs, forceReplace },
+      {
+        onSuccess: (result) => {
+          setCreatedCount(result.created);
+          setStep('done');
+        },
       },
-    });
+    );
   }
 
   const selectedCount = drafts.filter((d) => d.selected).length;
@@ -160,6 +164,24 @@ export function AiMap() {
             <p className="text-xs text-muted-foreground">
               SKUs with existing {providerLabel(providerFilter)} mappings will be skipped, but SKUs
               mapped only to other providers will still be included.
+            </p>
+          )}
+
+          <div className="flex items-center gap-2">
+            <input
+              id="forceReplace"
+              type="checkbox"
+              checked={forceReplace}
+              onChange={(e) => setForceReplace(e.target.checked)}
+            />
+            <label htmlFor="forceReplace" className="text-sm font-medium">
+              Replace existing mappings (re-map / fix wrong ones)
+            </label>
+          </div>
+          {forceReplace && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              Existing mappings for the matched (SKU, provider) will be overwritten with the AI
+              suggestion. Priority and lock settings are preserved.
             </p>
           )}
 
@@ -329,7 +351,8 @@ export function AiMap() {
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="text-5xl">✓</div>
           <p className="text-lg font-semibold">
-            {createdCount} mapping{createdCount !== 1 ? 's' : ''} created successfully
+            {createdCount} mapping{createdCount !== 1 ? 's' : ''}{' '}
+            {forceReplace ? 'created or updated' : 'created'} successfully
           </p>
           <button
             onClick={() => navigate('/sku-mappings')}

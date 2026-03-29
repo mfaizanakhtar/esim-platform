@@ -569,14 +569,17 @@ export default function adminRoutes(
 
   /**
    * POST /admin/sku-mappings/bulk
-   * Create multiple SKU mappings in a single request (from AI auto-map approval).
+   * Create (or replace) multiple SKU mappings in a single request (from AI auto-map approval).
    * Processes each item and returns per-item results — partial success is possible.
-   * Body: { mappings: CreateSkuMappingInput[] }
+   * Body: { mappings: CreateSkuMappingInput[], forceReplace?: boolean }
+   *   forceReplace=true  — update existing (shopifySku, provider) rows instead of skipping them
+   *   forceReplace=false — skip duplicates silently (default, idempotent)
    */
   app.post('/sku-mappings/bulk', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
-    const body = (request.body ?? {}) as { mappings?: unknown[] };
+    const body = (request.body ?? {}) as { mappings?: unknown[]; forceReplace?: boolean };
+    const forceReplace = body.forceReplace === true;
     if (!Array.isArray(body.mappings) || body.mappings.length === 0) {
       return reply.code(400).send({ error: 'mappings array is required' });
     }
@@ -622,11 +625,30 @@ export default function adminRoutes(
           providerSku = entry.productCode;
         }
 
-        // Skip duplicates silently (idempotent)
         const existing = await prisma.providerSkuMapping.findUnique({
           where: { shopifySku_provider: { shopifySku, provider } },
         });
+
         if (existing) {
+          if (!forceReplace) {
+            // Idempotent skip — already mapped, nothing to do
+            results.push({ ok: true, shopifySku, provider });
+            continue;
+          }
+          // forceReplace: update the existing row with the new catalog entry
+          await prisma.providerSkuMapping.update({
+            where: { shopifySku_provider: { shopifySku, provider } },
+            data: {
+              providerCatalogId,
+              providerSku,
+              name: entry.productName ?? null,
+              region: entry.region ?? null,
+              dataAmount: entry.dataAmount ?? null,
+              validity: entry.validity ?? null,
+              packageType: entry.productCode?.includes('?') ? 'daypass' : 'fixed',
+              isActive: true,
+            },
+          });
           results.push({ ok: true, shopifySku, provider });
           continue;
         }
