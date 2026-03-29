@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
@@ -160,16 +160,31 @@ function CatalogTab({ provider }: { provider: string }) {
 }
 
 export function Catalog() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: providersData } = useProviders();
   const providers = providersData?.providers ?? [];
-  const [activeTab, setActiveTab] = useState('');
 
-  // Set default tab once providers load
+  const tabParam = searchParams.get('tab') ?? '';
+  const activeTab = providers.includes(tabParam) ? tabParam : (providers[0] ?? '');
+
+  // Set default tab in URL once providers load
   useEffect(() => {
-    if (providers.length > 0 && !activeTab) {
-      setActiveTab(providers[0]);
+    if (providers.length > 0 && !searchParams.get('tab')) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', providers[0]);
+        return next;
+      }, { replace: true });
     }
-  }, [providers, activeTab]);
+  }, [providers, searchParams, setSearchParams]);
+
+  function setActiveTab(provider: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', provider);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -193,7 +208,8 @@ export function Catalog() {
         </div>
       </div>
 
-      {activeTab && <CatalogTab provider={activeTab} />}
+      {/* key={activeTab} forces CatalogTab to remount when provider changes, resetting page/search state */}
+      {activeTab && <CatalogTab key={activeTab} provider={activeTab} />}
     </div>
   );
 }

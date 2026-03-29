@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useSkuMappings } from '@/hooks/useSkuMappings';
+import { useAllSkuMappings } from '@/hooks/useSkuMappings';
 import {
   useCreateSkuMapping,
   useUpdateSkuMapping,
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 
-const PAGE_SIZE = 10000; // load all — grouped display doesn't paginate
+// useAllSkuMappings fetches in two phases to load every record regardless of count
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -108,9 +108,7 @@ export function SkuMappings() {
     [setSearchParams],
   );
 
-  const { data, isLoading } = useSkuMappings({
-    limit: PAGE_SIZE,
-    offset: 0,
+  const { data, isLoading } = useAllSkuMappings({
     provider: provider || undefined,
     isActive: status === 'active' ? true : status === 'inactive' ? false : undefined,
     search: debouncedSearch || undefined,

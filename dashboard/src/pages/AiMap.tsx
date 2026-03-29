@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { useBulkCreateMappings } from '@/hooks/useSkuMappingMutations';
@@ -32,14 +32,33 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
 
 export function AiMap() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Step 1 config
   const { data: providersData } = useProviders();
   const providers = providersData?.providers ?? [];
 
-  const [providerFilter, setProviderFilter] = useState('');
+  const providerFilter = searchParams.get('provider') ?? '';
+  const unmappedOnly = searchParams.get('unmapped') !== 'false';
   const [forceReplace, setForceReplace] = useState(false);
-  const [unmappedOnly, setUnmappedOnly] = useState(true);
+
+  function setProviderFilter(value: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set('provider', value);
+      else next.delete('provider');
+      return next;
+    });
+  }
+
+  function setUnmappedOnly(value: boolean) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (!value) next.set('unmapped', 'false');
+      else next.delete('unmapped');
+      return next;
+    });
+  }
 
   // Steps: configure | running | review | done
   const [step, setStep] = useState<'configure' | 'running' | 'review' | 'done'>('configure');
