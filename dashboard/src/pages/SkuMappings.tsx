@@ -22,6 +22,7 @@ import {
   Sparkles,
   Brain,
 } from 'lucide-react';
+import { useProviders, providerLabel } from '@/hooks/useProviders';
 
 const PAGE_SIZE = 500; // load all — grouped display doesn't use pagination
 
@@ -67,9 +68,11 @@ export function SkuMappings() {
   const debouncedSearch = useDebounce(search, 300);
   const isInitialMount = useRef(true);
 
+  const { data: providersData } = useProviders();
+  const providers = providersData?.providers ?? [];
+
   const providerParam = searchParams.get('provider');
-  const provider: '' | 'firoam' | 'tgt' =
-    providerParam === 'firoam' || providerParam === 'tgt' ? providerParam : '';
+  const provider = providers.includes(providerParam ?? '') ? (providerParam ?? '') : '';
 
   const statusParam = searchParams.get('status');
   const status: '' | 'active' | 'inactive' =
@@ -186,8 +189,9 @@ export function SkuMappings() {
             className="border rounded-md px-3 py-1.5 text-sm"
           >
             <option value="">All Providers</option>
-            <option value="firoam">FiRoam</option>
-            <option value="tgt">TGT</option>
+            {providers.map((p) => (
+              <option key={p} value={p}>{providerLabel(p)}</option>
+            ))}
           </select>
           <select
             aria-label="Filter by status"

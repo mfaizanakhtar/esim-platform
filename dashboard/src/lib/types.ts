@@ -57,7 +57,7 @@ export interface DeliveryDetail extends Delivery {
   esimOrders: EsimOrder[];
 }
 
-export type SkuMappingProvider = 'firoam' | 'tgt';
+export type SkuMappingProvider = string;
 export type SkuMappingPackageType = 'fixed' | 'daypass';
 
 export interface SkuMapping {

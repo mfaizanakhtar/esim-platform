@@ -4,10 +4,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { SkuMapping, CatalogItem } from '@/lib/types';
 import { useCatalog } from '@/hooks/useCatalog';
+import { useProviders, providerLabel } from '@/hooks/useProviders';
 
 const schema = z.object({
   shopifySku: z.string().min(1, 'Shopify SKU is required'),
-  provider: z.enum(['firoam', 'tgt'], { required_error: 'Provider is required' }),
+  provider: z.string().min(1, 'Provider is required'),
   providerCatalogId: z.string().optional(),
   name: z.string().optional(),
   region: z.string().optional(),
@@ -56,7 +57,7 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
     defaultValues: initial
       ? {
           shopifySku: initial.shopifySku,
-          provider: initial.provider as 'firoam' | 'tgt',
+          provider: initial.provider,
           providerCatalogId: initial.providerCatalogId ?? undefined,
           name: initial.name ?? '',
           region: initial.region ?? '',
@@ -74,10 +75,13 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
       : { packageType: 'fixed', isActive: true, priorityLocked: false, mappingLocked: false },
   });
 
-  const provider = watch('provider') as 'firoam' | 'tgt' | undefined;
+  const provider = watch('provider') as string | undefined;
   const providerCatalogId = watch('providerCatalogId');
   const packageType = watch('packageType');
   const daysCount = watch('daysCount');
+
+  const { data: providersData } = useProviders();
+  const providers = providersData?.providers ?? [];
 
   // Combobox state
   const [comboQuery, setComboQuery] = useState('');
@@ -238,8 +242,9 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
         <label className="text-sm font-medium">Provider *</label>
         <select {...register('provider')} className="w-full border rounded-md px-3 py-2 text-sm">
           <option value="">Select provider</option>
-          <option value="firoam">FiRoam</option>
-          <option value="tgt">TGT</option>
+          {providers.map((p) => (
+            <option key={p} value={p}>{providerLabel(p)}</option>
+          ))}
         </select>
         {errors.provider && <p className="text-xs text-red-600">{errors.provider.message}</p>}
       </div>

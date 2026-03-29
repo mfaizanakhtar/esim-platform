@@ -9,6 +9,7 @@ import FiRoamClient from '~/vendor/firoamClient';
 import { getShopifyClient } from '~/shopify/client';
 import { logger } from '~/utils/logger';
 import OpenAI from 'openai';
+import { getRegisteredProviders } from '~/vendor/registry';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
@@ -231,6 +232,20 @@ export default function adminRoutes(
     app.log.info(`[Admin] Resent delivery email for ${id}: ${emailResult.messageId}`);
 
     return reply.send({ ok: true, messageId: emailResult.messageId });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Providers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * GET /admin/providers
+   * Returns all registered vendor provider names from the registry.
+   * Drives dynamic dropdowns in the dashboard — no code change needed when a new provider is added.
+   */
+  app.get('/providers', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    return reply.send({ providers: getRegisteredProviders() });
   });
 
   // ---------------------------------------------------------------------------

@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { useBulkCreateMappings } from '@/hooks/useSkuMappingMutations';
-import type { AiMappingDraft, SkuMappingProvider } from '@/lib/types';
+import { useProviders, providerLabel } from '@/hooks/useProviders';
+import type { AiMappingDraft } from '@/lib/types';
 import { ArrowLeft, Brain, CheckSquare, Square } from 'lucide-react';
 
 interface AiMapResponse {
@@ -33,7 +34,10 @@ export function AiMap() {
   const navigate = useNavigate();
 
   // Step 1 config
-  const [providerFilter, setProviderFilter] = useState<SkuMappingProvider | ''>('');
+  const { data: providersData } = useProviders();
+  const providers = providersData?.providers ?? [];
+
+  const [providerFilter, setProviderFilter] = useState('');
   const [unmappedOnly, setUnmappedOnly] = useState(true);
 
   // Steps: configure | running | review | done
@@ -78,7 +82,7 @@ export function AiMap() {
     const selected = drafts.filter((d) => d.selected);
     const inputs = selected.map((d) => ({
       shopifySku: d.shopifySku,
-      provider: providerFilter as SkuMappingProvider || 'firoam',
+      provider: providerFilter || providers[0] || 'firoam',
       providerCatalogId: d.catalogId,
       name: d.productName,
       region: d.region,
@@ -129,12 +133,13 @@ export function AiMap() {
             <label className="text-sm font-medium">Provider</label>
             <select
               value={providerFilter}
-              onChange={(e) => setProviderFilter(e.target.value as SkuMappingProvider | '')}
+              onChange={(e) => setProviderFilter(e.target.value)}
               className="w-full border rounded-md px-3 py-2 text-sm"
             >
-              <option value="">Both providers</option>
-              <option value="firoam">FiRoam only</option>
-              <option value="tgt">TGT only</option>
+              <option value="">All providers</option>
+              {providers.map((p) => (
+                <option key={p} value={p}>{providerLabel(p)} only</option>
+              ))}
             </select>
           </div>
 
@@ -147,14 +152,14 @@ export function AiMap() {
             />
             <label htmlFor="unmappedOnly" className="text-sm font-medium">
               {providerFilter
-                ? `Skip SKUs already mapped to ${providerFilter === 'firoam' ? 'FiRoam' : 'TGT'}`
+                ? `Skip SKUs already mapped to ${providerLabel(providerFilter)}`
                 : 'Skip SKUs already mapped to any provider'}
             </label>
           </div>
           {providerFilter && unmappedOnly && (
             <p className="text-xs text-muted-foreground">
-              SKUs with existing {providerFilter === 'firoam' ? 'FiRoam' : 'TGT'} mappings will be
-              skipped, but SKUs mapped only to other providers will still be included.
+              SKUs with existing {providerLabel(providerFilter)} mappings will be skipped, but SKUs
+              mapped only to other providers will still be included.
             </p>
           )}
 

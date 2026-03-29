@@ -25,6 +25,11 @@ const registry = new Map<string, VendorProvider>([
  *
  * @param name - Value of `ProviderSkuMapping.provider` (e.g. `'firoam'`)
  */
+/** Returns all registered provider names (keys of the registry map). */
+export function getRegisteredProviders(): string[] {
+  return [...registry.keys()];
+}
+
 export function getProvider(name: string): VendorProvider {
   const provider = registry.get(name);
   if (!provider) {
