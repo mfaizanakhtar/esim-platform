@@ -63,7 +63,7 @@ export function AiMap() {
   // Steps: configure | running | review | done
   const [step, setStep] = useState<'configure' | 'running' | 'review' | 'done'>('configure');
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
-  const [createdCount, setCreatedCount] = useState(0);
+  const [bulkResult, setBulkResult] = useState<{ created: number; updated: number; skipped: number } | null>(null);
 
   const aiMapMutation = useMutation({
     mutationFn: () =>
@@ -115,7 +115,7 @@ export function AiMap() {
       { inputs, forceReplace },
       {
         onSuccess: (result) => {
-          setCreatedCount(result.created);
+          setBulkResult({ created: result.created, updated: result.updated ?? 0, skipped: result.skipped ?? 0 });
           setStep('done');
         },
       },
@@ -373,12 +373,13 @@ export function AiMap() {
       )}
 
       {/* Step 4: Done */}
-      {step === 'done' && (
+      {step === 'done' && bulkResult && (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="text-5xl">✓</div>
           <p className="text-lg font-semibold">
-            {createdCount} mapping{createdCount !== 1 ? 's' : ''}{' '}
-            {forceReplace ? 'created or updated' : 'created'} successfully
+            {bulkResult.created} created
+            {bulkResult.updated > 0 && `, ${bulkResult.updated} updated`}
+            {bulkResult.skipped > 0 && `, ${bulkResult.skipped} skipped`}
           </p>
           <button
             onClick={() => navigate('/sku-mappings')}

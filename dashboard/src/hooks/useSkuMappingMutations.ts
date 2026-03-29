@@ -114,8 +114,10 @@ export function useSmartPricing() {
 
 interface BulkCreateResult {
   created: number;
+  updated: number;
+  skipped: number;
   failed: number;
-  results: Array<{ ok: boolean; shopifySku?: string; provider?: string; error?: string }>;
+  results: Array<{ ok: boolean; action: string; shopifySku?: string; provider?: string; error?: string }>;
 }
 
 export function useBulkCreateMappings() {

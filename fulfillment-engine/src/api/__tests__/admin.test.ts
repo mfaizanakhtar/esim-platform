@@ -1993,8 +1993,9 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json<{ created: number; failed: number }>();
-      expect(body.created).toBe(1);
+      const body = res.json<{ created: number; skipped: number; failed: number }>();
+      expect(body.created).toBe(0);
+      expect(body.skipped).toBe(1);
       expect(body.failed).toBe(0);
       expect(prisma.providerSkuMapping.create).not.toHaveBeenCalled();
     });
@@ -2106,8 +2107,9 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json<{ created: number; failed: number }>();
-      expect(body.created).toBe(1);
+      const body = res.json<{ created: number; updated: number; failed: number }>();
+      expect(body.created).toBe(0);
+      expect(body.updated).toBe(1);
       expect(body.failed).toBe(0);
       expect(prisma.providerSkuMapping.update).toHaveBeenCalledWith(
         expect.objectContaining({

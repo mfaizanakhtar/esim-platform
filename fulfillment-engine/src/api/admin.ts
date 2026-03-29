@@ -632,7 +632,7 @@ export default function adminRoutes(
         if (existing) {
           if (!forceReplace) {
             // Idempotent skip — already mapped, nothing to do
-            results.push({ ok: true, shopifySku, provider });
+            results.push({ ok: true, action: 'skipped' as const, shopifySku, provider });
             continue;
           }
           // forceReplace: update the existing row with the new catalog entry
@@ -649,7 +649,7 @@ export default function adminRoutes(
               isActive: true,
             },
           });
-          results.push({ ok: true, shopifySku, provider });
+          results.push({ ok: true, action: 'updated' as const, shopifySku, provider });
           continue;
         }
 
@@ -677,11 +677,12 @@ export default function adminRoutes(
           },
         });
 
-        results.push({ ok: true, shopifySku, provider });
+        results.push({ ok: true, action: 'created' as const, shopifySku, provider });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         results.push({
           ok: false,
+          action: 'failed' as const,
           shopifySku: (item as Record<string, string>).shopifySku,
           provider: (item as Record<string, string>).provider,
           error: msg,
@@ -689,10 +690,12 @@ export default function adminRoutes(
       }
     }
 
-    const created = results.filter((r) => r.ok).length;
+    const created = results.filter((r) => r.action === 'created').length;
+    const updated = results.filter((r) => r.action === 'updated').length;
+    const skipped = results.filter((r) => r.action === 'skipped').length;
     const failed = results.filter((r) => !r.ok).length;
-    app.log.info(`[Admin] Bulk created ${created} SKU mappings, ${failed} failed`);
-    return reply.send({ created, failed, results });
+    app.log.info(`[Admin] Bulk mapped: ${created} created, ${updated} updated, ${skipped} skipped, ${failed} failed`);
+    return reply.send({ created, updated, skipped, failed, results });
   });
 
   // SKU Mapping Priority Reorder
