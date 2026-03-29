@@ -687,12 +687,15 @@ export default function adminRoutes(
    * GET /admin/shopify-skus
    * Fetch all product variant SKUs from Shopify.
    * Query: unmappedOnly=true — exclude SKUs already in ProviderSkuMapping
+   *        provider=firoam|tgt — when combined with unmappedOnly, only excludes SKUs
+   *          already mapped for that specific provider (not any provider)
    */
   app.get('/shopify-skus', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
-    const query = request.query as { unmappedOnly?: string };
+    const query = request.query as { unmappedOnly?: string; provider?: string };
     const unmappedOnly = query.unmappedOnly === 'true';
+    const providerFilter = query.provider || undefined;
 
     let allVariants: Array<{
       sku: string;
@@ -712,6 +715,7 @@ export default function adminRoutes(
       const mappedSkus = await prisma.providerSkuMapping.findMany({
         select: { shopifySku: true },
         distinct: ['shopifySku'],
+        ...(providerFilter ? { where: { provider: providerFilter } } : {}),
       });
       const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
       const filtered = allVariants.filter((v) => !mappedSet.has(v.sku));
@@ -763,9 +767,12 @@ export default function adminRoutes(
       }
 
       if (body.unmappedOnly !== false) {
+        // When a provider is specified, only exclude SKUs already mapped to that provider.
+        // This lets you add TGT mappings for SKUs that already have FiRoam mappings.
         const mappedSkus = await prisma.providerSkuMapping.findMany({
           select: { shopifySku: true },
           distinct: ['shopifySku'],
+          ...(body.provider ? { where: { provider: body.provider } } : {}),
         });
         const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
         shopifySkus = shopifySkus.filter((v) => !mappedSet.has(v.sku));

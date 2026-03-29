@@ -118,6 +118,11 @@ export function AiMap() {
           <p className="text-sm text-muted-foreground">
             AI will match your Shopify SKU names to provider catalog entries based on region, data
             amount, and validity. Review and approve suggestions before they are saved.
+            <br />
+            <span className="mt-1 inline-block">
+              Tip: select a specific provider to add that provider&apos;s mappings to SKUs that are
+              already mapped elsewhere — existing mappings are never overwritten.
+            </span>
           </p>
 
           <div className="space-y-1">
@@ -141,9 +146,17 @@ export function AiMap() {
               onChange={(e) => setUnmappedOnly(e.target.checked)}
             />
             <label htmlFor="unmappedOnly" className="text-sm font-medium">
-              Unmapped SKUs only (skip already-mapped)
+              {providerFilter
+                ? `Skip SKUs already mapped to ${providerFilter === 'firoam' ? 'FiRoam' : 'TGT'}`
+                : 'Skip SKUs already mapped to any provider'}
             </label>
           </div>
+          {providerFilter && unmappedOnly && (
+            <p className="text-xs text-muted-foreground">
+              SKUs with existing {providerFilter === 'firoam' ? 'FiRoam' : 'TGT'} mappings will be
+              skipped, but SKUs mapped only to other providers will still be included.
+            </p>
+          )}
 
           <button
             onClick={runAi}
