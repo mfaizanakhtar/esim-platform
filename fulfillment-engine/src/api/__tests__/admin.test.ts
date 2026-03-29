@@ -93,17 +93,10 @@ vi.mock('~/shopify/client', () => ({
 vi.mock('openai', () => {
   class MockAPIError extends Error {
     status: number;
-    code: string | null;
-    constructor(
-      status: number,
-      _error: unknown,
-      message: string,
-      _headers: unknown,
-      code: string | null = null,
-    ) {
+    code: string | null = null;
+    constructor(status: number, _error: unknown, message: string, _headers: unknown) {
       super(message);
       this.status = status;
-      this.code = code;
     }
   }
   return {
@@ -1966,6 +1959,36 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(502);
       expect(res.json().error).toMatch(/OpenAI error.*quota/);
       // Handler must have broken after the first batch — not called a second time
+      expect(adminMocks.mockOpenAiCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it('short-circuits immediately on fatal error identified by error code', async () => {
+      // >50 SKUs → 2 batches; error code path (status ≠ 401/429) must still be fatal
+      const manySkus = Array.from({ length: 55 }, (_, i) => ({
+        sku: `ESIM-JP-${i}GB`,
+        variantId: `gid://${i}`,
+        productTitle: 'Japan',
+        variantTitle: `${i}GB`,
+      }));
+      adminMocks.mockGetAllVariants.mockResolvedValue(manySkus);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      const codeErr = Object.assign(
+        new OpenAI.APIError(200, undefined, 'insufficient quota', undefined),
+        { code: 'insufficient_quota' },
+      );
+      adminMocks.mockOpenAiCreate.mockRejectedValueOnce(codeErr);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(502);
       expect(adminMocks.mockOpenAiCreate).toHaveBeenCalledTimes(1);
     });
 

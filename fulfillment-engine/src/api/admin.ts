@@ -1073,13 +1073,10 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       } catch (err) {
         logger.error({ err, batch: skuList }, 'OpenAI batch failed');
         const msg = err instanceof Error ? err.message : String(err);
-        // Use SDK typed errors: status 401/429 or code insufficient_quota/invalid_api_key = fatal
+        // Use SDK typed errors: status 401/429 or code insufficient_quota = fatal
         const isFatal =
           err instanceof OpenAI.APIError &&
-          (err.status === 401 ||
-            err.status === 429 ||
-            err.code === 'insufficient_quota' ||
-            err.code === 'invalid_api_key');
+          (err.status === 401 || err.status === 429 || err.code === 'insufficient_quota');
         openAiError = msg;
         if (isFatal) break;
       }
