@@ -1011,6 +1011,8 @@ export default function adminRoutes(
       netPrice: e.netPrice,
     }));
 
+    let openAiError: string | null = null;
+
     for (let i = 0; i < shopifySkus.length; i += BATCH_SIZE) {
       const batch = shopifySkus.slice(i, i + BATCH_SIZE);
       const skuList = batch.map((v) => ({
@@ -1070,10 +1072,27 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         }
       } catch (err) {
         logger.error({ err, batch: skuList }, 'OpenAI batch failed');
+        const msg = err instanceof Error ? err.message : String(err);
+        // Fatal errors: quota exceeded (429) or auth failure (401) — no point continuing batches
+        const isFatal =
+          msg.includes('insufficient_quota') ||
+          msg.includes('429') ||
+          msg.includes('401') ||
+          msg.includes('Unauthorized') ||
+          msg.includes('invalid_api_key');
+        openAiError = msg;
+        if (isFatal) break;
       }
     }
 
-    return reply.send({ drafts: allDrafts });
+    if (openAiError && allDrafts.length === 0) {
+      return reply.code(502).send({ error: `OpenAI error: ${openAiError}` });
+    }
+
+    return reply.send({
+      drafts: allDrafts,
+      ...(openAiError ? { warning: `Some batches failed: ${openAiError}` } : {}),
+    });
   });
 
   // ---------------------------------------------------------------------------
