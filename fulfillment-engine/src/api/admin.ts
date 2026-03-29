@@ -9,6 +9,7 @@ import FiRoamClient from '~/vendor/firoamClient';
 import { getShopifyClient } from '~/shopify/client';
 import { logger } from '~/utils/logger';
 import OpenAI from 'openai';
+import { getRegisteredProviders } from '~/vendor/registry';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
@@ -231,6 +232,20 @@ export default function adminRoutes(
     app.log.info(`[Admin] Resent delivery email for ${id}: ${emailResult.messageId}`);
 
     return reply.send({ ok: true, messageId: emailResult.messageId });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Providers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * GET /admin/providers
+   * Returns all registered vendor provider names from the registry.
+   * Drives dynamic dropdowns in the dashboard — no code change needed when a new provider is added.
+   */
+  app.get('/providers', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    return reply.send({ providers: getRegisteredProviders() });
   });
 
   // ---------------------------------------------------------------------------
@@ -549,6 +564,171 @@ export default function adminRoutes(
   });
 
   // ---------------------------------------------------------------------------
+  // SKU Mapping Bulk Create
+  // ---------------------------------------------------------------------------
+
+  /**
+   * POST /admin/sku-mappings/bulk
+   * Create (or replace) multiple SKU mappings in a single request (from AI auto-map approval).
+   * Processes each item and returns per-item results — partial success is possible.
+   * Body: { mappings: CreateSkuMappingInput[], forceReplace?: boolean }
+   *   forceReplace=true  — update existing (shopifySku, provider) rows instead of skipping them
+   *   forceReplace=false — skip duplicates silently (default, idempotent)
+   */
+  app.post('/sku-mappings/bulk', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = (request.body ?? {}) as { mappings?: unknown[]; forceReplace?: boolean };
+    const forceReplace = body.forceReplace === true;
+    if (!Array.isArray(body.mappings) || body.mappings.length === 0) {
+      return reply.code(400).send({ error: 'mappings array is required' });
+    }
+
+    const results: Array<{
+      ok: boolean;
+      action: 'created' | 'updated' | 'skipped' | 'failed';
+      shopifySku?: string;
+      provider?: string;
+      error?: string;
+    }> = [];
+
+    for (const item of body.mappings as Array<Record<string, unknown>>) {
+      try {
+        // Reuse the same resolution logic as the single create endpoint
+        const { shopifySku, provider, providerCatalogId } = item as {
+          shopifySku?: string;
+          provider?: string;
+          providerCatalogId?: string;
+        };
+
+        if (!shopifySku || !provider || !providerCatalogId) {
+          results.push({
+            ok: false,
+            action: 'failed' as const,
+            shopifySku,
+            provider,
+            error: 'Missing required fields',
+          });
+          continue;
+        }
+
+        const entry = await providerSkuCatalog.findUnique({ where: { id: providerCatalogId } });
+        if (!entry) {
+          results.push({
+            ok: false,
+            action: 'failed' as const,
+            shopifySku,
+            provider,
+            error: 'Catalog entry not found',
+          });
+          continue;
+        }
+
+        if (entry.provider !== provider) {
+          results.push({
+            ok: false,
+            action: 'failed' as const,
+            shopifySku,
+            provider,
+            error: `Catalog entry provider '${entry.provider}' does not match requested provider '${provider}'`,
+          });
+          continue;
+        }
+
+        // Derive providerSku from catalog
+        let providerSku: string;
+        if (entry.provider === 'firoam') {
+          const raw = (entry.rawPayload ?? {}) as { skuId?: unknown; priceid?: unknown };
+          if (raw.skuId === undefined || raw.priceid === undefined) {
+            results.push({
+              ok: false,
+              action: 'failed' as const,
+              shopifySku,
+              provider,
+              error: 'Catalog entry rawPayload missing firoam fields',
+            });
+            continue;
+          }
+          providerSku = `${String(raw.skuId)}:${entry.productCode}:${String(raw.priceid)}`;
+        } else {
+          providerSku = entry.productCode;
+        }
+
+        const existing = await prisma.providerSkuMapping.findUnique({
+          where: { shopifySku_provider: { shopifySku, provider } },
+        });
+
+        if (existing) {
+          if (!forceReplace) {
+            // Idempotent skip — already mapped, nothing to do
+            results.push({ ok: true, action: 'skipped' as const, shopifySku, provider });
+            continue;
+          }
+          // forceReplace: update the existing row with the new catalog entry
+          await prisma.providerSkuMapping.update({
+            where: { shopifySku_provider: { shopifySku, provider } },
+            data: {
+              providerCatalogId,
+              providerSku,
+              name: entry.productName ?? null,
+              region: entry.region ?? null,
+              dataAmount: entry.dataAmount ?? null,
+              validity: entry.validity ?? null,
+              packageType: entry.productCode?.includes('?') ? 'daypass' : 'fixed',
+              isActive: true,
+            },
+          });
+          results.push({ ok: true, action: 'updated' as const, shopifySku, provider });
+          continue;
+        }
+
+        const maxRow = await prisma.providerSkuMapping.findFirst({
+          where: { shopifySku },
+          orderBy: { priority: 'desc' },
+          select: { priority: true },
+        });
+
+        await prisma.providerSkuMapping.create({
+          data: {
+            shopifySku,
+            provider,
+            providerCatalogId,
+            providerSku,
+            name: entry.productName ?? null,
+            region: entry.region ?? null,
+            dataAmount: entry.dataAmount ?? null,
+            validity: entry.validity ?? null,
+            packageType: entry.productCode?.includes('?') ? 'daypass' : 'fixed',
+            isActive: true,
+            priority: (maxRow?.priority ?? 0) + 1,
+            priorityLocked: false,
+            mappingLocked: false,
+          },
+        });
+
+        results.push({ ok: true, action: 'created' as const, shopifySku, provider });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push({
+          ok: false,
+          action: 'failed' as const,
+          shopifySku: (item as Record<string, string>).shopifySku,
+          provider: (item as Record<string, string>).provider,
+          error: msg,
+        });
+      }
+    }
+
+    const created = results.filter((r) => r.action === 'created').length;
+    const updated = results.filter((r) => r.action === 'updated').length;
+    const skipped = results.filter((r) => r.action === 'skipped').length;
+    const failed = results.filter((r) => !r.ok).length;
+    app.log.info(
+      `[Admin] Bulk mapped: ${created} created, ${updated} updated, ${skipped} skipped, ${failed} failed`,
+    );
+    return reply.send({ created, updated, skipped, failed, results });
+  });
+
   // SKU Mapping Priority Reorder
   // ---------------------------------------------------------------------------
 
@@ -687,12 +867,15 @@ export default function adminRoutes(
    * GET /admin/shopify-skus
    * Fetch all product variant SKUs from Shopify.
    * Query: unmappedOnly=true — exclude SKUs already in ProviderSkuMapping
+   *        provider=firoam|tgt — when combined with unmappedOnly, only excludes SKUs
+   *          already mapped for that specific provider (not any provider)
    */
   app.get('/shopify-skus', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
-    const query = request.query as { unmappedOnly?: string };
+    const query = request.query as { unmappedOnly?: string; provider?: string };
     const unmappedOnly = query.unmappedOnly === 'true';
+    const providerFilter = query.provider || undefined;
 
     let allVariants: Array<{
       sku: string;
@@ -712,6 +895,7 @@ export default function adminRoutes(
       const mappedSkus = await prisma.providerSkuMapping.findMany({
         select: { shopifySku: true },
         distinct: ['shopifySku'],
+        ...(providerFilter ? { where: { provider: providerFilter } } : {}),
       });
       const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
       const filtered = allVariants.filter((v) => !mappedSet.has(v.sku));
@@ -763,9 +947,12 @@ export default function adminRoutes(
       }
 
       if (body.unmappedOnly !== false) {
+        // When a provider is specified, only exclude SKUs already mapped to that provider.
+        // This lets you add TGT mappings for SKUs that already have FiRoam mappings.
         const mappedSkus = await prisma.providerSkuMapping.findMany({
           select: { shopifySku: true },
           distinct: ['shopifySku'],
+          ...(body.provider ? { where: { provider: body.provider } } : {}),
         });
         const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
         shopifySkus = shopifySkus.filter((v) => !mappedSet.has(v.sku));

@@ -57,7 +57,7 @@ export interface DeliveryDetail extends Delivery {
   esimOrders: EsimOrder[];
 }
 
-export type SkuMappingProvider = 'firoam' | 'tgt';
+export type SkuMappingProvider = string;
 export type SkuMappingPackageType = 'fixed' | 'daypass';
 
 export interface SkuMapping {
@@ -74,8 +74,31 @@ export interface SkuMapping {
   packageType: SkuMappingPackageType | null;
   daysCount: number | null;
   isActive: boolean;
+  priority: number;
+  priorityLocked: boolean;
+  mappingLocked: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ShopifySku {
+  sku: string;
+  variantId: string;
+  productTitle: string;
+  variantTitle: string;
+}
+
+export interface AiMappingDraft {
+  shopifySku: string;
+  catalogId: string;
+  provider: string;
+  productName: string;
+  region: string | null;
+  dataAmount: string | null;
+  validity: string | null;
+  netPrice: number | null;
+  confidence: number;
+  reason: string;
 }
 
 export interface CatalogItem {

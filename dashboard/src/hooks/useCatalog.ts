@@ -3,7 +3,7 @@ import { apiClient } from '@/lib/api';
 import type { CatalogItem, CatalogPage } from '@/lib/types';
 
 interface UseCatalogParams {
-  provider?: 'firoam' | 'tgt';
+  provider?: string;
   search?: string;
   isActive?: boolean;
   limit?: number;
@@ -11,7 +11,7 @@ interface UseCatalogParams {
 }
 
 interface SyncInput {
-  provider: 'firoam' | 'tgt';
+  provider: string;
   pageSize?: number;
   maxPages?: number;
   maxSkus?: number;

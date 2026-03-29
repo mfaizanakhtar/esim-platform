@@ -191,6 +191,53 @@ describe('TGT callback route', () => {
     expect(vi.mocked(finalizeDelivery)).not.toHaveBeenCalled();
   });
 
+  it('skips finalize when qrCode is not yet available', async () => {
+    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue({
+      id: 'delivery-nolpa',
+      shop: 'test.myshopify.com',
+      orderId: 'order-nolpa',
+      orderName: '#3001',
+      lineItemId: 'line-nolpa',
+      variantId: 'var-nolpa',
+      customerEmail: 'nolpa@example.com',
+      vendorReferenceId: 'SE-NOLPA',
+      provider: null,
+      iccidHash: null,
+      topupIccid: null,
+      sku: null,
+      payloadEncrypted: null,
+      accessToken: null,
+      status: 'awaiting_callback',
+      lastError: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const app = Fastify();
+    app.register(tgtCallbackRoutes, { prefix: '/webhook/tgt' });
+
+    const unsigned = {
+      code: '0000',
+      msg: 'success',
+      timestamp: '2026-03-08T00:00:00Z',
+      data: {
+        eventType: 1,
+        businessType: 'ESIM',
+        orderInfo: { orderNo: 'SE-NOLPA' }, // no qrCode
+      },
+    };
+    const sign = createTgtSignature(unsigned, process.env.TGT_CALLBACK_SECRET || '');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/webhook/tgt/callback',
+      payload: { ...unsigned, sign },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(vi.mocked(finalizeDelivery)).not.toHaveBeenCalled();
+  });
+
   it('verifies signature helper compatibility', () => {
     const payload = {
       code: '0000',

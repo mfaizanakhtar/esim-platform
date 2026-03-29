@@ -15,6 +15,9 @@ interface CreateSkuMappingInput {
   daysCount?: number;
   providerConfig?: Record<string, unknown>;
   isActive?: boolean;
+  priority?: number;
+  priorityLocked?: boolean;
+  mappingLocked?: boolean;
 }
 
 interface UpdateSkuMappingInput extends Partial<CreateSkuMappingInput> {
@@ -79,6 +82,55 @@ export function useDeleteSkuMapping() {
   return useMutation({
     mutationFn: (id: string) => apiClient.delete<{ ok: boolean }>(`/sku-mappings/${id}`),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+    },
+  });
+}
+
+export function useReorderMappings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shopifySku, orderedIds }: { shopifySku: string; orderedIds: string[] }) =>
+      apiClient.put<{ ok: boolean }>('/sku-mappings/reorder', { shopifySku, orderedIds }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+    },
+  });
+}
+
+export function useSmartPricing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (shopifySku?: string) =>
+      apiClient.post<{ updated: number; skipped: number; changes: unknown[] }>(
+        '/sku-mappings/smart-pricing',
+        shopifySku ? { shopifySku } : {},
+      ),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+    },
+  });
+}
+
+interface BulkCreateResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  results: Array<{ ok: boolean; action: string; shopifySku?: string; provider?: string; error?: string }>;
+}
+
+export function useBulkCreateMappings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      inputs,
+      forceReplace = false,
+    }: {
+      inputs: CreateSkuMappingInput[];
+      forceReplace?: boolean;
+    }) => apiClient.post<BulkCreateResult>('/sku-mappings/bulk', { mappings: inputs, forceReplace }),
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
     },
   });

@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
+import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { Pagination } from '@/components/Pagination';
 import { RefreshCw } from 'lucide-react';
-
-type Provider = 'firoam' | 'tgt';
 
 const PAGE_SIZE = 25;
 
@@ -17,11 +16,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-interface SyncButtonProps {
-  provider: Provider;
-}
-
-function SyncButton({ provider }: SyncButtonProps) {
+function SyncButton({ provider }: { provider: string }) {
   const syncMutation = useSyncCatalog();
   const [lastResult, setLastResult] = useState<string | null>(null);
 
@@ -31,7 +26,7 @@ function SyncButton({ provider }: SyncButtonProps) {
       {
         onSuccess: (data) => {
           const count = data.processedPackages ?? data.processed ?? 0;
-          setLastResult(`${provider === 'firoam' ? 'FiRoam' : 'TGT'} synced: ${count} packages`);
+          setLastResult(`${providerLabel(provider)} synced: ${count} packages`);
         },
         onError: (err) => {
           setLastResult(`Sync failed: ${(err as Error).message}`);
@@ -55,11 +50,7 @@ function SyncButton({ provider }: SyncButtonProps) {
   );
 }
 
-interface CatalogTabProps {
-  provider: Provider;
-}
-
-function CatalogTab({ provider }: CatalogTabProps) {
+function CatalogTab({ provider }: { provider: string }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 300);
@@ -77,8 +68,6 @@ function CatalogTab({ provider }: CatalogTabProps) {
     [setSearchParams],
   );
 
-  // Reset to page 0 when search changes, but not on initial mount
-  // (preserves bookmarked ?page=N when navigating back)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -171,7 +160,31 @@ function CatalogTab({ provider }: CatalogTabProps) {
 }
 
 export function Catalog() {
-  const [activeTab, setActiveTab] = useState<Provider>('firoam');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { data: providersData } = useProviders();
+  const providers = providersData?.providers ?? [];
+
+  const tabParam = searchParams.get('tab') ?? '';
+  const activeTab = providers.includes(tabParam) ? tabParam : (providers[0] ?? '');
+
+  // Set default tab in URL once providers load
+  useEffect(() => {
+    if (providers.length > 0 && !searchParams.get('tab')) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.set('tab', providers[0]);
+        return next;
+      }, { replace: true });
+    }
+  }, [providers, searchParams, setSearchParams]);
+
+  function setActiveTab(provider: string) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', provider);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -179,7 +192,7 @@ export function Catalog() {
 
       <div className="border-b">
         <div className="flex gap-0">
-          {(['firoam', 'tgt'] as Provider[]).map((provider) => (
+          {providers.map((provider) => (
             <button
               key={provider}
               onClick={() => setActiveTab(provider)}
@@ -189,13 +202,14 @@ export function Catalog() {
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               }`}
             >
-              {provider === 'firoam' ? 'FiRoam' : 'TGT'}
+              {providerLabel(provider)}
             </button>
           ))}
         </div>
       </div>
 
-      <CatalogTab provider={activeTab} />
+      {/* key={activeTab} forces CatalogTab to remount when provider changes, resetting page/search state */}
+      {activeTab && <CatalogTab key={activeTab} provider={activeTab} />}
     </div>
   );
 }

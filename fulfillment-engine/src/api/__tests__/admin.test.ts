@@ -135,12 +135,14 @@ const prismaCatalog = (
   prisma as unknown as {
     providerSkuCatalog: {
       findMany: ReturnType<typeof vi.fn>;
+      findUnique: ReturnType<typeof vi.fn>;
       count: ReturnType<typeof vi.fn>;
       upsert: ReturnType<typeof vi.fn>;
     };
   }
 ).providerSkuCatalog as {
   findMany: ReturnType<typeof vi.fn>;
+  findUnique: ReturnType<typeof vi.fn>;
   count: ReturnType<typeof vi.fn>;
   upsert: ReturnType<typeof vi.fn>;
 };
@@ -591,6 +593,24 @@ describe('Admin Routes', () => {
       });
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true, messageId: 'msg-abc-123' });
+    });
+  });
+
+  // ── GET /providers ──────────────────────────────────────────────────────
+
+  describe('GET /providers', () => {
+    it('returns registered provider names from registry', async () => {
+      const res = await app.inject({ method: 'GET', url: '/providers', headers: AUTH });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ providers: string[] }>();
+      expect(Array.isArray(body.providers)).toBe(true);
+      expect(body.providers).toContain('firoam');
+      expect(body.providers).toContain('tgt');
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({ method: 'GET', url: '/providers' });
+      expect(res.statusCode).toBe(401);
     });
   });
 
@@ -1659,17 +1679,18 @@ describe('Admin Routes', () => {
 
   describe('POST /sku-mappings/smart-pricing', () => {
     it('returns ok with updated/skipped counts', async () => {
-      // Two unlocked mappings with catalog prices — should be reordered
+      // m1 is currently priority 1 (higher priority) but is MORE expensive —
+      // smart pricing should reorder so the cheaper m2 becomes priority 1
       const m1 = makeMapping({
         id: 'map-001',
         provider: 'firoam',
-        priority: 2,
+        priority: 1,
         providerCatalogId: 'cat-1',
       });
       const m2 = makeMapping({
         id: 'map-002',
         provider: 'tgt',
-        priority: 1,
+        priority: 2,
         providerCatalogId: 'cat-2',
       });
       vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
@@ -1855,6 +1876,299 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       // Shopify getAllVariants should NOT have been called
       expect(adminMocks.mockGetAllVariants).not.toHaveBeenCalled();
+    });
+
+    it('returns empty drafts when catalog has no entries', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().drafts).toHaveLength(0);
+    });
+
+    it('skips batch gracefully when OpenAI throws', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockRejectedValue(new Error('OpenAI rate limit'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      // Should still succeed — batch errors are swallowed and return empty drafts
+      expect(res.statusCode).toBe(200);
+      expect(res.json().drafts).toHaveLength(0);
+    });
+
+    it('returns 502 when Shopify fetch fails', async () => {
+      adminMocks.mockGetAllVariants.mockRejectedValue(new Error('Shopify timeout'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toBe('shopify_unavailable');
+    });
+  });
+
+  // ── POST /sku-mappings/bulk ───────────────────────────────────────────────
+
+  describe('POST /sku-mappings/bulk', () => {
+    const tgtCatalogEntry = makeCatalogItem({
+      id: 'cat-tgt-1',
+      provider: 'tgt',
+      productCode: 'A-002-ES-AU-T-30D',
+      productName: 'Australia 3GB',
+    });
+
+    it('creates multiple mappings and returns per-item results', async () => {
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(tgtCatalogEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.create).mockResolvedValue(makeMapping());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-tgt-1' },
+            { shopifySku: 'ESIM-AU-5GB', provider: 'tgt', providerCatalogId: 'cat-tgt-1' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.created).toBe(2);
+      expect(body.failed).toBe(0);
+    });
+
+    it('returns 400 when mappings array is missing or empty', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('skips existing mapping idempotently', async () => {
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(tgtCatalogEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(makeMapping());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-tgt-1' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; skipped: number; failed: number }>();
+      expect(body.created).toBe(0);
+      expect(body.skipped).toBe(1);
+      expect(body.failed).toBe(0);
+      expect(prisma.providerSkuMapping.create).not.toHaveBeenCalled();
+    });
+
+    it('records per-item failure when catalog entry not found', async () => {
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-missing' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.created).toBe(0);
+      expect(body.failed).toBe(1);
+    });
+
+    it('records per-item failure when required fields are missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [{ shopifySku: 'ESIM-AU-3GB' }], // missing provider + catalogId
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.failed).toBe(1);
+    });
+
+    it('derives providerSku from firoam rawPayload', async () => {
+      const firoamCatalogEntry = makeCatalogItem({
+        id: 'cat-firoam-1',
+        provider: 'firoam',
+        productCode: '826-0-?-1-G-D',
+        rawPayload: { skuId: '120', priceid: '14094' } as unknown,
+      });
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(firoamCatalogEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.create).mockResolvedValue(makeMapping());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-US-10GB', provider: 'firoam', providerCatalogId: 'cat-firoam-1' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number }>();
+      expect(body.created).toBe(1);
+    });
+
+    it('records failure when firoam catalog rawPayload is missing required fields', async () => {
+      const badFiroamEntry = makeCatalogItem({
+        id: 'cat-firoam-bad',
+        provider: 'firoam',
+        productCode: '826-0',
+        rawPayload: {} as unknown,
+      });
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(badFiroamEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-US-10GB', provider: 'firoam', providerCatalogId: 'cat-firoam-bad' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.failed).toBe(1);
+    });
+
+    it('replaces existing mapping when forceReplace=true', async () => {
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(tgtCatalogEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(makeMapping());
+      vi.mocked(prisma.providerSkuMapping.update).mockResolvedValue(makeMapping());
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          forceReplace: true,
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-tgt-1' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; updated: number; failed: number }>();
+      expect(body.created).toBe(0);
+      expect(body.updated).toBe(1);
+      expect(body.failed).toBe(0);
+      expect(prisma.providerSkuMapping.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { shopifySku_provider: { shopifySku: 'ESIM-AU-3GB', provider: 'tgt' } },
+        }),
+      );
+    });
+
+    it('records failure when create throws a non-Error value', async () => {
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(tgtCatalogEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(null);
+      vi.mocked(prisma.providerSkuMapping.create).mockRejectedValue('db connection lost');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-tgt-1' },
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.failed).toBe(1);
+      expect(body.created).toBe(0);
+    });
+
+    it('records failure when catalog provider does not match requested provider', async () => {
+      const wrongProviderEntry = makeCatalogItem({
+        id: 'cat-firoam-wrong',
+        provider: 'firoam', // catalog is firoam
+      });
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(wrongProviderEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-firoam-wrong' }, // mismatch
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.failed).toBe(1);
+      expect(body.created).toBe(0);
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({ method: 'POST', url: '/sku-mappings/bulk', payload: {} });
+      expect(res.statusCode).toBe(401);
     });
   });
 });
