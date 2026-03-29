@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
