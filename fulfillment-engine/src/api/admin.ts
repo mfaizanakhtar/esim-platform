@@ -1073,13 +1073,12 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       } catch (err) {
         logger.error({ err, batch: skuList }, 'OpenAI batch failed');
         const msg = err instanceof Error ? err.message : String(err);
-        // Fatal errors: quota exceeded (429) or auth failure (401) — no point continuing batches
-        const isFatal =
-          msg.includes('insufficient_quota') ||
-          msg.includes('429') ||
-          msg.includes('401') ||
-          msg.includes('Unauthorized') ||
-          msg.includes('invalid_api_key');
+        // Use SDK typed errors when available (status 401/429 = fatal — no point continuing batches)
+        const apiStatus =
+          err != null && typeof err === 'object' && 'status' in err
+            ? (err as { status?: number }).status
+            : undefined;
+        const isFatal = apiStatus === 401 || apiStatus === 429;
         openAiError = msg;
         if (isFatal) break;
       }
