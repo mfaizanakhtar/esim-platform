@@ -624,6 +624,17 @@ export default function adminRoutes(
           continue;
         }
 
+        if (entry.provider !== provider) {
+          results.push({
+            ok: false,
+            action: 'failed' as const,
+            shopifySku,
+            provider,
+            error: `Catalog entry provider '${entry.provider}' does not match requested provider '${provider}'`,
+          });
+          continue;
+        }
+
         // Derive providerSku from catalog
         let providerSku: string;
         if (entry.provider === 'firoam') {

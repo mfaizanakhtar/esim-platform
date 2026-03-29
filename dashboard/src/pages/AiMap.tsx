@@ -63,7 +63,7 @@ export function AiMap() {
   // Steps: configure | running | review | done
   const [step, setStep] = useState<'configure' | 'running' | 'review' | 'done'>('configure');
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
-  const [bulkResult, setBulkResult] = useState<{ created: number; updated: number; skipped: number } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ created: number; updated: number; skipped: number; failed: number } | null>(null);
 
   const aiMapMutation = useMutation({
     mutationFn: () =>
@@ -115,8 +115,16 @@ export function AiMap() {
       { inputs, forceReplace },
       {
         onSuccess: (result) => {
-          setBulkResult({ created: result.created, updated: result.updated ?? 0, skipped: result.skipped ?? 0 });
-          setStep('done');
+          setBulkResult({
+            created: result.created,
+            updated: result.updated ?? 0,
+            skipped: result.skipped ?? 0,
+            failed: result.failed,
+          });
+          // Only advance if fully successful; keep review open on partial failure
+          if (result.failed === 0) {
+            setStep('done');
+          }
         },
       },
     );
@@ -362,6 +370,13 @@ export function AiMap() {
                 : `Create ${selectedCount} mapping${selectedCount !== 1 ? 's' : ''}`}
             </button>
           </div>
+
+          {bulkResult && bulkResult.failed > 0 && (
+            <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              {bulkResult.created + bulkResult.updated} succeeded, {bulkResult.failed} failed. Review the
+              remaining rows above and try again.
+            </p>
+          )}
 
           {bulkCreate.isError && (
             <p className="text-sm text-red-600">

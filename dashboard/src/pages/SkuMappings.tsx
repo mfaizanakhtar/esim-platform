@@ -72,7 +72,12 @@ export function SkuMappings() {
   const providers = providersData?.providers ?? [];
 
   const providerParam = searchParams.get('provider');
-  const provider = providers.includes(providerParam ?? '') ? (providerParam ?? '') : '';
+  // Keep the URL param while providers are still loading to avoid a spurious unfiltered request
+  const provider = !providersData
+    ? (providerParam ?? '')
+    : providers.includes(providerParam ?? '')
+      ? (providerParam ?? '')
+      : '';
 
   const statusParam = searchParams.get('status');
   const status: '' | 'active' | 'inactive' =

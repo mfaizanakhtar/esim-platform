@@ -93,9 +93,9 @@ export interface AiMappingDraft {
   catalogId: string;
   provider: string;
   productName: string;
-  region: string;
-  dataAmount: string;
-  validity: string;
+  region: string | null;
+  dataAmount: string | null;
+  validity: string | null;
   netPrice: number | null;
   confidence: number;
   reason: string;
