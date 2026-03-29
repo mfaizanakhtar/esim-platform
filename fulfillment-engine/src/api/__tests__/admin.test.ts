@@ -93,9 +93,17 @@ vi.mock('~/shopify/client', () => ({
 vi.mock('openai', () => {
   class MockAPIError extends Error {
     status: number;
-    constructor(status: number, _error: unknown, message: string, _headers: unknown) {
+    code: string | null;
+    constructor(
+      status: number,
+      _error: unknown,
+      message: string,
+      _headers: unknown,
+      code: string | null = null,
+    ) {
       super(message);
       this.status = status;
+      this.code = code;
     }
   }
   return {
@@ -1930,15 +1938,21 @@ describe('Admin Routes', () => {
       expect(res.json().error).toMatch(/OpenAI error/);
     });
 
-    it('returns 502 immediately on fatal OpenAI quota error', async () => {
-      adminMocks.mockGetAllVariants.mockResolvedValue([
-        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
-      ]);
+    it('short-circuits immediately on fatal OpenAI quota error (429)', async () => {
+      // Use >50 SKUs so there would be 2 batches if not short-circuited
+      const manySkus = Array.from({ length: 55 }, (_, i) => ({
+        sku: `ESIM-JP-${i}GB`,
+        variantId: `gid://${i}`,
+        productTitle: 'Japan',
+        variantTitle: `${i}GB`,
+      }));
+      adminMocks.mockGetAllVariants.mockResolvedValue(manySkus);
       vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
       vi.mocked(prismaCatalog.findMany).mockResolvedValue([
         makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
       ]);
-      adminMocks.mockOpenAiCreate.mockRejectedValue(
+      // First batch throws a fatal quota error; a second call should never happen
+      adminMocks.mockOpenAiCreate.mockRejectedValueOnce(
         new OpenAI.APIError(429, undefined, 'You exceeded your current quota', undefined),
       );
 
@@ -1951,6 +1965,8 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(502);
       expect(res.json().error).toMatch(/OpenAI error.*quota/);
+      // Handler must have broken after the first batch — not called a second time
+      expect(adminMocks.mockOpenAiCreate).toHaveBeenCalledTimes(1);
     });
 
     it('returns 502 when Shopify fetch fails', async () => {
