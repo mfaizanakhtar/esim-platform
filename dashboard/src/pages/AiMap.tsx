@@ -82,7 +82,7 @@ export function AiMap() {
     const selected = drafts.filter((d) => d.selected);
     const inputs = selected.map((d) => ({
       shopifySku: d.shopifySku,
-      provider: providerFilter || providers[0] || 'firoam',
+      provider: d.provider, // each draft carries the provider from the matched catalog entry
       providerCatalogId: d.catalogId,
       name: d.productName,
       region: d.region,
@@ -91,8 +91,8 @@ export function AiMap() {
       isActive: true,
     }));
     bulkCreate.mutate(inputs, {
-      onSuccess: (results) => {
-        setCreatedCount(results.length);
+      onSuccess: (result) => {
+        setCreatedCount(result.created);
         setStep('done');
       },
     });

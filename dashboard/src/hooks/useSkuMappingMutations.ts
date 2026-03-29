@@ -112,17 +112,17 @@ export function useSmartPricing() {
   });
 }
 
+interface BulkCreateResult {
+  created: number;
+  failed: number;
+  results: Array<{ ok: boolean; shopifySku?: string; provider?: string; error?: string }>;
+}
+
 export function useBulkCreateMappings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (inputs: CreateSkuMappingInput[]) => {
-      const results: SkuMapping[] = [];
-      for (const input of inputs) {
-        const result = await apiClient.post<SkuMapping>('/sku-mappings', input);
-        results.push(result);
-      }
-      return results;
-    },
+    mutationFn: (inputs: CreateSkuMappingInput[]) =>
+      apiClient.post<BulkCreateResult>('/sku-mappings/bulk', { mappings: inputs }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
     },

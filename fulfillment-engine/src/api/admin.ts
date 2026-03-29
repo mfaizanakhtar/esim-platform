@@ -564,6 +564,115 @@ export default function adminRoutes(
   });
 
   // ---------------------------------------------------------------------------
+  // SKU Mapping Bulk Create
+  // ---------------------------------------------------------------------------
+
+  /**
+   * POST /admin/sku-mappings/bulk
+   * Create multiple SKU mappings in a single request (from AI auto-map approval).
+   * Processes each item and returns per-item results — partial success is possible.
+   * Body: { mappings: CreateSkuMappingInput[] }
+   */
+  app.post('/sku-mappings/bulk', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = (request.body ?? {}) as { mappings?: unknown[] };
+    if (!Array.isArray(body.mappings) || body.mappings.length === 0) {
+      return reply.code(400).send({ error: 'mappings array is required' });
+    }
+
+    const results: Array<{ ok: boolean; shopifySku?: string; provider?: string; error?: string }> =
+      [];
+
+    for (const item of body.mappings as Array<Record<string, unknown>>) {
+      try {
+        // Reuse the same resolution logic as the single create endpoint
+        const { shopifySku, provider, providerCatalogId } = item as {
+          shopifySku?: string;
+          provider?: string;
+          providerCatalogId?: string;
+        };
+
+        if (!shopifySku || !provider || !providerCatalogId) {
+          results.push({ ok: false, shopifySku, provider, error: 'Missing required fields' });
+          continue;
+        }
+
+        const entry = await providerSkuCatalog.findUnique({ where: { id: providerCatalogId } });
+        if (!entry) {
+          results.push({ ok: false, shopifySku, provider, error: 'Catalog entry not found' });
+          continue;
+        }
+
+        // Derive providerSku from catalog
+        let providerSku: string;
+        if (entry.provider === 'firoam') {
+          const raw = (entry.rawPayload ?? {}) as { skuId?: unknown; priceid?: unknown };
+          if (raw.skuId === undefined || raw.priceid === undefined) {
+            results.push({
+              ok: false,
+              shopifySku,
+              provider,
+              error: 'Catalog entry rawPayload missing firoam fields',
+            });
+            continue;
+          }
+          providerSku = `${String(raw.skuId)}:${entry.productCode}:${String(raw.priceid)}`;
+        } else {
+          providerSku = entry.productCode;
+        }
+
+        // Skip duplicates silently (idempotent)
+        const existing = await prisma.providerSkuMapping.findUnique({
+          where: { shopifySku_provider: { shopifySku, provider } },
+        });
+        if (existing) {
+          results.push({ ok: true, shopifySku, provider });
+          continue;
+        }
+
+        const maxRow = await prisma.providerSkuMapping.findFirst({
+          where: { shopifySku },
+          orderBy: { priority: 'desc' },
+          select: { priority: true },
+        });
+
+        await prisma.providerSkuMapping.create({
+          data: {
+            shopifySku,
+            provider,
+            providerCatalogId,
+            providerSku,
+            name: entry.productName ?? null,
+            region: entry.region ?? null,
+            dataAmount: entry.dataAmount ?? null,
+            validity: entry.validity ?? null,
+            packageType: entry.productCode?.includes('?') ? 'daypass' : 'fixed',
+            isActive: true,
+            priority: (maxRow?.priority ?? 0) + 1,
+            priorityLocked: false,
+            mappingLocked: false,
+          },
+        });
+
+        results.push({ ok: true, shopifySku, provider });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push({
+          ok: false,
+          shopifySku: (item as Record<string, string>).shopifySku,
+          provider: (item as Record<string, string>).provider,
+          error: msg,
+        });
+      }
+    }
+
+    const created = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok).length;
+    app.log.info(`[Admin] Bulk created ${created} SKU mappings, ${failed} failed`);
+    return reply.send({ created, failed, results });
+  });
+
   // SKU Mapping Priority Reorder
   // ---------------------------------------------------------------------------
 

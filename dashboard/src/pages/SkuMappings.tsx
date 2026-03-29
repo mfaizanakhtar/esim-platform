@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useSkuMappings } from '@/hooks/useSkuMappings';
 import {
@@ -170,6 +170,10 @@ export function SkuMappings() {
     updateMutation.mutate({ id: mapping.id, priorityLocked: !mapping.priorityLocked });
   }
 
+  function toggleMappingLock(mapping: SkuMapping) {
+    updateMutation.mutate({ id: mapping.id, mappingLocked: !mapping.mappingLocked });
+  }
+
   function handleSmartPricing() {
     setSmartPricingResult(null);
     smartPricingMutation.mutate(undefined, {
@@ -276,9 +280,9 @@ export function SkuMappings() {
               ))}
 
             {Array.from(grouped.entries()).map(([sku, group]) => (
-              <>
+              <Fragment key={sku}>
                 {/* SKU group header */}
-                <tr key={`header-${sku}`} className="bg-muted/30">
+                <tr className="bg-muted/30">
                   <td colSpan={5} className="px-4 py-2">
                     <span className="font-mono text-xs font-semibold text-foreground">{sku}</span>
                     <span className="ml-2 text-xs text-muted-foreground">
@@ -352,7 +356,7 @@ export function SkuMappings() {
 
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-1">
-                        {/* Priority lock toggle */}
+                        {/* Priority lock toggle — always available */}
                         <button
                           onClick={() => togglePriorityLock(mapping)}
                           className={`p-1 rounded hover:bg-muted transition-colors ${
@@ -367,13 +371,28 @@ export function SkuMappings() {
                           )}
                         </button>
 
+                        {/* Mapping lock toggle — always available (only way to unlock) */}
+                        <button
+                          onClick={() => toggleMappingLock(mapping)}
+                          className={`p-1 rounded hover:bg-muted transition-colors ${
+                            mapping.mappingLocked ? 'text-red-500' : 'text-muted-foreground'
+                          }`}
+                          title={mapping.mappingLocked ? 'Unlock mapping (allow edits)' : 'Lock mapping (prevent edits)'}
+                        >
+                          {mapping.mappingLocked ? (
+                            <Lock className="h-4 w-4" />
+                          ) : (
+                            <Unlock className="h-4 w-4" />
+                          )}
+                        </button>
+
                         <button
                           onClick={() => openEdit(mapping)}
                           disabled={mapping.mappingLocked}
                           className={`p-1 rounded hover:bg-muted transition-colors ${
                             mapping.mappingLocked ? 'opacity-40 cursor-not-allowed' : ''
                           }`}
-                          title={mapping.mappingLocked ? 'Mapping is locked' : 'Edit'}
+                          title={mapping.mappingLocked ? 'Unlock mapping to edit' : 'Edit'}
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
@@ -384,7 +403,7 @@ export function SkuMappings() {
                           className={`p-1 rounded hover:bg-muted text-red-500 transition-colors ${
                             mapping.mappingLocked ? 'opacity-40 cursor-not-allowed' : ''
                           }`}
-                          title={mapping.mappingLocked ? 'Mapping is locked' : 'Deactivate'}
+                          title={mapping.mappingLocked ? 'Unlock mapping to deactivate' : 'Deactivate'}
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>
@@ -392,7 +411,7 @@ export function SkuMappings() {
                     </td>
                   </tr>
                 ))}
-              </>
+              </Fragment>
             ))}
 
             {data?.mappings.length === 0 && (

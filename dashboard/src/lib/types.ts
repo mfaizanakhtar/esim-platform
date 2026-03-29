@@ -91,6 +91,7 @@ export interface ShopifySku {
 export interface AiMappingDraft {
   shopifySku: string;
   catalogId: string;
+  provider: string;
   productName: string;
   region: string;
   dataAmount: string;
