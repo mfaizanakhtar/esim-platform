@@ -90,20 +90,34 @@ vi.mock('~/shopify/client', () => ({
   })),
 }));
 
-vi.mock('openai', () => ({
-  default: class MockOpenAI {
-    chat = {
-      completions: {
-        create: adminMocks.mockOpenAiCreate,
+vi.mock('openai', () => {
+  class MockAPIError extends Error {
+    status: number;
+    code: string | null = null;
+    constructor(status: number, _error: unknown, message: string, _headers: unknown) {
+      super(message);
+      this.status = status;
+    }
+  }
+  return {
+    default: Object.assign(
+      class MockOpenAI {
+        chat = {
+          completions: {
+            create: adminMocks.mockOpenAiCreate,
+          },
+        };
       },
-    };
-  },
-}));
+      { APIError: MockAPIError },
+    ),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
+import OpenAI from 'openai';
 import adminRoutes from '~/api/admin';
 import prisma from '~/db/prisma';
 
@@ -1896,7 +1910,7 @@ describe('Admin Routes', () => {
       expect(res.json().drafts).toHaveLength(0);
     });
 
-    it('skips batch gracefully when OpenAI throws', async () => {
+    it('returns 502 when OpenAI throws and no drafts were produced', async () => {
       adminMocks.mockGetAllVariants.mockResolvedValue([
         { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
       ]);
@@ -1913,9 +1927,69 @@ describe('Admin Routes', () => {
         payload: { unmappedOnly: false },
       });
 
-      // Should still succeed — batch errors are swallowed and return empty drafts
-      expect(res.statusCode).toBe(200);
-      expect(res.json().drafts).toHaveLength(0);
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toMatch(/OpenAI error/);
+    });
+
+    it('short-circuits immediately on fatal OpenAI quota error (429)', async () => {
+      // Use >50 SKUs so there would be 2 batches if not short-circuited
+      const manySkus = Array.from({ length: 55 }, (_, i) => ({
+        sku: `ESIM-JP-${i}GB`,
+        variantId: `gid://${i}`,
+        productTitle: 'Japan',
+        variantTitle: `${i}GB`,
+      }));
+      adminMocks.mockGetAllVariants.mockResolvedValue(manySkus);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      // First batch throws a fatal quota error; a second call should never happen
+      adminMocks.mockOpenAiCreate.mockRejectedValueOnce(
+        new OpenAI.APIError(429, undefined, 'You exceeded your current quota', undefined),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toMatch(/OpenAI error.*quota/);
+      // Handler must have broken after the first batch — not called a second time
+      expect(adminMocks.mockOpenAiCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it('short-circuits immediately on fatal error identified by error code', async () => {
+      // >50 SKUs → 2 batches; error code path (status ≠ 401/429) must still be fatal
+      const manySkus = Array.from({ length: 55 }, (_, i) => ({
+        sku: `ESIM-JP-${i}GB`,
+        variantId: `gid://${i}`,
+        productTitle: 'Japan',
+        variantTitle: `${i}GB`,
+      }));
+      adminMocks.mockGetAllVariants.mockResolvedValue(manySkus);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      const codeErr = Object.assign(
+        new OpenAI.APIError(200, undefined, 'insufficient quota', undefined),
+        { code: 'insufficient_quota' },
+      );
+      adminMocks.mockOpenAiCreate.mockRejectedValueOnce(codeErr);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(502);
+      expect(adminMocks.mockOpenAiCreate).toHaveBeenCalledTimes(1);
     });
 
     it('returns 502 when Shopify fetch fails', async () => {
