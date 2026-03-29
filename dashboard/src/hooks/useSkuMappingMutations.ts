@@ -106,7 +106,7 @@ export function useSmartPricing() {
         '/sku-mappings/smart-pricing',
         shopifySku ? { shopifySku } : {},
       ),
-    onSuccess: () => {
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
     },
   });
@@ -128,7 +128,7 @@ export function useBulkCreateMappings() {
       inputs: CreateSkuMappingInput[];
       forceReplace?: boolean;
     }) => apiClient.post<BulkCreateResult>('/sku-mappings/bulk', { mappings: inputs, forceReplace }),
-    onSuccess: () => {
+    onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
     },
   });

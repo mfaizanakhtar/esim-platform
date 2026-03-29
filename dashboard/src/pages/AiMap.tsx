@@ -50,7 +50,8 @@ export function AiMap() {
     mutationFn: () =>
       apiClient.post<AiMapResponse>('/sku-mappings/ai-map', {
         provider: providerFilter || undefined,
-        unmappedOnly,
+        // forceReplace implies we want to see all SKUs, including already-mapped ones
+        unmappedOnly: forceReplace ? false : unmappedOnly,
       }),
     onSuccess: (data) => {
       const rows: DraftRow[] = data.drafts.map((d) => ({
@@ -262,6 +263,7 @@ export function AiMap() {
                 <tr>
                   <th className="px-3 py-2 w-8"></th>
                   <th className="text-left px-3 py-2 font-medium">Shopify SKU</th>
+                  <th className="text-left px-3 py-2 font-medium">Provider</th>
                   <th className="text-left px-3 py-2 font-medium">Matched Product</th>
                   <th className="text-left px-3 py-2 font-medium">Region</th>
                   <th className="text-left px-3 py-2 font-medium">Data</th>
@@ -275,12 +277,16 @@ export function AiMap() {
                 {drafts.map((draft, idx) => (
                   <tr
                     key={idx}
+                    role="checkbox"
+                    aria-checked={draft.selected}
+                    tabIndex={0}
                     className={`transition-colors cursor-pointer ${
                       draft.selected ? 'bg-primary/5' : 'hover:bg-muted/20'
                     }`}
                     onClick={() => toggleRow(idx)}
+                    onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleRow(idx); } }}
                   >
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2" aria-hidden="true">
                       {draft.selected ? (
                         <CheckSquare className="h-4 w-4 text-primary" />
                       ) : (
@@ -288,6 +294,7 @@ export function AiMap() {
                       )}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs">{draft.shopifySku}</td>
+                    <td className="px-3 py-2 text-xs capitalize">{draft.provider}</td>
                     <td className="px-3 py-2 max-w-xs truncate" title={draft.productName}>
                       {draft.productName}
                     </td>
@@ -310,7 +317,7 @@ export function AiMap() {
                 ))}
                 {drafts.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                    <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
                       No suggestions returned. All SKUs may already be mapped.
                     </td>
                   </tr>

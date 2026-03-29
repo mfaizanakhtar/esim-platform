@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 
-const PAGE_SIZE = 500; // load all — grouped display doesn't use pagination
+const PAGE_SIZE = 10000; // load all — grouped display doesn't paginate
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -150,9 +150,14 @@ export function SkuMappings() {
     deleteMutation.mutate(id, { onSuccess: () => setDeleteConfirm(null) });
   }
 
+  function canMove(group: SkuMapping[], idxA: number, idxB: number): boolean {
+    return !group[idxA].priorityLocked && !group[idxA].mappingLocked &&
+           !group[idxB].priorityLocked && !group[idxB].mappingLocked;
+  }
+
   function moveUp(sku: string, index: number) {
     const group = grouped.get(sku);
-    if (!group || index === 0) return;
+    if (!group || index === 0 || !canMove(group, index, index - 1)) return;
     const reordered = [...group];
     [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
     reorderMutation.mutate({ shopifySku: sku, orderedIds: reordered.map((m) => m.id) });
@@ -160,7 +165,7 @@ export function SkuMappings() {
 
   function moveDown(sku: string, index: number) {
     const group = grouped.get(sku);
-    if (!group || index === group.length - 1) return;
+    if (!group || index === group.length - 1 || !canMove(group, index, index + 1)) return;
     const reordered = [...group];
     [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
     reorderMutation.mutate({ shopifySku: sku, orderedIds: reordered.map((m) => m.id) });
@@ -299,18 +304,18 @@ export function SkuMappings() {
                       <div className="flex flex-col items-center gap-0.5">
                         <button
                           onClick={() => moveUp(sku, idx)}
-                          disabled={idx === 0 || reorderMutation.isPending}
+                          disabled={idx === 0 || reorderMutation.isPending || (idx > 0 && !canMove(group, idx, idx - 1))}
                           className="p-0.5 rounded hover:bg-muted disabled:opacity-20 transition-colors"
-                          title="Move up (higher priority)"
+                          title={idx > 0 && !canMove(group, idx, idx - 1) ? 'Cannot reorder locked mappings' : 'Move up (higher priority)'}
                         >
                           <ChevronUp className="h-3 w-3" />
                         </button>
                         <span className="text-xs text-muted-foreground tabular-nums">{mapping.priority}</span>
                         <button
                           onClick={() => moveDown(sku, idx)}
-                          disabled={idx === group.length - 1 || reorderMutation.isPending}
+                          disabled={idx === group.length - 1 || reorderMutation.isPending || (idx < group.length - 1 && !canMove(group, idx, idx + 1))}
                           className="p-0.5 rounded hover:bg-muted disabled:opacity-20 transition-colors"
-                          title="Move down (lower priority)"
+                          title={idx < group.length - 1 && !canMove(group, idx, idx + 1) ? 'Cannot reorder locked mappings' : 'Move down (lower priority)'}
                         >
                           <ChevronDown className="h-3 w-3" />
                         </button>
