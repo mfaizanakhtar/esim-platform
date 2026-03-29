@@ -106,9 +106,9 @@ export function AiMap() {
       provider: d.provider, // each draft carries the provider from the matched catalog entry
       providerCatalogId: d.catalogId,
       name: d.productName,
-      region: d.region,
-      dataAmount: d.dataAmount,
-      validity: d.validity,
+      region: d.region ?? undefined,
+      dataAmount: d.dataAmount ?? undefined,
+      validity: d.validity ?? undefined,
       isActive: true,
     }));
     bulkCreate.mutate(
