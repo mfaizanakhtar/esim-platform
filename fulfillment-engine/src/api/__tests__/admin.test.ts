@@ -1896,7 +1896,7 @@ describe('Admin Routes', () => {
       expect(res.json().drafts).toHaveLength(0);
     });
 
-    it('skips batch gracefully when OpenAI throws', async () => {
+    it('returns 502 when OpenAI throws and no drafts were produced', async () => {
       adminMocks.mockGetAllVariants.mockResolvedValue([
         { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
       ]);
@@ -1913,9 +1913,31 @@ describe('Admin Routes', () => {
         payload: { unmappedOnly: false },
       });
 
-      // Should still succeed — batch errors are swallowed and return empty drafts
-      expect(res.statusCode).toBe(200);
-      expect(res.json().drafts).toHaveLength(0);
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toMatch(/OpenAI error/);
+    });
+
+    it('returns 502 immediately on fatal OpenAI quota error', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockRejectedValue(
+        new Error('429 You exceeded your current quota, insufficient_quota'),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toMatch(/insufficient_quota/);
     });
 
     it('returns 502 when Shopify fetch fails', async () => {
