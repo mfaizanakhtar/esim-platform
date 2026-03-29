@@ -1073,11 +1073,8 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       } catch (err) {
         logger.error({ err, batch: skuList }, 'OpenAI batch failed');
         const msg = err instanceof Error ? err.message : String(err);
-        // Use SDK typed errors when available (status 401/429 = fatal — no point continuing batches)
-        const apiStatus =
-          err != null && typeof err === 'object' && 'status' in err
-            ? (err as { status?: number }).status
-            : undefined;
+        // Use SDK typed errors: status 401 (auth) / 429 (quota) are fatal — no point continuing
+        const apiStatus = err instanceof OpenAI.APIError ? err.status : undefined;
         const isFatal = apiStatus === 401 || apiStatus === 429;
         openAiError = msg;
         if (isFatal) break;

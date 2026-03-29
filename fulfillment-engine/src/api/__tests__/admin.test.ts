@@ -90,20 +90,33 @@ vi.mock('~/shopify/client', () => ({
   })),
 }));
 
-vi.mock('openai', () => ({
-  default: class MockOpenAI {
-    chat = {
-      completions: {
-        create: adminMocks.mockOpenAiCreate,
+vi.mock('openai', () => {
+  class MockAPIError extends Error {
+    status: number;
+    constructor(status: number, _error: unknown, message: string, _headers: unknown) {
+      super(message);
+      this.status = status;
+    }
+  }
+  return {
+    default: Object.assign(
+      class MockOpenAI {
+        chat = {
+          completions: {
+            create: adminMocks.mockOpenAiCreate,
+          },
+        };
       },
-    };
-  },
-}));
+      { APIError: MockAPIError },
+    ),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
 
+import OpenAI from 'openai';
 import adminRoutes from '~/api/admin';
 import prisma from '~/db/prisma';
 
@@ -1926,7 +1939,7 @@ describe('Admin Routes', () => {
         makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
       ]);
       adminMocks.mockOpenAiCreate.mockRejectedValue(
-        new Error('429 You exceeded your current quota, insufficient_quota'),
+        new OpenAI.APIError(429, undefined, 'You exceeded your current quota', undefined),
       );
 
       const res = await app.inject({
@@ -1937,7 +1950,7 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(502);
-      expect(res.json().error).toMatch(/insufficient_quota/);
+      expect(res.json().error).toMatch(/OpenAI error.*quota/);
     });
 
     it('returns 502 when Shopify fetch fails', async () => {
