@@ -2141,6 +2141,31 @@ describe('Admin Routes', () => {
       expect(body.created).toBe(0);
     });
 
+    it('records failure when catalog provider does not match requested provider', async () => {
+      const wrongProviderEntry = makeCatalogItem({
+        id: 'cat-firoam-wrong',
+        provider: 'firoam', // catalog is firoam
+      });
+      vi.mocked(prismaCatalog.findUnique).mockResolvedValue(wrongProviderEntry);
+      vi.mocked(prisma.providerSkuMapping.findUnique).mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/bulk',
+        headers: JSON_HEADERS,
+        payload: {
+          mappings: [
+            { shopifySku: 'ESIM-AU-3GB', provider: 'tgt', providerCatalogId: 'cat-firoam-wrong' }, // mismatch
+          ],
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ created: number; failed: number }>();
+      expect(body.failed).toBe(1);
+      expect(body.created).toBe(0);
+    });
+
     it('returns 401 without admin key', async () => {
       const res = await app.inject({ method: 'POST', url: '/sku-mappings/bulk', payload: {} });
       expect(res.statusCode).toBe(401);
