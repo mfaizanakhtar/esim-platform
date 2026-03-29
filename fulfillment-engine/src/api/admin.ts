@@ -584,8 +584,13 @@ export default function adminRoutes(
       return reply.code(400).send({ error: 'mappings array is required' });
     }
 
-    const results: Array<{ ok: boolean; shopifySku?: string; provider?: string; error?: string }> =
-      [];
+    const results: Array<{
+      ok: boolean;
+      action: 'created' | 'updated' | 'skipped' | 'failed';
+      shopifySku?: string;
+      provider?: string;
+      error?: string;
+    }> = [];
 
     for (const item of body.mappings as Array<Record<string, unknown>>) {
       try {
@@ -597,13 +602,25 @@ export default function adminRoutes(
         };
 
         if (!shopifySku || !provider || !providerCatalogId) {
-          results.push({ ok: false, shopifySku, provider, error: 'Missing required fields' });
+          results.push({
+            ok: false,
+            action: 'failed' as const,
+            shopifySku,
+            provider,
+            error: 'Missing required fields',
+          });
           continue;
         }
 
         const entry = await providerSkuCatalog.findUnique({ where: { id: providerCatalogId } });
         if (!entry) {
-          results.push({ ok: false, shopifySku, provider, error: 'Catalog entry not found' });
+          results.push({
+            ok: false,
+            action: 'failed' as const,
+            shopifySku,
+            provider,
+            error: 'Catalog entry not found',
+          });
           continue;
         }
 
@@ -614,6 +631,7 @@ export default function adminRoutes(
           if (raw.skuId === undefined || raw.priceid === undefined) {
             results.push({
               ok: false,
+              action: 'failed' as const,
               shopifySku,
               provider,
               error: 'Catalog entry rawPayload missing firoam fields',
@@ -694,7 +712,9 @@ export default function adminRoutes(
     const updated = results.filter((r) => r.action === 'updated').length;
     const skipped = results.filter((r) => r.action === 'skipped').length;
     const failed = results.filter((r) => !r.ok).length;
-    app.log.info(`[Admin] Bulk mapped: ${created} created, ${updated} updated, ${skipped} skipped, ${failed} failed`);
+    app.log.info(
+      `[Admin] Bulk mapped: ${created} created, ${updated} updated, ${skipped} skipped, ${failed} failed`,
+    );
     return reply.send({ created, updated, skipped, failed, results });
   });
 
