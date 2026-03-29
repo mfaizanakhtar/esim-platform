@@ -594,6 +594,24 @@ describe('Admin Routes', () => {
     });
   });
 
+  // ── GET /providers ──────────────────────────────────────────────────────
+
+  describe('GET /providers', () => {
+    it('returns registered provider names from registry', async () => {
+      const res = await app.inject({ method: 'GET', url: '/providers', headers: AUTH });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ providers: string[] }>();
+      expect(Array.isArray(body.providers)).toBe(true);
+      expect(body.providers).toContain('firoam');
+      expect(body.providers).toContain('tgt');
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({ method: 'GET', url: '/providers' });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
   // ── GET /sku-mappings ───────────────────────────────────────────────────
 
   describe('GET /sku-mappings', () => {
