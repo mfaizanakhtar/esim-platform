@@ -371,6 +371,7 @@ export function SkuMappings() {
                             mapping.priorityLocked ? 'text-amber-500' : 'text-muted-foreground'
                           }`}
                           title={mapping.priorityLocked ? 'Unlock priority' : 'Lock priority'}
+                          aria-label={mapping.priorityLocked ? 'Unlock priority' : 'Lock priority'}
                         >
                           {mapping.priorityLocked ? (
                             <Lock className="h-4 w-4" />
@@ -386,6 +387,7 @@ export function SkuMappings() {
                             mapping.mappingLocked ? 'text-red-500' : 'text-muted-foreground'
                           }`}
                           title={mapping.mappingLocked ? 'Unlock mapping (allow edits)' : 'Lock mapping (prevent edits)'}
+                          aria-label={mapping.mappingLocked ? 'Unlock mapping (allow edits)' : 'Lock mapping (prevent edits)'}
                         >
                           {mapping.mappingLocked ? (
                             <Lock className="h-4 w-4" />
