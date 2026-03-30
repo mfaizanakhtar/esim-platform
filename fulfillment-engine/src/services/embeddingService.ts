@@ -85,18 +85,19 @@ export async function backfillMissingEmbeddings(
   openai: OpenAI,
   provider?: string,
 ): Promise<number> {
+  type NullEmbeddingRow = {
+    id: string;
+    productName: string;
+    region: string | null;
+    dataAmount: string | null;
+    validity: string | null;
+  };
+
   const BATCH_SIZE = 500;
   let total = 0;
+  let hasMore = true;
 
-  while (true) {
-    type NullEmbeddingRow = {
-      id: string;
-      productName: string;
-      region: string | null;
-      dataAmount: string | null;
-      validity: string | null;
-    };
-
+  while (hasMore) {
     let rows: NullEmbeddingRow[];
     if (provider) {
       rows = await prisma.$queryRaw<NullEmbeddingRow[]>`
@@ -114,13 +115,18 @@ export async function backfillMissingEmbeddings(
       `;
     }
 
-    if (rows.length === 0) break;
+    if (rows.length === 0) {
+      hasMore = false;
+      break;
+    }
 
     const texts = rows.map(buildCatalogText);
     const vectors = await embedBatch(texts, openai);
     await Promise.all(rows.map((r, i) => storeEmbedding(r.id, vectors[i])));
     total += rows.length;
     logger.info({ count: rows.length, total }, 'Backfilled catalog embeddings batch');
+
+    if (rows.length < BATCH_SIZE) hasMore = false;
   }
 
   return total;

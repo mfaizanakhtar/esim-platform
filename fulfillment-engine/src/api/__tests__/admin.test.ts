@@ -130,7 +130,8 @@ vi.mock('~/services/embeddingService', () => ({
   embedBatch: (...args: unknown[]) => adminMocks.mockEmbedBatch(...args),
   findTopCandidates: (...args: unknown[]) => adminMocks.mockFindTopCandidates(...args),
   storeEmbedding: (...args: unknown[]) => adminMocks.mockStoreEmbedding(...args),
-  backfillMissingEmbeddings: (...args: unknown[]) => adminMocks.mockBackfillMissingEmbeddings(...args),
+  backfillMissingEmbeddings: (...args: unknown[]) =>
+    adminMocks.mockBackfillMissingEmbeddings(...args),
   buildCatalogText: (...args: unknown[]) => adminMocks.mockBuildCatalogText(...args),
 }));
 
@@ -1486,11 +1487,27 @@ describe('Admin Routes', () => {
           countryImageUrlDtoList: [],
           esimPackageDtoList: [
             {
-              flows: 1, days: 7, unit: 'GB', price: 2.5, priceid: 50, flowType: 1,
-              countryImageUrlDtoList: null, showName: '1GB 7 Days', pid: 100,
-              premark: '', expireDays: 0, networkDtoList: [], supportDaypass: 0,
-              openCardFee: 0, minDay: 0, singleDiscountDay: 0, singleDiscount: 0,
-              maxDiscount: 0, maxDay: 0, mustDate: 0, apiCode: 'JP-1GB-7D',
+              flows: 1,
+              days: 7,
+              unit: 'GB',
+              price: 2.5,
+              priceid: 50,
+              flowType: 1,
+              countryImageUrlDtoList: null,
+              showName: '1GB 7 Days',
+              pid: 100,
+              premark: '',
+              expireDays: 0,
+              networkDtoList: [],
+              supportDaypass: 0,
+              openCardFee: 0,
+              minDay: 0,
+              singleDiscountDay: 0,
+              singleDiscount: 0,
+              maxDiscount: 0,
+              maxDay: 0,
+              mustDate: 0,
+              apiCode: 'JP-1GB-7D',
             },
           ],
         },
@@ -2117,7 +2134,14 @@ describe('Admin Routes', () => {
           {
             message: {
               content: JSON.stringify({
-                mappings: [{ shopifySku: 'ESIM-JP-1GB', catalogId: 'cat-vector-1', confidence: 0.95, reason: 'Vector match' }],
+                mappings: [
+                  {
+                    shopifySku: 'ESIM-JP-1GB',
+                    catalogId: 'cat-vector-1',
+                    confidence: 0.95,
+                    reason: 'Vector match',
+                  },
+                ],
               }),
             },
           },
@@ -2208,7 +2232,14 @@ describe('Admin Routes', () => {
           {
             message: {
               content: JSON.stringify({
-                mappings: [{ shopifySku: 'ESIM-JP-1GB', catalogId: 'cat-jp', confidence: 0.9, reason: 'Match' }],
+                mappings: [
+                  {
+                    shopifySku: 'ESIM-JP-1GB',
+                    catalogId: 'cat-jp',
+                    confidence: 0.9,
+                    reason: 'Match',
+                  },
+                ],
               }),
             },
           },

@@ -55,7 +55,12 @@ function getMockEmbeddingsCreate() {
 describe('buildCatalogText', () => {
   it('joins all non-null fields with |', () => {
     expect(
-      buildCatalogText({ productName: 'Japan 1GB', region: 'JP', dataAmount: '1GB', validity: '7 days' }),
+      buildCatalogText({
+        productName: 'Japan 1GB',
+        region: 'JP',
+        dataAmount: '1GB',
+        validity: '7 days',
+      }),
     ).toBe('Japan 1GB | JP | 1GB | 7 days');
   });
 
@@ -101,16 +106,16 @@ describe('embedBatch', () => {
   it('calls openai with all texts and returns array of embeddings', async () => {
     const mockCreate = getMockEmbeddingsCreate();
     mockCreate.mockResolvedValue({
-      data: [
-        { embedding: [0.1, 0.2] },
-        { embedding: [0.3, 0.4] },
-      ],
+      data: [{ embedding: [0.1, 0.2] }, { embedding: [0.3, 0.4] }],
     });
 
     const openai = new OpenAI({ apiKey: 'test' });
     const result = await embedBatch(['text1', 'text2'], openai);
 
-    expect(result).toEqual([[0.1, 0.2], [0.3, 0.4]]);
+    expect(result).toEqual([
+      [0.1, 0.2],
+      [0.3, 0.4],
+    ]);
     expect(mockCreate).toHaveBeenCalledWith({
       model: 'text-embedding-3-small',
       input: ['text1', 'text2'],
@@ -136,7 +141,17 @@ describe('findTopCandidates', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('queries without provider filter when provider is undefined', async () => {
-    const mockRows = [{ id: 'cat-1', provider: 'tgt', productName: 'Japan 1GB', region: 'JP', dataAmount: '1GB', validity: '7 days', netPrice: 1.0 }];
+    const mockRows = [
+      {
+        id: 'cat-1',
+        provider: 'tgt',
+        productName: 'Japan 1GB',
+        region: 'JP',
+        dataAmount: '1GB',
+        validity: '7 days',
+        netPrice: 1.0,
+      },
+    ];
     mockQueryRaw.mockResolvedValue(mockRows);
 
     const result = await findTopCandidates([0.1, 0.2], undefined, 10);
@@ -187,7 +202,13 @@ describe('backfillMissingEmbeddings', () => {
 
   it('embeds rows and returns total count', async () => {
     const rows = [
-      { id: 'cat-1', productName: 'Japan 1GB', region: 'JP', dataAmount: '1GB', validity: '7 days' },
+      {
+        id: 'cat-1',
+        productName: 'Japan 1GB',
+        region: 'JP',
+        dataAmount: '1GB',
+        validity: '7 days',
+      },
       { id: 'cat-2', productName: 'USA 5GB', region: 'US', dataAmount: '5GB', validity: '30 days' },
     ];
     // First call returns rows; second call returns empty (done)

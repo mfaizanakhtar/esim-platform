@@ -951,9 +951,7 @@ export default function adminRoutes(
    * Supports vector pre-filtering (top-20 candidates via pgvector cosine search)
    * with automatic fallback to full catalog when pgvector is unavailable.
    */
-  async function* aiMapBatchGenerator(
-    params: AiMapGenParams,
-  ): AsyncGenerator<AiMapProgressEvent> {
+  async function* aiMapBatchGenerator(params: AiMapGenParams): AsyncGenerator<AiMapProgressEvent> {
     const { shopifySkus: providedSkus, provider, unmappedOnly, openaiApiKey } = params;
 
     // 1. Resolve Shopify SKUs
@@ -1017,7 +1015,10 @@ export default function adminRoutes(
         );
         skuEmbeddings = await embedBatch(displayNames, openai);
       } catch (err) {
-        logger.warn({ err }, 'Failed to embed SKU names for vector search — falling back to full catalog');
+        logger.warn(
+          { err },
+          'Failed to embed SKU names for vector search — falling back to full catalog',
+        );
         skuEmbeddings = null;
       }
     }
@@ -1090,7 +1091,12 @@ Only include a mapping with confidence >= 0.3. If no good match, return empty ma
             const raw = completion.choices[0]?.message?.content;
             if (!raw) continue;
             const parsed = JSON.parse(raw) as {
-              mappings?: Array<{ shopifySku: string; catalogId: string; confidence: number; reason: string }>;
+              mappings?: Array<{
+                shopifySku: string;
+                catalogId: string;
+                confidence: number;
+                reason: string;
+              }>;
             };
             for (const match of parsed.mappings ?? []) {
               const entry = catalogEntries.find((e) => e.id === match.catalogId);
@@ -1152,7 +1158,12 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           const raw = completion.choices[0]?.message?.content;
           if (raw) {
             const parsed = JSON.parse(raw) as {
-              mappings?: Array<{ shopifySku: string; catalogId: string; confidence: number; reason: string }>;
+              mappings?: Array<{
+                shopifySku: string;
+                catalogId: string;
+                confidence: number;
+                reason: string;
+              }>;
             };
             for (const match of parsed.mappings ?? []) {
               const entry = catalogEntries.find((e) => e.id === match.catalogId);
@@ -1637,7 +1648,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       }
     }
 
-    return reply.send({ ok: true, provider: 'tgt', processed, total, pages: pageNum, embedded: tgtEmbedded });
+    return reply.send({
+      ok: true,
+      provider: 'tgt',
+      processed,
+      total,
+      pages: pageNum,
+      embedded: tgtEmbedded,
+    });
   });
 
   /**
@@ -1646,21 +1664,24 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
    * Safe to run repeatedly — only processes rows without embeddings.
    * Body: { provider?: string }
    */
-  app.post('/provider-catalog/embed-backfill', async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!requireAdminKey(request, reply)) return;
+  app.post(
+    '/provider-catalog/embed-backfill',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
 
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-    if (!OPENAI_API_KEY) {
-      return reply.code(500).send({ error: 'OPENAI_API_KEY not configured' });
-    }
+      const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+      if (!OPENAI_API_KEY) {
+        return reply.code(500).send({ error: 'OPENAI_API_KEY not configured' });
+      }
 
-    const body = (request.body || {}) as { provider?: string };
-    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+      const body = (request.body || {}) as { provider?: string };
+      const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-    const embedded = await backfillMissingEmbeddings(openai, body.provider);
+      const embedded = await backfillMissingEmbeddings(openai, body.provider);
 
-    return reply.send({ ok: true, embedded });
-  });
+      return reply.send({ ok: true, embedded });
+    },
+  );
 
   done();
 }
