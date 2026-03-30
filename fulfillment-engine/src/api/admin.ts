@@ -10,17 +10,26 @@ import { getShopifyClient } from '~/shopify/client';
 import { logger } from '~/utils/logger';
 import OpenAI from 'openai';
 import { getRegisteredProviders } from '~/vendor/registry';
+import {
+  buildCatalogText,
+  embedBatch,
+  storeEmbedding,
+  findTopCandidates,
+  isVectorAvailable,
+  backfillMissingEmbeddings,
+} from '~/services/embeddingService';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
 /**
- * Simple API key guard — reads X-Admin-Key header.
+ * Simple API key guard — reads X-Admin-Key header or query.apiKey (SSE fallback).
  * Set ADMIN_API_KEY env var to enable protection (no-ops in dev if unset).
  */
 function requireAdminKey(request: FastifyRequest, reply: FastifyReply): boolean {
   if (!ADMIN_API_KEY) return true; // dev mode: no key required
-  const key = request.headers['x-admin-key'];
-  if (key !== ADMIN_API_KEY) {
+  const headerKey = request.headers['x-admin-key'];
+  const queryKey = (request.query as { apiKey?: string }).apiKey;
+  if (headerKey !== ADMIN_API_KEY && queryKey !== ADMIN_API_KEY) {
     reply.code(401).send({ error: 'Unauthorized' });
     return false;
   }
@@ -54,7 +63,7 @@ export default function adminRoutes(
       providerSkuCatalog: {
         findMany: (args: unknown) => Promise<unknown[]>;
         count: (args: unknown) => Promise<number>;
-        upsert: (args: unknown) => Promise<unknown>;
+        upsert: (args: unknown) => Promise<{ id: string }>;
         findUnique: (args: { where: { id: string } }) => Promise<CatalogEntry | null>;
       };
     }
@@ -906,13 +915,287 @@ export default function adminRoutes(
   });
 
   // ---------------------------------------------------------------------------
-  // AI Bulk Mapping
+  // AI Bulk Mapping — shared generator + POST (sync) + GET (SSE stream)
   // ---------------------------------------------------------------------------
+
+  type AiMappingDraftInternal = {
+    shopifySku: string;
+    catalogId: string;
+    productName: string;
+    region: string | null;
+    dataAmount: string | null;
+    validity: string | null;
+    netPrice: unknown;
+    provider: string;
+    confidence: number;
+    reason: string;
+  };
+
+  type AiMapProgressEvent = {
+    batch: number;
+    totalBatches: number;
+    foundSoFar: number;
+    partialDrafts: AiMappingDraftInternal[];
+    warning?: string;
+  };
+
+  type AiMapGenParams = {
+    shopifySkus?: string[];
+    provider?: string;
+    unmappedOnly?: boolean;
+    openaiApiKey: string;
+  };
+
+  /**
+   * Core AI-map generator — yields per-batch progress events.
+   * Supports vector pre-filtering (top-20 candidates via pgvector cosine search)
+   * with automatic fallback to full catalog when pgvector is unavailable.
+   */
+  async function* aiMapBatchGenerator(
+    params: AiMapGenParams,
+  ): AsyncGenerator<AiMapProgressEvent> {
+    const { shopifySkus: providedSkus, provider, unmappedOnly, openaiApiKey } = params;
+
+    // 1. Resolve Shopify SKUs
+    let shopifySkuList: Array<{ sku: string; productTitle: string; variantTitle: string }>;
+
+    if (Array.isArray(providedSkus) && providedSkus.length > 0) {
+      shopifySkuList = providedSkus.map((sku) => ({ sku, productTitle: '', variantTitle: '' }));
+    } else {
+      try {
+        const shopify = getShopifyClient();
+        shopifySkuList = await shopify.getAllVariants();
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to fetch Shopify variants for AI mapping');
+        throw new Error('shopify_unavailable');
+      }
+
+      if (unmappedOnly !== false) {
+        const mappedSkus = await prisma.providerSkuMapping.findMany({
+          select: { shopifySku: true },
+          distinct: ['shopifySku'],
+          ...(provider ? { where: { provider } } : {}),
+        });
+        const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
+        shopifySkuList = shopifySkuList.filter((v) => !mappedSet.has(v.sku));
+      }
+    }
+
+    if (shopifySkuList.length === 0) return;
+
+    // 2. Fetch catalog
+    const catalogWhere: Record<string, unknown> = { isActive: true };
+    if (provider) catalogWhere.provider = provider;
+
+    const catalogEntries = (await providerSkuCatalog.findMany({
+      where: catalogWhere,
+      orderBy: { productName: 'asc' },
+    })) as Array<{
+      id: string;
+      provider: string;
+      productCode: string;
+      productName: string;
+      region: string | null;
+      dataAmount: string | null;
+      validity: string | null;
+      netPrice: unknown;
+    }>;
+
+    if (catalogEntries.length === 0) return;
+
+    const openai = new OpenAI({ apiKey: openaiApiKey });
+    const BATCH_SIZE = 50;
+    const totalBatches = Math.ceil(shopifySkuList.length / BATCH_SIZE);
+
+    // 3. Vector search setup — embed all display names up-front in one batch call
+    const useVectorSearch = await isVectorAvailable();
+    let skuEmbeddings: number[][] | null = null;
+    if (useVectorSearch) {
+      try {
+        const displayNames = shopifySkuList.map(
+          (v) => [v.productTitle, v.variantTitle].filter(Boolean).join(' - ') || v.sku,
+        );
+        skuEmbeddings = await embedBatch(displayNames, openai);
+      } catch (err) {
+        logger.warn({ err }, 'Failed to embed SKU names for vector search — falling back to full catalog');
+        skuEmbeddings = null;
+      }
+    }
+
+    const catalogCompact = catalogEntries.map((e) => ({
+      id: e.id,
+      provider: e.provider,
+      productName: e.productName,
+      region: e.region,
+      dataAmount: e.dataAmount,
+      validity: e.validity,
+      netPrice: e.netPrice,
+    }));
+
+    let foundSoFar = 0;
+
+    for (let i = 0; i < shopifySkuList.length; i += BATCH_SIZE) {
+      const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+      const batch = shopifySkuList.slice(i, i + BATCH_SIZE);
+      const partialDrafts: AiMappingDraftInternal[] = [];
+      let batchWarning: string | undefined;
+
+      if (useVectorSearch && skuEmbeddings) {
+        // Vector path: one GPT call per SKU with its top-20 candidates
+        for (let j = 0; j < batch.length; j++) {
+          const variant = batch[j];
+          const skuIdx = i + j;
+          const displayName =
+            [variant.productTitle, variant.variantTitle].filter(Boolean).join(' - ') || variant.sku;
+
+          let candidates: typeof catalogCompact;
+          try {
+            const topRows = await findTopCandidates(skuEmbeddings[skuIdx], provider, 20);
+            candidates =
+              topRows.length > 0
+                ? topRows.map((c) => ({
+                    id: (c as { id: string }).id,
+                    provider: (c as { provider: string }).provider,
+                    productName: (c as { productName: string }).productName,
+                    region: (c as { region: string | null }).region,
+                    dataAmount: (c as { dataAmount: string | null }).dataAmount,
+                    validity: (c as { validity: string | null }).validity,
+                    netPrice: (c as { netPrice: unknown }).netPrice,
+                  }))
+                : catalogCompact;
+          } catch {
+            candidates = catalogCompact;
+          }
+
+          const systemPrompt =
+            'You are an eSIM product matcher. You are given a Shopify SKU and its top-20 most semantically similar catalog candidates. Pick the best match or omit if none are suitable. Return only JSON.';
+          const userPrompt = `Match this Shopify SKU to a catalog entry:
+SKU: ${JSON.stringify({ sku: variant.sku, displayName })}
+
+Candidates: ${JSON.stringify(candidates)}
+
+Return JSON: { "mappings": [{ "shopifySku": string, "catalogId": string, "confidence": number (0-1), "reason": string }] }
+Only include a mapping with confidence >= 0.3. If no good match, return empty mappings array.`;
+
+          try {
+            const completion = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt },
+              ],
+              response_format: { type: 'json_object' },
+              temperature: 0.1,
+            });
+            const raw = completion.choices[0]?.message?.content;
+            if (!raw) continue;
+            const parsed = JSON.parse(raw) as {
+              mappings?: Array<{ shopifySku: string; catalogId: string; confidence: number; reason: string }>;
+            };
+            for (const match of parsed.mappings ?? []) {
+              const entry = catalogEntries.find((e) => e.id === match.catalogId);
+              if (!entry) continue;
+              partialDrafts.push({
+                shopifySku: match.shopifySku,
+                catalogId: match.catalogId,
+                productName: entry.productName,
+                region: entry.region,
+                dataAmount: entry.dataAmount,
+                validity: entry.validity,
+                netPrice: entry.netPrice,
+                provider: entry.provider,
+                confidence: match.confidence,
+                reason: match.reason,
+              });
+            }
+          } catch (err) {
+            logger.error({ err, sku: variant.sku }, 'OpenAI SKU match failed');
+            const msg = err instanceof Error ? err.message : String(err);
+            const isFatal =
+              err instanceof OpenAI.APIError &&
+              (err.status === 401 || err.status === 429 || err.code === 'insufficient_quota');
+            batchWarning = msg;
+            if (isFatal) {
+              foundSoFar += partialDrafts.length;
+              yield { batch: batchNum, totalBatches, foundSoFar, partialDrafts, warning: msg };
+              throw err;
+            }
+          }
+        }
+      } else {
+        // Fallback path: one GPT call per batch of 50 SKUs with full catalog
+        const skuList = batch.map((v) => ({
+          sku: v.sku,
+          displayName: [v.productTitle, v.variantTitle].filter(Boolean).join(' - ') || v.sku,
+        }));
+
+        const systemPrompt =
+          'You are an eSIM product matcher. Match each Shopify SKU to the best provider catalog entry based on region, data amount, and validity. Return only JSON.';
+        const userPrompt = `Match these Shopify SKUs to catalog entries:
+SKUs: ${JSON.stringify(skuList)}
+
+Catalog: ${JSON.stringify(catalogCompact)}
+
+Return JSON: { "mappings": [{ "shopifySku": string, "catalogId": string, "confidence": number (0-1), "reason": string }] }
+Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
+
+        try {
+          const completion = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            response_format: { type: 'json_object' },
+            temperature: 0.1,
+          });
+          const raw = completion.choices[0]?.message?.content;
+          if (raw) {
+            const parsed = JSON.parse(raw) as {
+              mappings?: Array<{ shopifySku: string; catalogId: string; confidence: number; reason: string }>;
+            };
+            for (const match of parsed.mappings ?? []) {
+              const entry = catalogEntries.find((e) => e.id === match.catalogId);
+              if (!entry) continue;
+              partialDrafts.push({
+                shopifySku: match.shopifySku,
+                catalogId: match.catalogId,
+                productName: entry.productName,
+                region: entry.region,
+                dataAmount: entry.dataAmount,
+                validity: entry.validity,
+                netPrice: entry.netPrice,
+                provider: entry.provider,
+                confidence: match.confidence,
+                reason: match.reason,
+              });
+            }
+          }
+        } catch (err) {
+          logger.error({ err, batch: skuList }, 'OpenAI batch failed');
+          const msg = err instanceof Error ? err.message : String(err);
+          const isFatal =
+            err instanceof OpenAI.APIError &&
+            (err.status === 401 || err.status === 429 || err.code === 'insufficient_quota');
+          batchWarning = msg;
+          if (isFatal) {
+            foundSoFar += partialDrafts.length;
+            yield { batch: batchNum, totalBatches, foundSoFar, partialDrafts, warning: msg };
+            throw err;
+          }
+        }
+      }
+
+      foundSoFar += partialDrafts.length;
+      yield { batch: batchNum, totalBatches, foundSoFar, partialDrafts, warning: batchWarning };
+    }
+  }
 
   /**
    * POST /admin/sku-mappings/ai-map
    * Bulk AI mapping: uses OpenAI to suggest catalog matches for Shopify SKUs.
    * Returns draft mappings — does NOT save to DB. Admin reviews and approves.
+   * Non-streaming fallback — collects all generator yields and returns final JSON.
    *
    * Body: { shopifySkus?: string[], provider?: string, unmappedOnly?: boolean }
    */
@@ -930,156 +1213,29 @@ export default function adminRoutes(
       unmappedOnly?: boolean;
     };
 
-    // 1. Determine the list of Shopify SKUs to map
-    let shopifySkus: Array<{ sku: string; productTitle: string; variantTitle: string }>;
-
-    if (Array.isArray(body.shopifySkus) && body.shopifySkus.length > 0) {
-      shopifySkus = body.shopifySkus.map((sku) => ({ sku, productTitle: '', variantTitle: '' }));
-    } else {
-      // Fetch from Shopify
-      try {
-        const shopify = getShopifyClient();
-        const variants = await shopify.getAllVariants();
-        shopifySkus = variants;
-      } catch (error) {
-        logger.error({ err: error }, 'Failed to fetch Shopify variants for AI mapping');
-        return reply.code(502).send({ error: 'shopify_unavailable' });
-      }
-
-      if (body.unmappedOnly !== false) {
-        // When a provider is specified, only exclude SKUs already mapped to that provider.
-        // This lets you add TGT mappings for SKUs that already have FiRoam mappings.
-        const mappedSkus = await prisma.providerSkuMapping.findMany({
-          select: { shopifySku: true },
-          distinct: ['shopifySku'],
-          ...(body.provider ? { where: { provider: body.provider } } : {}),
-        });
-        const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
-        shopifySkus = shopifySkus.filter((v) => !mappedSet.has(v.sku));
-      }
-    }
-
-    if (shopifySkus.length === 0) {
-      return reply.send({ drafts: [] });
-    }
-
-    // 2. Fetch provider catalog entries
-    const catalogWhere: Record<string, unknown> = { isActive: true };
-    if (body.provider) catalogWhere.provider = body.provider;
-
-    const catalogEntries = (await providerSkuCatalog.findMany({
-      where: catalogWhere,
-      orderBy: { productName: 'asc' },
-    })) as Array<{
-      id: string;
-      provider: string;
-      productCode: string;
-      productName: string;
-      region: string | null;
-      dataAmount: string | null;
-      validity: string | null;
-      netPrice: unknown;
-    }>;
-
-    if (catalogEntries.length === 0) {
-      return reply.send({ drafts: [], message: 'No catalog entries found for the given provider' });
-    }
-
-    // 3. Call OpenAI in batches of 50 SKUs
-    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-    const BATCH_SIZE = 50;
-    const allDrafts: Array<{
-      shopifySku: string;
-      catalogId: string;
-      productName: string;
-      region: string | null;
-      dataAmount: string | null;
-      validity: string | null;
-      netPrice: unknown;
-      provider: string;
-      confidence: number;
-      reason: string;
-    }> = [];
-
-    const catalogCompact = catalogEntries.map((e) => ({
-      id: e.id,
-      provider: e.provider,
-      productName: e.productName,
-      region: e.region,
-      dataAmount: e.dataAmount,
-      validity: e.validity,
-      netPrice: e.netPrice,
-    }));
-
+    const allDrafts: AiMappingDraftInternal[] = [];
     let openAiError: string | null = null;
 
-    for (let i = 0; i < shopifySkus.length; i += BATCH_SIZE) {
-      const batch = shopifySkus.slice(i, i + BATCH_SIZE);
-      const skuList = batch.map((v) => ({
-        sku: v.sku,
-        displayName: [v.productTitle, v.variantTitle].filter(Boolean).join(' - ') || v.sku,
-      }));
-
-      const systemPrompt =
-        'You are an eSIM product matcher. Match each Shopify SKU to the best provider catalog entry based on region, data amount, and validity. Return only JSON.';
-
-      const userPrompt = `Match these Shopify SKUs to catalog entries:
-SKUs: ${JSON.stringify(skuList)}
-
-Catalog: ${JSON.stringify(catalogCompact)}
-
-Return JSON: { "mappings": [{ "shopifySku": string, "catalogId": string, "confidence": number (0-1), "reason": string }] }
-Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
-
-      try {
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.1,
-        });
-
-        const raw = completion.choices[0]?.message?.content;
-        if (!raw) continue;
-
-        const parsed = JSON.parse(raw) as {
-          mappings?: Array<{
-            shopifySku: string;
-            catalogId: string;
-            confidence: number;
-            reason: string;
-          }>;
-        };
-
-        for (const match of parsed.mappings ?? []) {
-          const entry = catalogEntries.find((e) => e.id === match.catalogId);
-          if (!entry) continue;
-          allDrafts.push({
-            shopifySku: match.shopifySku,
-            catalogId: match.catalogId,
-            productName: entry.productName,
-            region: entry.region,
-            dataAmount: entry.dataAmount,
-            validity: entry.validity,
-            netPrice: entry.netPrice,
-            provider: entry.provider,
-            confidence: match.confidence,
-            reason: match.reason,
-          });
-        }
-      } catch (err) {
-        logger.error({ err, batch: skuList }, 'OpenAI batch failed');
-        const msg = err instanceof Error ? err.message : String(err);
-        // Use SDK typed errors: status 401/429 or code insufficient_quota = fatal
-        const isFatal =
-          err instanceof OpenAI.APIError &&
-          (err.status === 401 || err.status === 429 || err.code === 'insufficient_quota');
-        openAiError = msg;
-        if (isFatal) break;
+    try {
+      for await (const evt of aiMapBatchGenerator({
+        shopifySkus: body.shopifySkus,
+        provider: body.provider,
+        unmappedOnly: body.unmappedOnly,
+        openaiApiKey: OPENAI_API_KEY,
+      })) {
+        allDrafts.push(...evt.partialDrafts);
+        if (evt.warning) openAiError = evt.warning;
       }
+    } catch (err) {
+      logger.error({ err }, 'AI map generator failed');
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg === 'shopify_unavailable') {
+        return reply.code(502).send({ error: 'shopify_unavailable' });
+      }
+      if (allDrafts.length === 0) {
+        return reply.code(502).send({ error: `OpenAI error: ${msg}` });
+      }
+      openAiError = msg;
     }
 
     if (openAiError && allDrafts.length === 0) {
@@ -1090,6 +1246,68 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       drafts: allDrafts,
       ...(openAiError ? { warning: `Some batches failed: ${openAiError}` } : {}),
     });
+  });
+
+  /**
+   * GET /admin/sku-mappings/ai-map/stream
+   * SSE-streaming version of ai-map. EventSource can't set headers, so the admin
+   * key is accepted via query.apiKey as a fallback to x-admin-key.
+   *
+   * Query: provider, unmappedOnly, apiKey
+   */
+  app.get('/sku-mappings/ai-map/stream', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    const query = request.query as {
+      provider?: string;
+      unmappedOnly?: string;
+    };
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    reply.raw.flushHeaders();
+
+    const heartbeat = setInterval(() => {
+      if (!reply.raw.destroyed) reply.raw.write(': heartbeat\n\n');
+    }, 15_000);
+
+    request.raw.on('close', () => clearInterval(heartbeat));
+
+    if (!OPENAI_API_KEY) {
+      reply.raw.write(
+        `event: error\ndata: ${JSON.stringify({ message: 'OPENAI_API_KEY not configured' })}\n\n`,
+      );
+      clearInterval(heartbeat);
+      reply.raw.end();
+      return;
+    }
+
+    try {
+      for await (const evt of aiMapBatchGenerator({
+        provider: query.provider,
+        unmappedOnly: query.unmappedOnly !== 'false',
+        openaiApiKey: OPENAI_API_KEY,
+      })) {
+        if (reply.raw.destroyed) break;
+        reply.raw.write(`event: progress\ndata: ${JSON.stringify(evt)}\n\n`);
+      }
+      if (!reply.raw.destroyed) {
+        reply.raw.write(`event: done\ndata: {}\n\n`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!reply.raw.destroyed) {
+        reply.raw.write(`event: error\ndata: ${JSON.stringify({ message: msg })}\n\n`);
+      }
+    } finally {
+      clearInterval(heartbeat);
+      reply.raw.end();
+    }
   });
 
   // ---------------------------------------------------------------------------
@@ -1182,6 +1400,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       let processedSkus = 0;
       let processedPackages = 0;
       let skipsNoApiCode = 0;
+      const upsertedIds: string[] = [];
 
       for (const sku of skus) {
         const pkgResult = await client.getPackages(String(sku.skuid));
@@ -1217,7 +1436,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             ? (pkgData.supportCountry as unknown as Prisma.InputJsonValue)
             : Prisma.JsonNull;
 
-          await providerSkuCatalog.upsert({
+          const upserted = await providerSkuCatalog.upsert({
             where: {
               provider_skuId_productCode: {
                 provider: 'firoam',
@@ -1262,7 +1481,35 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             },
           });
 
+          upsertedIds.push(upserted.id);
           processedPackages += 1;
+        }
+      }
+
+      let embedded = 0;
+      const OPENAI_API_KEY_SYNC = process.env.OPENAI_API_KEY;
+      if (OPENAI_API_KEY_SYNC && upsertedIds.length > 0) {
+        try {
+          const entries = (await providerSkuCatalog.findMany({
+            where: { id: { in: upsertedIds } },
+            select: { id: true, productName: true, region: true, dataAmount: true, validity: true },
+          })) as Array<{
+            id: string;
+            productName: string;
+            region: string | null;
+            dataAmount: string | null;
+            validity: string | null;
+          }>;
+          if (entries.length > 0) {
+            const openaiSync = new OpenAI({ apiKey: OPENAI_API_KEY_SYNC });
+            const texts = entries.map(buildCatalogText);
+            const vectors = await embedBatch(texts, openaiSync);
+            await Promise.all(entries.map((e, i) => storeEmbedding(e.id, vectors[i])));
+            embedded = entries.length;
+            logger.info({ count: entries.length }, 'Stored catalog embeddings after firoam sync');
+          }
+        } catch (err) {
+          logger.warn({ err }, 'Embedding failed after firoam sync — run backfill to retry');
         }
       }
 
@@ -1273,6 +1520,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         processedPackages,
         totalSkus: skuResult.skus.length,
         skipsNoApiCode,
+        embedded,
       });
     }
 
@@ -1284,6 +1532,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     let pageNum = 1;
     let processed = 0;
     let total = 0;
+    const tgtUpsertedIds: string[] = [];
 
     while (pageNum <= maxPages) {
       const result = await client.listProducts({ pageNum, pageSize, lang });
@@ -1306,7 +1555,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         const validity =
           product.validityPeriod !== undefined ? `${product.validityPeriod} days` : null;
 
-        await providerSkuCatalog.upsert({
+        const tgtUpserted = await providerSkuCatalog.upsert({
           where: {
             provider_skuId_productCode: {
               provider: 'tgt',
@@ -1353,6 +1602,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           },
         });
 
+        tgtUpsertedIds.push(tgtUpserted.id);
         processed += 1;
       }
 
@@ -1360,7 +1610,56 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       pageNum += 1;
     }
 
-    return reply.send({ ok: true, provider: 'tgt', processed, total, pages: pageNum });
+    let tgtEmbedded = 0;
+    const OPENAI_API_KEY_TGT = process.env.OPENAI_API_KEY;
+    if (OPENAI_API_KEY_TGT && tgtUpsertedIds.length > 0) {
+      try {
+        const tgtEntries = (await providerSkuCatalog.findMany({
+          where: { id: { in: tgtUpsertedIds } },
+          select: { id: true, productName: true, region: true, dataAmount: true, validity: true },
+        })) as Array<{
+          id: string;
+          productName: string;
+          region: string | null;
+          dataAmount: string | null;
+          validity: string | null;
+        }>;
+        if (tgtEntries.length > 0) {
+          const openaiTgt = new OpenAI({ apiKey: OPENAI_API_KEY_TGT });
+          const tgtTexts = tgtEntries.map(buildCatalogText);
+          const tgtVectors = await embedBatch(tgtTexts, openaiTgt);
+          await Promise.all(tgtEntries.map((e, i) => storeEmbedding(e.id, tgtVectors[i])));
+          tgtEmbedded = tgtEntries.length;
+          logger.info({ count: tgtEntries.length }, 'Stored catalog embeddings after tgt sync');
+        }
+      } catch (err) {
+        logger.warn({ err }, 'Embedding failed after tgt sync — run backfill to retry');
+      }
+    }
+
+    return reply.send({ ok: true, provider: 'tgt', processed, total, pages: pageNum, embedded: tgtEmbedded });
+  });
+
+  /**
+   * POST /admin/provider-catalog/embed-backfill
+   * One-time (or re-run) backfill: embeds all catalog entries where embedding IS NULL.
+   * Safe to run repeatedly — only processes rows without embeddings.
+   * Body: { provider?: string }
+   */
+  app.post('/provider-catalog/embed-backfill', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) {
+      return reply.code(500).send({ error: 'OPENAI_API_KEY not configured' });
+    }
+
+    const body = (request.body || {}) as { provider?: string };
+    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+    const embedded = await backfillMissingEmbeddings(openai, body.provider);
+
+    return reply.send({ ok: true, embedded });
   });
 
   done();

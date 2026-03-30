@@ -53,3 +53,14 @@ export const apiClient = {
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
+
+/**
+ * Build a full SSE URL including the admin API key as a query param.
+ * EventSource cannot set custom headers, so the key goes in ?apiKey=...
+ */
+export function buildSseUrl(path: string, params: Record<string, string> = {}): string {
+  const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/admin';
+  const apiKey = getApiKey();
+  const qs = new URLSearchParams({ ...params, ...(apiKey ? { apiKey } : {}) });
+  return `${baseUrl}${path}?${qs.toString()}`;
+}

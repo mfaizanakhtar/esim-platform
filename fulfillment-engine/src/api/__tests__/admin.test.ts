@@ -19,6 +19,13 @@ const adminMocks = vi.hoisted(() => {
     mockFiroamGetPackages: vi.fn(),
     mockGetAllVariants: vi.fn(),
     mockOpenAiCreate: vi.fn(),
+    mockOpenAiEmbeddingsCreate: vi.fn(),
+    mockIsVectorAvailable: vi.fn().mockResolvedValue(false),
+    mockEmbedBatch: vi.fn().mockResolvedValue([]),
+    mockFindTopCandidates: vi.fn().mockResolvedValue([]),
+    mockStoreEmbedding: vi.fn().mockResolvedValue(undefined),
+    mockBackfillMissingEmbeddings: vi.fn().mockResolvedValue(0),
+    mockBuildCatalogText: vi.fn().mockReturnValue(''),
   };
 });
 
@@ -49,6 +56,8 @@ vi.mock('~/db/prisma', () => ({
       count: vi.fn(),
       upsert: vi.fn(),
     },
+    $queryRaw: vi.fn(),
+    $executeRaw: vi.fn(),
   },
 }));
 
@@ -107,11 +116,23 @@ vi.mock('openai', () => {
             create: adminMocks.mockOpenAiCreate,
           },
         };
+        embeddings = {
+          create: adminMocks.mockOpenAiEmbeddingsCreate,
+        };
       },
       { APIError: MockAPIError },
     ),
   };
 });
+
+vi.mock('~/services/embeddingService', () => ({
+  isVectorAvailable: () => adminMocks.mockIsVectorAvailable(),
+  embedBatch: (...args: unknown[]) => adminMocks.mockEmbedBatch(...args),
+  findTopCandidates: (...args: unknown[]) => adminMocks.mockFindTopCandidates(...args),
+  storeEmbedding: (...args: unknown[]) => adminMocks.mockStoreEmbedding(...args),
+  backfillMissingEmbeddings: (...args: unknown[]) => adminMocks.mockBackfillMissingEmbeddings(...args),
+  buildCatalogText: (...args: unknown[]) => adminMocks.mockBuildCatalogText(...args),
+}));
 
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
@@ -1447,6 +1468,73 @@ describe('Admin Routes', () => {
       expect(adminMocks.mockTgtListProducts).toHaveBeenCalledTimes(2);
       expect(res.json()).toMatchObject({ ok: true, processed: 2, total: 2 });
     });
+
+    it('stores embeddings after FiRoam sync when entries are returned', async () => {
+      adminMocks.mockFiroamGetSkus.mockResolvedValue({
+        skus: [{ skuid: 100, display: 'Japan', countryCode: 'JP' }],
+      });
+      adminMocks.mockFiroamGetPackages.mockResolvedValue({
+        packageData: {
+          skuid: 100,
+          detailId: null,
+          countrycode: 'JP',
+          imageUrl: '',
+          display: '日本',
+          displayEn: 'Japan',
+          supportCountry: ['JP'],
+          expirydate: null,
+          countryImageUrlDtoList: [],
+          esimPackageDtoList: [
+            {
+              flows: 1, days: 7, unit: 'GB', price: 2.5, priceid: 50, flowType: 1,
+              countryImageUrlDtoList: null, showName: '1GB 7 Days', pid: 100,
+              premark: '', expireDays: 0, networkDtoList: [], supportDaypass: 0,
+              openCardFee: 0, minDay: 0, singleDiscountDay: 0, singleDiscount: 0,
+              maxDiscount: 0, maxDay: 0, mustDate: 0, apiCode: 'JP-1GB-7D',
+            },
+          ],
+        },
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem({ id: 'cat-jp-1' }));
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp-1', productName: 'Japan 1GB', region: 'JP' }),
+      ]);
+      adminMocks.mockEmbedBatch.mockResolvedValue([[0.1, 0.2, 0.3]]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, embedded: 1 });
+      expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
+    });
+
+    it('stores embeddings after TGT sync when entries are returned', async () => {
+      adminMocks.mockTgtListProducts.mockResolvedValue({
+        total: 1,
+        products: [{ productCode: 'JP-1GB', productName: 'Japan 1GB', netPrice: 2.0 }],
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem({ id: 'cat-tgt-jp' }));
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-tgt-jp', productName: 'Japan 1GB', region: null }),
+      ]);
+      adminMocks.mockEmbedBatch.mockResolvedValue([[0.1, 0.2]]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'tgt' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, embedded: 1 });
+      expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ── Catalog-linked SKU mapping flows ──────────────────────────────────────
@@ -2004,6 +2092,256 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(502);
       expect(res.json().error).toBe('shopify_unavailable');
+    });
+  });
+
+  // ── POST /sku-mappings/ai-map — vector path ───────────────────────────────
+
+  describe('POST /sku-mappings/ai-map — vector path', () => {
+    it('uses findTopCandidates instead of full catalog when isVectorAvailable returns true', async () => {
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(true);
+      adminMocks.mockEmbedBatch.mockResolvedValue([[0.1, 0.2, 0.3]]);
+      adminMocks.mockFindTopCandidates.mockResolvedValue([
+        makeCatalogItem({ id: 'cat-vector-1', productName: 'Japan 1GB 3 Days', region: 'JP' }),
+      ]);
+
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-vector-1', productName: 'Japan 1GB 3 Days', region: 'JP' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [{ shopifySku: 'ESIM-JP-1GB', catalogId: 'cat-vector-1', confidence: 0.95, reason: 'Vector match' }],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().drafts).toHaveLength(1);
+      expect(adminMocks.mockFindTopCandidates).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to full catalog when findTopCandidates returns empty results', async () => {
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(true);
+      adminMocks.mockEmbedBatch.mockResolvedValue([[0.1, 0.2]]);
+      adminMocks.mockFindTopCandidates.mockResolvedValue([]); // empty → fallback to full catalog
+
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify({ mappings: [] }) } }],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // findTopCandidates was called but returned empty, so full catalog was used as fallback
+      expect(adminMocks.mockFindTopCandidates).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to full catalog when isVectorAvailable returns false', async () => {
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify({ mappings: [] }) } }],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // findTopCandidates should NOT be called in fallback mode
+      expect(adminMocks.mockFindTopCandidates).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── GET /sku-mappings/ai-map/stream ──────────────────────────────────────
+
+  describe('GET /sku-mappings/ai-map/stream', () => {
+    it('returns SSE response with progress and done events', async () => {
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [{ shopifySku: 'ESIM-JP-1GB', catalogId: 'cat-jp', confidence: 0.9, reason: 'Match' }],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/stream?apiKey=test-admin-key&unmappedOnly=false',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('text/event-stream');
+      expect(res.body).toContain('event: progress');
+      expect(res.body).toContain('event: done');
+    });
+
+    it('returns 401 when apiKey query param is wrong', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/stream?apiKey=wrong-key',
+      });
+
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('accepts valid x-admin-key header as alternative to query param', async () => {
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      adminMocks.mockGetAllVariants.mockResolvedValue([]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/stream',
+        headers: AUTH,
+      });
+
+      // No SKUs → generator returns immediately → done event only
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('event: done');
+    });
+
+    it('streams error event when OPENAI_API_KEY is missing', async () => {
+      const savedKey = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/stream?apiKey=test-admin-key',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('event: error');
+      process.env.OPENAI_API_KEY = savedKey;
+    });
+
+    it('streams error event when Shopify fetch fails inside generator', async () => {
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      adminMocks.mockGetAllVariants.mockRejectedValue(new Error('Shopify down'));
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/stream?apiKey=test-admin-key&unmappedOnly=false',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('event: error');
+    });
+
+    it('streams error event when OpenAI throws a fatal error', async () => {
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockRejectedValue(
+        new OpenAI.APIError(429, undefined, 'quota exceeded', undefined),
+      );
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/stream?apiKey=test-admin-key&unmappedOnly=false',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('event: error');
+    });
+  });
+
+  // ── POST /provider-catalog/embed-backfill ─────────────────────────────────
+
+  describe('POST /provider-catalog/embed-backfill', () => {
+    it('calls backfillMissingEmbeddings and returns embedded count', async () => {
+      adminMocks.mockBackfillMissingEmbeddings.mockResolvedValue(42);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/embed-backfill',
+        headers: JSON_HEADERS,
+        payload: { provider: 'tgt' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, embedded: 42 });
+      expect(adminMocks.mockBackfillMissingEmbeddings).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns 500 when OPENAI_API_KEY is not set', async () => {
+      const savedKey = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/embed-backfill',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(500);
+      process.env.OPENAI_API_KEY = savedKey;
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/embed-backfill',
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(401);
     });
   });
 
