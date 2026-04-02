@@ -2110,6 +2110,56 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(502);
       expect(res.json().error).toBe('shopify_unavailable');
     });
+
+    it('returns partial drafts with warning when fatal OpenAI error occurs after first batch succeeds', async () => {
+      // 55 SKUs → 2 batches; first batch succeeds, second batch gets fatal error
+      const manySkus = Array.from({ length: 55 }, (_, i) => ({
+        sku: `ESIM-JP-${i}GB`,
+        variantId: `gid://${i}`,
+        productTitle: 'Japan',
+        variantTitle: `${i}GB`,
+      }));
+      adminMocks.mockGetAllVariants.mockResolvedValue(manySkus);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-jp', productName: 'Japan 1GB' }),
+      ]);
+      // First batch succeeds with a match; second batch throws fatal quota error
+      adminMocks.mockOpenAiCreate
+        .mockResolvedValueOnce({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  mappings: [
+                    {
+                      shopifySku: 'ESIM-JP-0GB',
+                      catalogId: 'cat-jp',
+                      confidence: 0.9,
+                      reason: 'Match',
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        })
+        .mockRejectedValueOnce(
+          new OpenAI.APIError(429, undefined, 'You exceeded your current quota', undefined),
+        );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      // Partial drafts exist from first batch → 200 with warning, not 502
+      expect(res.statusCode).toBe(200);
+      expect(res.json().drafts.length).toBeGreaterThan(0);
+      expect(res.json().warning).toBeDefined();
+    });
   });
 
   // ── POST /sku-mappings/ai-map — vector path ───────────────────────────────

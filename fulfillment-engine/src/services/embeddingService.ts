@@ -125,8 +125,6 @@ export async function backfillMissingEmbeddings(
     await Promise.all(rows.map((r, i) => storeEmbedding(r.id, vectors[i])));
     total += rows.length;
     logger.info({ count: rows.length, total }, 'Backfilled catalog embeddings batch');
-
-    if (rows.length < BATCH_SIZE) hasMore = false;
   }
 
   return total;
