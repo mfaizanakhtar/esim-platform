@@ -1,7 +1,7 @@
 import { ApiError } from '@/lib/queryClient';
 
 // apiKey is accessed lazily to avoid circular imports
-function getApiKey(): string | null {
+export function getApiKey(): string | null {
   try {
     return sessionStorage.getItem('esim-admin-api-key');
   } catch {
@@ -55,12 +55,12 @@ export const apiClient = {
 };
 
 /**
- * Build a full SSE URL including the admin API key as a query param.
- * EventSource cannot set custom headers, so the key goes in ?apiKey=...
+ * Build a full SSE URL. The admin key is sent via x-admin-key header (fetch),
+ * not in the query string.
  */
 export function buildSseUrl(path: string, params: Record<string, string> = {}): string {
   const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/admin';
-  const apiKey = getApiKey();
-  const qs = new URLSearchParams({ ...params, ...(apiKey ? { apiKey } : {}) });
-  return `${baseUrl}${path}?${qs.toString()}`;
+  const qs = new URLSearchParams(params);
+  const query = qs.toString();
+  return query ? `${baseUrl}${path}?${query}` : `${baseUrl}${path}`;
 }

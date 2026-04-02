@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { AiMappingDraft } from '@/lib/types';
-import { buildSseUrl } from '@/lib/api';
+import { buildSseUrl, getApiKey } from '@/lib/api';
 
 type StreamStatus = 'idle' | 'running' | 'done' | 'error' | 'cancelled';
 
@@ -20,23 +20,35 @@ export function useAiMapStream() {
   const [progress, setProgress] = useState<StreamProgress | null>(null);
   const [drafts, setDrafts] = useState<AiMappingDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const sourceRef = useRef<EventSource | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Close the stream when the component unmounts
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort();
+        abortRef.current = null;
+      }
+    };
+  }, []);
 
   const cancel = useCallback(() => {
-    if (sourceRef.current) {
-      sourceRef.current.close();
-      sourceRef.current = null;
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
     }
     setStatus('cancelled');
     setProgress(null);
   }, []);
 
-  const start = useCallback((params: StartParams) => {
-    // Clean up any existing stream
-    if (sourceRef.current) {
-      sourceRef.current.close();
-      sourceRef.current = null;
+  const start = useCallback(async (params: StartParams) => {
+    // Cancel any in-flight stream before starting a new one
+    if (abortRef.current) {
+      abortRef.current.abort();
     }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     setStatus('running');
     setProgress(null);
@@ -48,51 +60,77 @@ export function useAiMapStream() {
       unmappedOnly: params.unmappedOnly === false ? 'false' : 'true',
     });
 
-    const es = new EventSource(url);
-    sourceRef.current = es;
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          'x-admin-key': getApiKey() ?? '',
+          Accept: 'text/event-stream',
+        },
+      });
 
-    es.addEventListener('progress', (e: MessageEvent) => {
-      try {
-        const evt = JSON.parse(e.data) as {
-          batch: number;
-          totalBatches: number;
-          foundSoFar: number;
-          partialDrafts: AiMappingDraft[];
-        };
-        setProgress({ batch: evt.batch, totalBatches: evt.totalBatches, found: evt.foundSoFar });
-        setDrafts((prev) => [...prev, ...evt.partialDrafts]);
-      } catch {
-        // ignore parse errors
+      if (!response.ok || !response.body) {
+        throw new Error(`HTTP ${response.status}`);
       }
-    });
 
-    es.addEventListener('done', () => {
-      es.close();
-      sourceRef.current = null;
-      setStatus('done');
-    });
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-    es.addEventListener('error', (e: MessageEvent) => {
-      es.close();
-      sourceRef.current = null;
-      let msg = 'Stream failed';
-      try {
-        const data = JSON.parse(e.data) as { message?: string };
-        if (data.message) msg = data.message;
-      } catch {
-        // use default message
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE events are separated by blank lines (\n\n)
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() ?? '';
+
+        for (const block of blocks) {
+          let eventType = 'message';
+          let data = '';
+
+          for (const line of block.split('\n')) {
+            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+            else if (line.startsWith('data: ')) data = line.slice(6).trim();
+          }
+
+          if (eventType === 'progress') {
+            try {
+              const evt = JSON.parse(data) as {
+                batch: number;
+                totalBatches: number;
+                foundSoFar: number;
+                partialDrafts: AiMappingDraft[];
+              };
+              setProgress({ batch: evt.batch, totalBatches: evt.totalBatches, found: evt.foundSoFar });
+              setDrafts((prev) => [...prev, ...evt.partialDrafts]);
+            } catch {
+              // ignore parse errors
+            }
+          } else if (eventType === 'done') {
+            setStatus('done');
+            return;
+          } else if (eventType === 'error') {
+            let msg = 'Stream failed';
+            try {
+              const d = JSON.parse(data) as { message?: string };
+              if (d.message) msg = d.message;
+            } catch {
+              // use default message
+            }
+            setError(msg);
+            setStatus('error');
+            return;
+          }
+        }
       }
-      setError(msg);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return; // cancelled
+      setError(err instanceof Error ? err.message : 'Unknown error');
       setStatus('error');
-    });
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) return;
-      es.close();
-      sourceRef.current = null;
-      setError('Connection lost');
-      setStatus('error');
-    };
+    }
   }, []);
 
   return { start, cancel, status, progress, drafts, error };

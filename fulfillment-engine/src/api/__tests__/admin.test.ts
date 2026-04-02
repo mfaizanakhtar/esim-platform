@@ -2298,7 +2298,8 @@ describe('Admin Routes', () => {
 
       const res = await app.inject({
         method: 'GET',
-        url: '/sku-mappings/ai-map/stream?apiKey=test-admin-key&unmappedOnly=false',
+        url: '/sku-mappings/ai-map/stream?unmappedOnly=false',
+        headers: AUTH,
       });
 
       expect(res.statusCode).toBe(200);
@@ -2307,16 +2308,26 @@ describe('Admin Routes', () => {
       expect(res.body).toContain('event: done');
     });
 
-    it('returns 401 when apiKey query param is wrong', async () => {
+    it('returns 401 when x-admin-key header is missing', async () => {
       const res = await app.inject({
         method: 'GET',
-        url: '/sku-mappings/ai-map/stream?apiKey=wrong-key',
+        url: '/sku-mappings/ai-map/stream',
       });
 
       expect(res.statusCode).toBe(401);
     });
 
-    it('accepts valid x-admin-key header as alternative to query param', async () => {
+    it('returns 401 when x-admin-key header is wrong', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/stream',
+        headers: { 'x-admin-key': 'wrong-key' },
+      });
+
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('accepts valid x-admin-key header', async () => {
       adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
       adminMocks.mockGetAllVariants.mockResolvedValue([]);
       vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
@@ -2338,7 +2349,8 @@ describe('Admin Routes', () => {
 
       const res = await app.inject({
         method: 'GET',
-        url: '/sku-mappings/ai-map/stream?apiKey=test-admin-key',
+        url: '/sku-mappings/ai-map/stream',
+        headers: AUTH,
       });
 
       expect(res.statusCode).toBe(200);
@@ -2352,7 +2364,8 @@ describe('Admin Routes', () => {
 
       const res = await app.inject({
         method: 'GET',
-        url: '/sku-mappings/ai-map/stream?apiKey=test-admin-key&unmappedOnly=false',
+        url: '/sku-mappings/ai-map/stream?unmappedOnly=false',
+        headers: AUTH,
       });
 
       expect(res.statusCode).toBe(200);
@@ -2374,7 +2387,8 @@ describe('Admin Routes', () => {
 
       const res = await app.inject({
         method: 'GET',
-        url: '/sku-mappings/ai-map/stream?apiKey=test-admin-key&unmappedOnly=false',
+        url: '/sku-mappings/ai-map/stream?unmappedOnly=false',
+        headers: AUTH,
       });
 
       expect(res.statusCode).toBe(200);

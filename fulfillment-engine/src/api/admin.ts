@@ -28,8 +28,7 @@ const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 function requireAdminKey(request: FastifyRequest, reply: FastifyReply): boolean {
   if (!ADMIN_API_KEY) return true; // dev mode: no key required
   const headerKey = request.headers['x-admin-key'];
-  const queryKey = (request.query as { apiKey?: string }).apiKey;
-  if (headerKey !== ADMIN_API_KEY && queryKey !== ADMIN_API_KEY) {
+  if (headerKey !== ADMIN_API_KEY) {
     reply.code(401).send({ error: 'Unauthorized' });
     return false;
   }

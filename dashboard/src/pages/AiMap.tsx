@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useBulkCreateMappings } from '@/hooks/useSkuMappingMutations';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
@@ -64,14 +64,16 @@ export function AiMap() {
   const bulkCreate = useBulkCreateMappings();
 
   // Advance to review when stream finishes
-  if (step === 'running' && stream.status === 'done') {
-    const rows: DraftRow[] = stream.drafts.map((d) => ({
-      ...d,
-      selected: d.confidence >= 0.8,
-    }));
-    setDrafts(rows);
-    setStep('review');
-  }
+  useEffect(() => {
+    if (step === 'running' && stream.status === 'done') {
+      const rows: DraftRow[] = stream.drafts.map((d) => ({
+        ...d,
+        selected: d.confidence >= 0.8,
+      }));
+      setDrafts(rows);
+      setStep('review');
+    }
+  }, [step, stream.status, stream.drafts]);
 
   function runAi() {
     setStep('running');

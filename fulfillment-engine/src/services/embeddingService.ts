@@ -56,7 +56,9 @@ export async function findTopCandidates(
     return prisma.$queryRaw<CandidateRow[]>`
       SELECT id, provider, "productCode", "productName", region, "dataAmount", validity, "netPrice"
       FROM "ProviderSkuCatalog"
-      WHERE "isActive" = true AND provider = ${provider}
+      WHERE "isActive" = true
+        AND embedding IS NOT NULL
+        AND provider = ${provider}
       ORDER BY embedding <=> ${vectorStr}::vector
       LIMIT ${k}
     `;
@@ -65,6 +67,7 @@ export async function findTopCandidates(
     SELECT id, provider, "productCode", "productName", region, "dataAmount", validity, "netPrice"
     FROM "ProviderSkuCatalog"
     WHERE "isActive" = true
+      AND embedding IS NOT NULL
     ORDER BY embedding <=> ${vectorStr}::vector
     LIMIT ${k}
   `;
