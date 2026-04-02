@@ -3,7 +3,9 @@ import { useSearchParams } from 'react-router-dom';
 import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { Pagination } from '@/components/Pagination';
-import { RefreshCw } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api';
+import { RefreshCw, Cpu } from 'lucide-react';
 
 const PAGE_SIZE = 25;
 
@@ -46,6 +48,31 @@ function SyncButton({ provider }: { provider: string }) {
         {syncMutation.isPending ? 'Syncing...' : 'Sync'}
       </button>
       {lastResult && <span className="text-sm text-muted-foreground">{lastResult}</span>}
+    </div>
+  );
+}
+
+function EmbedBackfillButton({ provider }: { provider: string }) {
+  const mutation = useMutation({
+    mutationFn: () =>
+      apiClient.post<{ ok: boolean; embedded: number }>('/provider-catalog/embed-backfill', { provider }),
+  });
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending}
+        className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
+      >
+        <Cpu className={`h-4 w-4 ${mutation.isPending ? 'animate-pulse' : ''}`} />
+        {mutation.isPending ? 'Embedding...' : 'Embed Backfill'}
+      </button>
+      {mutation.isSuccess && (
+        <span className="text-sm text-muted-foreground">{mutation.data.embedded} embeddings stored</span>
+      )}
+      {mutation.isError && (
+        <span className="text-sm text-red-600">{(mutation.error as Error).message}</span>
+      )}
     </div>
   );
 }
@@ -93,6 +120,7 @@ function CatalogTab({ provider }: { provider: string }) {
           className="border rounded-md px-3 py-1.5 text-sm flex-1 max-w-sm"
         />
         <SyncButton provider={provider} />
+        <EmbedBackfillButton provider={provider} />
         {data && (
           <span className="text-sm text-muted-foreground ml-auto">{data.total} items</span>
         )}

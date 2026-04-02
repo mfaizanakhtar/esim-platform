@@ -1,15 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api';
 import { useBulkCreateMappings } from '@/hooks/useSkuMappingMutations';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
+import { useAiMapStream } from '@/hooks/useAiMapStream';
 import type { AiMappingDraft } from '@/lib/types';
 import { ArrowLeft, Brain, CheckSquare, Square } from 'lucide-react';
-
-interface AiMapResponse {
-  drafts: AiMappingDraft[];
-}
 
 interface DraftRow extends AiMappingDraft {
   selected: boolean;
@@ -65,28 +60,27 @@ export function AiMap() {
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [bulkResult, setBulkResult] = useState<{ created: number; updated: number; skipped: number; failed: number } | null>(null);
 
-  const aiMapMutation = useMutation({
-    mutationFn: () =>
-      apiClient.post<AiMapResponse>('/sku-mappings/ai-map', {
-        provider: providerFilter || undefined,
-        // forceReplace implies we want to see all SKUs, including already-mapped ones
-        unmappedOnly: forceReplace ? false : unmappedOnly,
-      }),
-    onSuccess: (data) => {
-      const rows: DraftRow[] = data.drafts.map((d) => ({
+  const stream = useAiMapStream();
+  const bulkCreate = useBulkCreateMappings();
+
+  // Advance to review when stream finishes
+  useEffect(() => {
+    if (step === 'running' && stream.status === 'done') {
+      const rows: DraftRow[] = stream.drafts.map((d) => ({
         ...d,
         selected: d.confidence >= 0.8,
       }));
       setDrafts(rows);
       setStep('review');
-    },
-  });
-
-  const bulkCreate = useBulkCreateMappings();
+    }
+  }, [step, stream.status, stream.drafts]);
 
   function runAi() {
     setStep('running');
-    aiMapMutation.mutate();
+    stream.start({
+      provider: providerFilter || undefined,
+      unmappedOnly: forceReplace ? false : unmappedOnly,
+    });
   }
 
   function toggleAll(select: boolean) {
@@ -227,10 +221,30 @@ export function AiMap() {
       {step === 'running' && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
           <Brain className="h-10 w-10 animate-pulse" />
-          <p className="text-sm">AI is analyzing your SKUs and matching to catalog entries…</p>
-          {aiMapMutation.isError && (
+          {stream.progress ? (
+            <div className="text-center space-y-2">
+              <p className="text-sm font-medium text-foreground">
+                Batch {stream.progress.batch} / {stream.progress.totalBatches} — {stream.progress.found} matches found
+              </p>
+              <div className="w-64 bg-muted rounded-full h-2">
+                <div
+                  className="bg-primary h-2 rounded-full transition-all"
+                  style={{ width: `${Math.round((stream.progress.batch / stream.progress.totalBatches) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm">AI is analyzing your SKUs and matching to catalog entries…</p>
+          )}
+          <button
+            onClick={() => { stream.cancel(); setStep('configure'); }}
+            className="px-3 py-1.5 text-sm border rounded-md hover:bg-muted transition-colors"
+          >
+            Cancel
+          </button>
+          {stream.status === 'error' && (
             <div className="text-red-600 text-sm mt-4">
-              Error: {aiMapMutation.error instanceof Error ? aiMapMutation.error.message : 'Unknown error'}
+              Error: {stream.error ?? 'Unknown error'}
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={() => setStep('configure')}

@@ -1,7 +1,7 @@
 import { ApiError } from '@/lib/queryClient';
 
 // apiKey is accessed lazily to avoid circular imports
-function getApiKey(): string | null {
+export function getApiKey(): string | null {
   try {
     return sessionStorage.getItem('esim-admin-api-key');
   } catch {
@@ -53,3 +53,14 @@ export const apiClient = {
     request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 };
+
+/**
+ * Build a full SSE URL. The admin key is sent via x-admin-key header (fetch),
+ * not in the query string.
+ */
+export function buildSseUrl(path: string, params: Record<string, string> = {}): string {
+  const baseUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/admin';
+  const qs = new URLSearchParams(params);
+  const query = qs.toString();
+  return query ? `${baseUrl}${path}?${query}` : `${baseUrl}${path}`;
+}

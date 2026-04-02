@@ -106,6 +106,7 @@ model ProviderSkuCatalog {
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
   skuMappings   ProviderSkuMapping[]
+  // embedding vector(1536) -- pgvector column, managed via raw migration (not a Prisma field)
 
   @@unique([provider, skuId, productCode])
   @@index([provider])
