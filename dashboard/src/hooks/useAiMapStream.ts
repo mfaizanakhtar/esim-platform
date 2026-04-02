@@ -76,6 +76,7 @@ export function useAiMapStream() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
+      let explicitDone = false;
 
       for (;;) {
         const { done, value } = await reader.read();
@@ -110,9 +111,11 @@ export function useAiMapStream() {
               // ignore parse errors
             }
           } else if (eventType === 'done') {
+            explicitDone = true;
             setStatus('done');
             return;
           } else if (eventType === 'error') {
+            explicitDone = true;
             let msg = 'Stream failed';
             try {
               const d = JSON.parse(data) as { message?: string };
@@ -126,6 +129,9 @@ export function useAiMapStream() {
           }
         }
       }
+
+      // Stream closed without an explicit done/error event — treat as complete
+      if (!explicitDone) setStatus('done');
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return; // cancelled
       setError(err instanceof Error ? err.message : 'Unknown error');

@@ -190,14 +190,28 @@ describe('isVectorAvailable', () => {
   });
 });
 
+const LOCK_ACQUIRED = [{ acquired: true }];
+const LOCK_NOT_ACQUIRED = [{ acquired: false }];
+
 describe('backfillMissingEmbeddings', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('returns 0 when no rows need embedding', async () => {
-    mockQueryRaw.mockResolvedValue([]);
+    // First $queryRaw: advisory lock; second: empty rows batch
+    mockQueryRaw.mockResolvedValueOnce(LOCK_ACQUIRED).mockResolvedValueOnce([]);
+    mockExecuteRaw.mockResolvedValue(1); // advisory_unlock
     const openai = new OpenAI({ apiKey: 'test' });
     const result = await backfillMissingEmbeddings(openai);
     expect(result).toBe(0);
+  });
+
+  it('returns 0 immediately when advisory lock is not acquired', async () => {
+    mockQueryRaw.mockResolvedValueOnce(LOCK_NOT_ACQUIRED);
+    const openai = new OpenAI({ apiKey: 'test' });
+    const result = await backfillMissingEmbeddings(openai);
+    expect(result).toBe(0);
+    // Lock not acquired → no rows fetched, no unlock needed
+    expect(mockExecuteRaw).not.toHaveBeenCalled();
   });
 
   it('embeds rows and returns total count', async () => {
@@ -211,8 +225,11 @@ describe('backfillMissingEmbeddings', () => {
       },
       { id: 'cat-2', productName: 'USA 5GB', region: 'US', dataAmount: '5GB', validity: '30 days' },
     ];
-    // First call returns rows; second call returns empty (done)
-    mockQueryRaw.mockResolvedValueOnce(rows).mockResolvedValueOnce([]);
+    // lock → rows batch → empty batch (done)
+    mockQueryRaw
+      .mockResolvedValueOnce(LOCK_ACQUIRED)
+      .mockResolvedValueOnce(rows)
+      .mockResolvedValueOnce([]);
     mockExecuteRaw.mockResolvedValue(1);
 
     const mockCreate = getMockEmbeddingsCreate();
@@ -224,13 +241,16 @@ describe('backfillMissingEmbeddings', () => {
     const result = await backfillMissingEmbeddings(openai);
 
     expect(result).toBe(2);
-    expect(mockExecuteRaw).toHaveBeenCalledTimes(2); // one per row
+    // storeEmbedding (×2) + advisory_unlock (×1)
+    expect(mockExecuteRaw).toHaveBeenCalledTimes(3);
   });
 
   it('filters by provider when provided', async () => {
-    mockQueryRaw.mockResolvedValue([]);
+    // lock → empty rows (done)
+    mockQueryRaw.mockResolvedValueOnce(LOCK_ACQUIRED).mockResolvedValueOnce([]);
+    mockExecuteRaw.mockResolvedValue(1); // advisory_unlock
     const openai = new OpenAI({ apiKey: 'test' });
     await backfillMissingEmbeddings(openai, 'firoam');
-    expect(mockQueryRaw).toHaveBeenCalledTimes(1);
+    expect(mockQueryRaw).toHaveBeenCalledTimes(2); // lock + rows query
   });
 });

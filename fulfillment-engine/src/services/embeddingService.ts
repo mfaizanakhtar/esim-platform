@@ -96,38 +96,53 @@ export async function backfillMissingEmbeddings(
     validity: string | null;
   };
 
+  // Use a session-level advisory lock (id 0xEB4C = "embed backfill") so that
+  // concurrent calls don't double-embed the same rows or double-bill OpenAI.
+  const LOCK_ID = 0xeb4c;
+  const [lockResult] = await prisma.$queryRaw<[{ acquired: boolean }]>`
+    SELECT pg_try_advisory_lock(${LOCK_ID}::bigint) AS acquired
+  `;
+  if (!lockResult.acquired) {
+    logger.warn('Backfill advisory lock not acquired — another backfill is in progress');
+    return 0;
+  }
+
   const BATCH_SIZE = 500;
   let total = 0;
   let hasMore = true;
 
-  while (hasMore) {
-    let rows: NullEmbeddingRow[];
-    if (provider) {
-      rows = await prisma.$queryRaw<NullEmbeddingRow[]>`
-        SELECT id, "productName", region, "dataAmount", validity
-        FROM "ProviderSkuCatalog"
-        WHERE embedding IS NULL AND provider = ${provider}
-        LIMIT ${BATCH_SIZE}
-      `;
-    } else {
-      rows = await prisma.$queryRaw<NullEmbeddingRow[]>`
-        SELECT id, "productName", region, "dataAmount", validity
-        FROM "ProviderSkuCatalog"
-        WHERE embedding IS NULL
-        LIMIT ${BATCH_SIZE}
-      `;
-    }
+  try {
+    while (hasMore) {
+      let rows: NullEmbeddingRow[];
+      if (provider) {
+        rows = await prisma.$queryRaw<NullEmbeddingRow[]>`
+          SELECT id, "productName", region, "dataAmount", validity
+          FROM "ProviderSkuCatalog"
+          WHERE embedding IS NULL AND provider = ${provider}
+          LIMIT ${BATCH_SIZE}
+        `;
+      } else {
+        rows = await prisma.$queryRaw<NullEmbeddingRow[]>`
+          SELECT id, "productName", region, "dataAmount", validity
+          FROM "ProviderSkuCatalog"
+          WHERE embedding IS NULL
+          LIMIT ${BATCH_SIZE}
+        `;
+      }
 
-    if (rows.length === 0) {
-      hasMore = false;
-      break;
-    }
+      if (rows.length === 0) {
+        hasMore = false;
+        break;
+      }
 
-    const texts = rows.map(buildCatalogText);
-    const vectors = await embedBatch(texts, openai);
-    await Promise.all(rows.map((r, i) => storeEmbedding(r.id, vectors[i])));
-    total += rows.length;
-    logger.info({ count: rows.length, total }, 'Backfilled catalog embeddings batch');
+      const texts = rows.map(buildCatalogText);
+      const vectors = await embedBatch(texts, openai);
+      await Promise.all(rows.map((r, i) => storeEmbedding(r.id, vectors[i])));
+      total += rows.length;
+      logger.info({ count: rows.length, total }, 'Backfilled catalog embeddings batch');
+    }
+  } finally {
+    await prisma.$executeRaw`SELECT pg_advisory_unlock(${LOCK_ID}::bigint)`;
   }
 
   return total;
