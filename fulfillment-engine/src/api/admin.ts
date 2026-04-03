@@ -1052,7 +1052,11 @@ export default function adminRoutes(
           const groupCandidates = await Promise.all(
             group.map(async (_, j) => {
               try {
-                const topRows = await findTopCandidates(skuEmbeddings![groupStart + j], provider, 20);
+                const topRows = await findTopCandidates(
+                  skuEmbeddings![groupStart + j],
+                  provider,
+                  20,
+                );
                 if (topRows.length === 0) return catalogCompact;
                 return topRows.map((c) => ({
                   id: (c as { id: string }).id,
