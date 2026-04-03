@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBulkCreateMappings } from '@/hooks/useSkuMappingMutations';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
-import { useAiMapStream } from '@/hooks/useAiMapStream';
-import type { AiMappingDraft } from '@/lib/types';
-import { ArrowLeft, Brain, CheckSquare, Square } from 'lucide-react';
+import { useAiMapJob } from '@/hooks/useAiMapJob';
+import { apiClient } from '@/lib/api';
+import type { AiMappingDraft, AiMapJob } from '@/lib/types';
+import { ArrowLeft, Brain, CheckSquare, Square, ChevronDown, ChevronRight } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 
 interface DraftRow extends AiMappingDraft {
   selected: boolean;
@@ -25,8 +28,23 @@ function ConfidenceBadge({ confidence }: { confidence: number }) {
   );
 }
 
+function JobStatusBadge({ status }: { status: AiMapJob['status'] }) {
+  const map: Record<AiMapJob['status'], string> = {
+    running: 'bg-blue-100 text-blue-800',
+    done: 'bg-green-100 text-green-800',
+    error: 'bg-red-100 text-red-800',
+    interrupted: 'bg-yellow-100 text-yellow-800',
+  };
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${map[status] ?? 'bg-muted text-muted-foreground'}`}>
+      {status}
+    </span>
+  );
+}
+
 export function AiMap() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Step 1 config
@@ -59,28 +77,80 @@ export function AiMap() {
   const [step, setStep] = useState<'configure' | 'running' | 'review' | 'done'>('configure');
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
   const [bulkResult, setBulkResult] = useState<{ created: number; updated: number; skipped: number; failed: number } | null>(null);
+  const [pastJobsOpen, setPastJobsOpen] = useState(false);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [jobsActionError, setJobsActionError] = useState<string | null>(null);
 
-  const stream = useAiMapStream();
+  const job = useAiMapJob();
   const bulkCreate = useBulkCreateMappings();
 
-  // Advance to review when stream finishes
+  // Past jobs list — poll every 5s when panel is open
+  const { data: pastJobsData, refetch: refetchJobs } = useQuery({
+    queryKey: ['ai-map-jobs'],
+    queryFn: () => apiClient.get<{ jobs: AiMapJob[] }>('/sku-mappings/ai-map/jobs'),
+    refetchInterval: pastJobsOpen ? 5000 : false,
+    enabled: pastJobsOpen,
+  });
+  const pastJobs = pastJobsData?.jobs ?? [];
+
+  // Advance to review when job finishes
   useEffect(() => {
-    if (step === 'running' && stream.status === 'done') {
-      const rows: DraftRow[] = stream.drafts.map((d) => ({
+    if (step === 'running' && job.status === 'done') {
+      const rows: DraftRow[] = job.drafts.map((d) => ({
         ...d,
         selected: d.confidence >= 0.8,
       }));
       setDrafts(rows);
       setStep('review');
+      void queryClient.invalidateQueries({ queryKey: ['ai-map-jobs'] });
     }
-  }, [step, stream.status, stream.drafts]);
+  }, [step, job.status, job.drafts, queryClient]);
 
-  function runAi() {
+  async function runAi() {
+    setBulkResult(null);
     setStep('running');
-    stream.start({
+    await job.start({
       provider: providerFilter || undefined,
       unmappedOnly: forceReplace ? false : unmappedOnly,
     });
+  }
+
+  async function resumeJob(pastJob: AiMapJob) {
+    setBulkResult(null);
+    setJobsActionError(null);
+    try {
+      if (pastJob.status === 'done') {
+        // Load drafts and go straight to review
+        const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
+          `/sku-mappings/ai-map/jobs/${pastJob.id}`,
+        );
+        const rows: DraftRow[] = (result.job.draftsJson ?? []).map((d) => ({
+          ...d,
+          selected: d.confidence >= 0.8,
+        }));
+        setDrafts(rows);
+        setStep('review');
+      } else if (pastJob.status === 'running') {
+        // Reconnect to the live stream
+        setStep('running');
+        await job.connectToStream(pastJob.id);
+      }
+    } catch (err) {
+      setJobsActionError(err instanceof Error ? err.message : 'Failed to resume job');
+    }
+  }
+
+  async function dismissJob(id: string) {
+    setDismissingId(id);
+    setJobsActionError(null);
+    try {
+      await apiClient.delete(`/sku-mappings/ai-map/jobs/${id}`);
+      void refetchJobs();
+    } catch (err) {
+      setJobsActionError(err instanceof Error ? err.message : 'Failed to dismiss job');
+    } finally {
+      setDismissingId(null);
+    }
   }
 
   function toggleAll(select: boolean) {
@@ -97,7 +167,7 @@ export function AiMap() {
     const selected = drafts.filter((d) => d.selected);
     const inputs = selected.map((d) => ({
       shopifySku: d.shopifySku,
-      provider: d.provider, // each draft carries the provider from the matched catalog entry
+      provider: d.provider,
       providerCatalogId: d.catalogId,
       name: d.productName,
       region: d.region ?? undefined,
@@ -115,7 +185,6 @@ export function AiMap() {
             skipped: result.skipped ?? 0,
             failed: result.failed,
           });
-          // Only advance if fully successful; keep review open on partial failure
           if (result.failed === 0) {
             setStep('done');
           }
@@ -144,76 +213,156 @@ export function AiMap() {
 
       {/* Step 1: Configure */}
       {step === 'configure' && (
-        <div className="border rounded-lg p-6 space-y-5 max-w-md">
-          <p className="text-sm text-muted-foreground">
-            AI will match your Shopify SKU names to provider catalog entries based on region, data
-            amount, and validity. Review and approve suggestions before they are saved.
-            <br />
-            <span className="mt-1 inline-block">
-              Tip: select a specific provider to add that provider&apos;s mappings to SKUs that are
-              already mapped elsewhere — existing mappings are never overwritten.
-            </span>
-          </p>
+        <div className="space-y-4">
+          <div className="border rounded-lg p-6 space-y-5 max-w-md">
+            <p className="text-sm text-muted-foreground">
+              AI will match your Shopify SKU names to provider catalog entries based on region, data
+              amount, and validity. Review and approve suggestions before they are saved.
+              <br />
+              <span className="mt-1 inline-block">
+                Tip: select a specific provider to add that provider&apos;s mappings to SKUs that are
+                already mapped elsewhere — existing mappings are never overwritten.
+              </span>
+            </p>
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Provider</label>
-            <select
-              value={providerFilter}
-              onChange={(e) => setProviderFilter(e.target.value)}
-              className="w-full border rounded-md px-3 py-2 text-sm"
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Provider</label>
+              <select
+                value={providerFilter}
+                onChange={(e) => setProviderFilter(e.target.value)}
+                className="w-full border rounded-md px-3 py-2 text-sm"
+              >
+                <option value="">All providers</option>
+                {providers.map((p) => (
+                  <option key={p} value={p}>{providerLabel(p)} only</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="unmappedOnly"
+                type="checkbox"
+                checked={unmappedOnly}
+                onChange={(e) => setUnmappedOnly(e.target.checked)}
+              />
+              <label htmlFor="unmappedOnly" className="text-sm font-medium">
+                {providerFilter
+                  ? `Skip SKUs already mapped to ${providerLabel(providerFilter)}`
+                  : 'Skip SKUs already mapped to any provider'}
+              </label>
+            </div>
+            {providerFilter && unmappedOnly && (
+              <p className="text-xs text-muted-foreground">
+                SKUs with existing {providerLabel(providerFilter)} mappings will be skipped, but SKUs
+                mapped only to other providers will still be included.
+              </p>
+            )}
+
+            <div className="flex items-center gap-2">
+              <input
+                id="forceReplace"
+                type="checkbox"
+                checked={forceReplace}
+                onChange={(e) => setForceReplace(e.target.checked)}
+              />
+              <label htmlFor="forceReplace" className="text-sm font-medium">
+                Replace existing mappings (re-map / fix wrong ones)
+              </label>
+            </div>
+            {forceReplace && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                Existing mappings for the matched (SKU, provider) will be overwritten with the AI
+                suggestion. Priority and lock settings are preserved.
+              </p>
+            )}
+
+            <button
+              onClick={() => void runAi()}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
-              <option value="">All providers</option>
-              {providers.map((p) => (
-                <option key={p} value={p}>{providerLabel(p)} only</option>
-              ))}
-            </select>
+              <Brain className="h-4 w-4" />
+              Run AI Mapping
+            </button>
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              id="unmappedOnly"
-              type="checkbox"
-              checked={unmappedOnly}
-              onChange={(e) => setUnmappedOnly(e.target.checked)}
-            />
-            <label htmlFor="unmappedOnly" className="text-sm font-medium">
-              {providerFilter
-                ? `Skip SKUs already mapped to ${providerLabel(providerFilter)}`
-                : 'Skip SKUs already mapped to any provider'}
-            </label>
+          {/* Past Jobs panel */}
+          <div className="border rounded-lg overflow-hidden">
+            <button
+              onClick={() => setPastJobsOpen((v) => !v)}
+              className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors text-left"
+            >
+              {pastJobsOpen ? (
+                <ChevronDown className="h-4 w-4 shrink-0" />
+              ) : (
+                <ChevronRight className="h-4 w-4 shrink-0" />
+              )}
+              Past Jobs
+            </button>
+
+            {pastJobsOpen && (
+              <div className="border-t">
+                {pastJobs.length === 0 ? (
+                  <p className="px-4 py-6 text-sm text-center text-muted-foreground">
+                    No past jobs found.
+                  </p>
+                ) : (
+                  <div className="divide-y">
+                    {pastJobs.map((j) => (
+                      <div key={j.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                        <div className="flex-1 min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <JobStatusBadge status={j.status} />
+                            <span className="text-muted-foreground text-xs">
+                              {formatDistanceToNow(new Date(j.createdAt), { addSuffix: true })}
+                            </span>
+                            {j.provider && (
+                              <span className="text-xs capitalize text-muted-foreground">
+                                · {providerLabel(j.provider)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {j.status === 'running' ? (
+                              <>
+                                Batch {j.completedBatches}
+                                {j.totalBatches ? ` / ${j.totalBatches}` : ''} — {j.foundSoFar} matches
+                              </>
+                            ) : (
+                              <>{j.foundSoFar} matches</>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {(j.status === 'done' || j.status === 'running') && (
+                            <button
+                              onClick={() => void resumeJob(j)}
+                              className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                            >
+                              {j.status === 'done' ? 'Review' : 'View Progress'}
+                            </button>
+                          )}
+                          {(j.status === 'error' || j.status === 'interrupted') && (
+                            <button
+                              onClick={() => void dismissJob(j.id)}
+                              disabled={dismissingId === j.id}
+                              className="px-3 py-1 text-xs border rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+                            >
+                              Dismiss
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-          {providerFilter && unmappedOnly && (
-            <p className="text-xs text-muted-foreground">
-              SKUs with existing {providerLabel(providerFilter)} mappings will be skipped, but SKUs
-              mapped only to other providers will still be included.
-            </p>
+
+          {jobsActionError && (
+            <p className="text-sm text-red-600 px-1">{jobsActionError}</p>
           )}
-
-          <div className="flex items-center gap-2">
-            <input
-              id="forceReplace"
-              type="checkbox"
-              checked={forceReplace}
-              onChange={(e) => setForceReplace(e.target.checked)}
-            />
-            <label htmlFor="forceReplace" className="text-sm font-medium">
-              Replace existing mappings (re-map / fix wrong ones)
-            </label>
-          </div>
-          {forceReplace && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-              Existing mappings for the matched (SKU, provider) will be overwritten with the AI
-              suggestion. Priority and lock settings are preserved.
-            </p>
-          )}
-
-          <button
-            onClick={runAi}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            <Brain className="h-4 w-4" />
-            Run AI Mapping
-          </button>
         </div>
       )}
 
@@ -221,30 +370,41 @@ export function AiMap() {
       {step === 'running' && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
           <Brain className="h-10 w-10 animate-pulse" />
-          {stream.progress ? (
+          {job.progress ? (
             <div className="text-center space-y-2">
               <p className="text-sm font-medium text-foreground">
-                Batch {stream.progress.batch} / {stream.progress.totalBatches} — {stream.progress.found} matches found
+                Batch {job.progress.batch} / {job.progress.totalBatches} — {job.progress.found} matches found
               </p>
               <div className="w-64 bg-muted rounded-full h-2">
                 <div
                   className="bg-primary h-2 rounded-full transition-all"
-                  style={{ width: `${Math.round((stream.progress.batch / stream.progress.totalBatches) * 100)}%` }}
+                  style={{
+                    width: job.progress.totalBatches > 0
+                      ? `${Math.round((job.progress.batch / job.progress.totalBatches) * 100)}%`
+                      : '0%',
+                  }}
                 />
               </div>
             </div>
           ) : (
-            <p className="text-sm">AI is analyzing your SKUs and matching to catalog entries…</p>
+            <p className="text-sm">
+              {job.status === 'starting'
+                ? 'Starting job…'
+                : 'AI is analyzing your SKUs and matching to catalog entries…'}
+            </p>
           )}
+          <p className="text-xs text-muted-foreground">
+            You can leave this page — the job will continue in the background.
+          </p>
           <button
-            onClick={() => { stream.cancel(); setStep('configure'); }}
+            onClick={() => { job.cancel(); setStep('configure'); setPastJobsOpen(true); }}
             className="px-3 py-1.5 text-sm border rounded-md hover:bg-muted transition-colors"
           >
-            Cancel
+            Leave (job continues in background)
           </button>
-          {stream.status === 'error' && (
+          {job.status === 'error' && (
             <div className="text-red-600 text-sm mt-4">
-              Error: {stream.error ?? 'Unknown error'}
+              Error: {job.error ?? 'Unknown error'}
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={() => setStep('configure')}
@@ -253,7 +413,7 @@ export function AiMap() {
                   Back
                 </button>
                 <button
-                  onClick={runAi}
+                  onClick={() => void runAi()}
                   className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md"
                 >
                   Retry

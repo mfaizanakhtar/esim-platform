@@ -1417,6 +1417,285 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
   });
 
   // ---------------------------------------------------------------------------
+  // AI Map Jobs — persistent background job variant
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Background runner: consumes aiMapBatchGenerator and persists progress to DB.
+   * Called fire-and-forget (no await) so the HTTP handler returns immediately.
+   */
+  async function runAiMapJobAsync(jobId: string, params: AiMapGenParams): Promise<void> {
+    const allDrafts: AiMappingDraftInternal[] = [];
+    let totalBatchesSet = false;
+    try {
+      for await (const evt of aiMapBatchGenerator(params)) {
+        if (!totalBatchesSet) {
+          await prisma.aiMapJob.update({
+            where: { id: jobId },
+            data: { totalBatches: evt.totalBatches },
+          });
+          totalBatchesSet = true;
+        }
+        allDrafts.push(...evt.partialDrafts);
+        await prisma.aiMapJob.update({
+          where: { id: jobId },
+          data: {
+            completedBatches: evt.batch,
+            foundSoFar: evt.foundSoFar,
+            draftsJson: allDrafts as unknown as Prisma.JsonArray,
+            ...(evt.warning ? { warning: evt.warning } : {}),
+          },
+        });
+      }
+      await prisma.aiMapJob.update({
+        where: { id: jobId },
+        data: { status: 'done', completedAt: new Date() },
+      });
+    } catch (err) {
+      logger.error({ err, jobId }, 'AI map job failed');
+      const msg = err instanceof Error ? err.message : String(err);
+      try {
+        await prisma.aiMapJob.update({
+          where: { id: jobId },
+          data: { status: 'error', error: msg, completedAt: new Date() },
+        });
+      } catch (updateErr) {
+        logger.error({ err: updateErr, jobId }, 'Failed to persist AI map job failure state');
+      }
+    }
+  }
+
+  /**
+   * POST /admin/sku-mappings/ai-map/jobs
+   * Creates a persistent job and starts the AI mapping in the background.
+   * Returns { jobId } immediately — client polls /jobs/:id/stream for progress.
+   */
+  app.post('/sku-mappings/ai-map/jobs', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) {
+      return reply.code(500).send({ error: 'OPENAI_API_KEY not configured' });
+    }
+
+    const body = (request.body || {}) as {
+      provider?: string;
+      unmappedOnly?: boolean;
+      shopifySkus?: string[];
+    };
+
+    const job = await prisma.aiMapJob.create({
+      data: {
+        status: 'running',
+        provider: body.provider ?? null,
+        unmappedOnly: body.unmappedOnly !== false,
+      },
+    });
+
+    // Fire and forget — do not await
+    void runAiMapJobAsync(job.id, {
+      shopifySkus: body.shopifySkus,
+      provider: body.provider,
+      unmappedOnly: body.unmappedOnly,
+      openaiApiKey: OPENAI_API_KEY,
+    });
+
+    return reply.code(201).send({ jobId: job.id });
+  });
+
+  /**
+   * GET /admin/sku-mappings/ai-map/jobs
+   * List last 20 jobs newest-first, without the heavy draftsJson field.
+   */
+  app.get('/sku-mappings/ai-map/jobs', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const jobs = await prisma.aiMapJob.findMany({
+      select: {
+        id: true,
+        status: true,
+        provider: true,
+        unmappedOnly: true,
+        totalBatches: true,
+        completedBatches: true,
+        foundSoFar: true,
+        warning: true,
+        error: true,
+        createdAt: true,
+        completedAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+
+    return reply.send({ jobs });
+  });
+
+  /**
+   * GET /admin/sku-mappings/ai-map/jobs/:id
+   * Full job record including draftsJson — used after completion to load drafts for review.
+   */
+  app.get('/sku-mappings/ai-map/jobs/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { id } = request.params as { id: string };
+    const job = await prisma.aiMapJob.findUnique({ where: { id } });
+    if (!job) return reply.code(404).send({ error: 'Job not found' });
+
+    return reply.send({ job });
+  });
+
+  /**
+   * DELETE /admin/sku-mappings/ai-map/jobs/:id
+   * Hard-delete a job record (dismiss error/interrupted jobs from the list).
+   */
+  app.delete(
+    '/sku-mappings/ai-map/jobs/:id',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const { id } = request.params as { id: string };
+
+      // Fetch first to guard against deleting a still-running job
+      const existing = await prisma.aiMapJob.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!existing) return reply.code(404).send({ error: 'Job not found' });
+      if (existing.status === 'running') {
+        return reply.code(409).send({ error: 'Cannot delete a running job' });
+      }
+
+      try {
+        await prisma.aiMapJob.delete({ where: { id } });
+      } catch (err) {
+        // P2025 = "Record to delete does not exist" (race condition)
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+          return reply.code(404).send({ error: 'Job not found' });
+        }
+        logger.error({ err }, 'Failed to delete AI map job');
+        return reply.code(500).send({ error: 'Failed to delete job' });
+      }
+
+      return reply.send({ ok: true });
+    },
+  );
+
+  /**
+   * GET /admin/sku-mappings/ai-map/jobs/:id/stream
+   * SSE stream that polls the AiMapJob DB record every 2s and emits progress events.
+   * Clients can disconnect and reconnect — they'll pick up from the saved state.
+   */
+  app.get(
+    '/sku-mappings/ai-map/jobs/:id/stream',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const { id } = request.params as { id: string };
+
+      const requestOrigin = request.headers.origin;
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        ...(requestOrigin
+          ? {
+              'Access-Control-Allow-Origin': requestOrigin,
+              'Access-Control-Allow-Credentials': 'true',
+              Vary: 'Origin',
+            }
+          : {}),
+      });
+      reply.raw.flushHeaders();
+
+      let closed = false;
+      request.raw.on('close', () => {
+        closed = true;
+      });
+
+      const send = (event: string, data: unknown) => {
+        if (!reply.raw.destroyed) {
+          reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        }
+      };
+
+      // Poll loop
+      const poll = async () => {
+        while (!closed && !reply.raw.destroyed) {
+          let job: {
+            status: string;
+            totalBatches: number | null;
+            completedBatches: number;
+            foundSoFar: number;
+            error: string | null;
+          } | null;
+
+          try {
+            job = await prisma.aiMapJob.findUnique({
+              where: { id },
+              select: {
+                status: true,
+                totalBatches: true,
+                completedBatches: true,
+                foundSoFar: true,
+                error: true,
+              },
+            });
+          } catch {
+            send('error', { message: 'Failed to read job state' });
+            break;
+          }
+
+          if (!job) {
+            send('error', { message: 'Job not found' });
+            break;
+          }
+
+          if (job.status === 'running') {
+            send('progress', {
+              batch: job.completedBatches,
+              totalBatches: job.totalBatches ?? 0,
+              foundSoFar: job.foundSoFar,
+            });
+          } else if (job.status === 'done') {
+            send('progress', {
+              batch: job.completedBatches,
+              totalBatches: job.totalBatches ?? job.completedBatches,
+              foundSoFar: job.foundSoFar,
+            });
+            send('done', {});
+            break;
+          } else {
+            // error or interrupted
+            send('error', { message: job.error ?? job.status });
+            break;
+          }
+
+          // Wait 2s before next poll — clean up the close listener whether the
+          // timer or the close event fires first to avoid MaxListenersExceeded.
+          await new Promise<void>((resolve) => {
+            const onClose = () => {
+              clearTimeout(t);
+              resolve();
+            };
+            const t = setTimeout(() => {
+              request.raw.removeListener('close', onClose);
+              resolve();
+            }, 2000);
+            request.raw.once('close', onClose);
+          });
+        }
+
+        if (!reply.raw.destroyed) reply.raw.end();
+      };
+
+      void poll();
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // Provider SKU Catalog
   // ---------------------------------------------------------------------------
 

@@ -144,3 +144,19 @@ export interface CatalogPage<T> extends OffsetPage {
 export interface ApiErrorResponse {
   error: string;
 }
+
+export interface AiMapJob {
+  id: string;
+  status: 'running' | 'done' | 'error' | 'interrupted';
+  provider: string | null;
+  unmappedOnly: boolean;
+  totalBatches: number | null;
+  completedBatches: number;
+  foundSoFar: number;
+  warning: string | null;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  // draftsJson only present on GET /jobs/:id
+  draftsJson?: AiMappingDraft[];
+}

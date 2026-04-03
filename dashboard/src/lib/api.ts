@@ -64,3 +64,10 @@ export function buildSseUrl(path: string, params: Record<string, string> = {}): 
   const query = qs.toString();
   return query ? `${baseUrl}${path}?${query}` : `${baseUrl}${path}`;
 }
+
+/**
+ * Build the SSE URL for a persistent AI map job's progress stream.
+ */
+export function buildJobSseUrl(jobId: string): string {
+  return buildSseUrl(`/sku-mappings/ai-map/jobs/${jobId}/stream`);
+}
