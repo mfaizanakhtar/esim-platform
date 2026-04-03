@@ -31,7 +31,7 @@ export function AppShell() {
 
       {/* Sidebar — fixed+off-screen on mobile, static in-flow on desktop */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-56 border-r flex flex-col bg-background transition-transform duration-200 md:static md:translate-x-0 md:visible ${
+        className={`fixed inset-y-0 left-0 z-50 w-56 border-r flex flex-col bg-white transition-transform duration-200 md:static md:translate-x-0 md:visible ${
           sidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
         }`}
       >
@@ -80,7 +80,7 @@ export function AppShell() {
       {/* Main content area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar */}
-        <header className="md:hidden flex items-center gap-3 px-4 h-12 border-b shrink-0 bg-background">
+        <header className="md:hidden flex items-center gap-3 px-4 h-12 border-b shrink-0 bg-white">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-1 rounded hover:bg-muted transition-colors"
