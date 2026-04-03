@@ -79,6 +79,7 @@ export function AiMap() {
   const [bulkResult, setBulkResult] = useState<{ created: number; updated: number; skipped: number; failed: number } | null>(null);
   const [pastJobsOpen, setPastJobsOpen] = useState(false);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [jobsActionError, setJobsActionError] = useState<string | null>(null);
 
   const job = useAiMapJob();
   const bulkCreate = useBulkCreateMappings();
@@ -116,29 +117,37 @@ export function AiMap() {
 
   async function resumeJob(pastJob: AiMapJob) {
     setBulkResult(null);
-    if (pastJob.status === 'done') {
-      // Load drafts and go straight to review
-      const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
-        `/sku-mappings/ai-map/jobs/${pastJob.id}`,
-      );
-      const rows: DraftRow[] = (result.job.draftsJson ?? []).map((d) => ({
-        ...d,
-        selected: d.confidence >= 0.8,
-      }));
-      setDrafts(rows);
-      setStep('review');
-    } else if (pastJob.status === 'running') {
-      // Reconnect to the live stream
-      setStep('running');
-      await job.connectToStream(pastJob.id);
+    setJobsActionError(null);
+    try {
+      if (pastJob.status === 'done') {
+        // Load drafts and go straight to review
+        const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
+          `/sku-mappings/ai-map/jobs/${pastJob.id}`,
+        );
+        const rows: DraftRow[] = (result.job.draftsJson ?? []).map((d) => ({
+          ...d,
+          selected: d.confidence >= 0.8,
+        }));
+        setDrafts(rows);
+        setStep('review');
+      } else if (pastJob.status === 'running') {
+        // Reconnect to the live stream
+        setStep('running');
+        await job.connectToStream(pastJob.id);
+      }
+    } catch (err) {
+      setJobsActionError(err instanceof Error ? err.message : 'Failed to resume job');
     }
   }
 
   async function dismissJob(id: string) {
     setDismissingId(id);
+    setJobsActionError(null);
     try {
       await apiClient.delete(`/sku-mappings/ai-map/jobs/${id}`);
       void refetchJobs();
+    } catch (err) {
+      setJobsActionError(err instanceof Error ? err.message : 'Failed to dismiss job');
     } finally {
       setDismissingId(null);
     }
@@ -350,6 +359,10 @@ export function AiMap() {
               </div>
             )}
           </div>
+
+          {jobsActionError && (
+            <p className="text-sm text-red-600 px-1">{jobsActionError}</p>
+          )}
         </div>
       )}
 
