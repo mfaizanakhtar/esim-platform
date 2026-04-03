@@ -1041,41 +1041,49 @@ export default function adminRoutes(
       let batchWarning: string | undefined;
 
       if (useVectorSearch && skuEmbeddings) {
-        // Vector path: one GPT call per SKU with its top-20 candidates
-        for (let j = 0; j < batch.length; j++) {
-          const variant = batch[j];
-          const skuIdx = i + j;
-          const displayName =
-            [variant.productTitle, variant.variantTitle].filter(Boolean).join(' - ') || variant.sku;
+        // Vector path: group 10 SKUs per GPT call, fetch their candidates in parallel.
+        // 10x fewer API calls vs 1-per-SKU, keeping each prompt small (~20 candidates × 10 SKUs).
+        const VECTOR_GROUP = 10;
+        for (let g = 0; g < batch.length; g += VECTOR_GROUP) {
+          const group = batch.slice(g, g + VECTOR_GROUP);
+          const groupStart = i + g;
 
-          let candidates: typeof catalogCompact;
-          try {
-            const topRows = await findTopCandidates(skuEmbeddings[skuIdx], provider, 20);
-            candidates =
-              topRows.length > 0
-                ? topRows.map((c) => ({
-                    id: (c as { id: string }).id,
-                    provider: (c as { provider: string }).provider,
-                    productName: (c as { productName: string }).productName,
-                    region: (c as { region: string | null }).region,
-                    dataAmount: (c as { dataAmount: string | null }).dataAmount,
-                    validity: (c as { validity: string | null }).validity,
-                    netPrice: (c as { netPrice: unknown }).netPrice,
-                  }))
-                : catalogCompact;
-          } catch {
-            candidates = catalogCompact;
-          }
+          // Fetch top-20 candidates for each SKU in parallel
+          const groupCandidates = await Promise.all(
+            group.map(async (_, j) => {
+              try {
+                const topRows = await findTopCandidates(skuEmbeddings![groupStart + j], provider, 20);
+                if (topRows.length === 0) return catalogCompact;
+                return topRows.map((c) => ({
+                  id: (c as { id: string }).id,
+                  provider: (c as { provider: string }).provider,
+                  productName: (c as { productName: string }).productName,
+                  region: (c as { region: string | null }).region,
+                  dataAmount: (c as { dataAmount: string | null }).dataAmount,
+                  validity: (c as { validity: string | null }).validity,
+                  netPrice: (c as { netPrice: unknown }).netPrice,
+                }));
+              } catch {
+                return catalogCompact;
+              }
+            }),
+          );
+
+          const skuInputs = group.map((variant, j) => ({
+            sku: variant.sku,
+            displayName:
+              [variant.productTitle, variant.variantTitle].filter(Boolean).join(' - ') ||
+              variant.sku,
+            candidates: groupCandidates[j],
+          }));
 
           const systemPrompt =
-            'You are an eSIM product matcher. You are given a Shopify SKU and its top-20 most semantically similar catalog candidates. Pick the best match or omit if none are suitable. Return only JSON.';
-          const userPrompt = `Match this Shopify SKU to a catalog entry:
-SKU: ${JSON.stringify({ sku: variant.sku, displayName })}
-
-Candidates: ${JSON.stringify(candidates)}
+            'You are an eSIM product matcher. For each Shopify SKU you are given its top-20 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Return only JSON.';
+          const userPrompt = `Match each Shopify SKU to its best catalog entry:
+${JSON.stringify(skuInputs)}
 
 Return JSON: { "mappings": [{ "shopifySku": string, "catalogId": string, "confidence": number (0-1), "reason": string }] }
-Only include a mapping with confidence >= 0.3. If no good match, return empty mappings array.`;
+Only include mappings with confidence >= 0.3. If no good match for a SKU, omit it.`;
 
           try {
             const completion = await openai.chat.completions.create({
@@ -1114,7 +1122,7 @@ Only include a mapping with confidence >= 0.3. If no good match, return empty ma
               });
             }
           } catch (err) {
-            logger.error({ err, sku: variant.sku }, 'OpenAI SKU match failed');
+            logger.error({ err, skus: group.map((v) => v.sku) }, 'OpenAI group match failed');
             const msg = err instanceof Error ? err.message : String(err);
             const isFatal =
               err instanceof OpenAI.APIError &&
