@@ -106,6 +106,7 @@ export function AiMap() {
   }, [step, job.status, job.drafts, queryClient]);
 
   async function runAi() {
+    setBulkResult(null);
     setStep('running');
     await job.start({
       provider: providerFilter || undefined,
@@ -114,6 +115,7 @@ export function AiMap() {
   }
 
   async function resumeJob(pastJob: AiMapJob) {
+    setBulkResult(null);
     if (pastJob.status === 'done') {
       // Load drafts and go straight to review
       const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(

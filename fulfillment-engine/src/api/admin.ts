@@ -1452,13 +1452,16 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         data: { status: 'done', completedAt: new Date() },
       });
     } catch (err) {
+      logger.error({ err, jobId }, 'AI map job failed');
       const msg = err instanceof Error ? err.message : String(err);
-      await prisma.aiMapJob
-        .update({
+      try {
+        await prisma.aiMapJob.update({
           where: { id: jobId },
           data: { status: 'error', error: msg, completedAt: new Date() },
-        })
-        .catch(() => {});
+        });
+      } catch (updateErr) {
+        logger.error({ err: updateErr, jobId }, 'Failed to persist AI map job failure state');
+      }
     }
   }
 
@@ -1552,10 +1555,21 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       if (!requireAdminKey(request, reply)) return;
 
       const { id } = request.params as { id: string };
+
+      // Fetch first to guard against deleting a still-running job
+      const existing = await prisma.aiMapJob.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      if (!existing) return reply.code(404).send({ error: 'Job not found' });
+      if (existing.status === 'running') {
+        return reply.code(409).send({ error: 'Cannot delete a running job' });
+      }
+
       try {
         await prisma.aiMapJob.delete({ where: { id } });
       } catch (err) {
-        // P2025 = "Record to delete does not exist"
+        // P2025 = "Record to delete does not exist" (race condition)
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
           return reply.code(404).send({ error: 'Job not found' });
         }

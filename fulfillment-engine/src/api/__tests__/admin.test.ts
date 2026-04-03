@@ -3068,6 +3068,7 @@ describe('Admin Routes', () => {
     ).aiMapJob;
 
     it('deletes job and returns ok', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue({ status: 'done' });
       prismaAiMapJob.delete.mockResolvedValue({ id: 'job-1' });
 
       const res = await app.inject({
@@ -3079,12 +3080,19 @@ describe('Admin Routes', () => {
       expect(res.json<{ ok: boolean }>().ok).toBe(true);
     });
 
-    it('returns 404 when job does not exist', async () => {
-      const p2025 = new Prisma.PrismaClientKnownRequestError('Record not found', {
-        code: 'P2025',
-        clientVersion: '5.0.0',
+    it('returns 409 when trying to delete a running job', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue({ status: 'running' });
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/sku-mappings/ai-map/jobs/job-running',
+        headers: AUTH,
       });
-      prismaAiMapJob.delete.mockRejectedValue(p2025);
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 404 when job does not exist', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue(null);
       const res = await app.inject({
         method: 'DELETE',
         url: '/sku-mappings/ai-map/jobs/missing',
