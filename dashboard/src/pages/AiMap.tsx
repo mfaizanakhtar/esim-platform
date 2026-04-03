@@ -119,8 +119,8 @@ export function AiMap() {
     setBulkResult(null);
     setJobsActionError(null);
     try {
-      if (pastJob.status === 'done') {
-        // Load drafts and go straight to review
+      if (pastJob.status === 'done' || pastJob.status === 'error') {
+        // Load drafts (may be partial for errored jobs) and go straight to review
         const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
           `/sku-mappings/ai-map/jobs/${pastJob.id}`,
         );
@@ -342,6 +342,14 @@ export function AiMap() {
                               {j.status === 'done' ? 'Review' : 'View Progress'}
                             </button>
                           )}
+                          {j.status === 'error' && j.foundSoFar > 0 && (
+                            <button
+                              onClick={() => void resumeJob(j)}
+                              className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                            >
+                              Review partial
+                            </button>
+                          )}
                           {(j.status === 'error' || j.status === 'interrupted') && (
                             <button
                               onClick={() => void dismissJob(j.id)}
@@ -412,6 +420,17 @@ export function AiMap() {
                 >
                   Back
                 </button>
+                {job.drafts.length > 0 && (
+                  <button
+                    onClick={() => {
+                      setDrafts(job.drafts.map((d) => ({ ...d, selected: d.confidence >= 0.8 })));
+                      setStep('review');
+                    }}
+                    className="px-3 py-1.5 text-sm border rounded-md hover:bg-muted"
+                  >
+                    Review {job.drafts.length} partial results
+                  </button>
+                )}
                 <button
                   onClick={() => void runAi()}
                   className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md"
