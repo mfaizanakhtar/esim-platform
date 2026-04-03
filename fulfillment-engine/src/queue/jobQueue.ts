@@ -14,7 +14,7 @@ export async function initializeJobQueue(): Promise<PgBoss> {
       throw new Error('DATABASE_URL not set');
     }
 
-    jobQueue = new PgBoss(connectionString);
+    jobQueue = new PgBoss({ connectionString, max: 3 });
     await jobQueue.start();
     logger.info('pg-boss started');
   }
