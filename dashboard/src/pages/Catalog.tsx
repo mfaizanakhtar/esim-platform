@@ -112,22 +112,22 @@ function CatalogTab({ provider }: { provider: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name, code, or region..."
-          className="border rounded-md px-3 py-1.5 text-sm flex-1 max-w-sm"
+          className="border rounded-md px-3 py-1.5 text-sm flex-1 min-w-[160px] max-w-sm"
         />
         <SyncButton provider={provider} />
         <EmbedBackfillButton provider={provider} />
         {data && (
-          <span className="text-sm text-muted-foreground ml-auto">{data.total} items</span>
+          <span className="text-sm text-muted-foreground">{data.total} items</span>
         )}
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="border rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[560px]">
           <thead className="bg-muted/50">
             <tr>
               <th className="text-left px-4 py-3 font-medium">Product Code</th>
