@@ -191,9 +191,9 @@ export function SkuMappings() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
         <h1 className="text-2xl font-bold">SKU Mappings</h1>
-        <div className="flex items-center gap-3 ml-auto flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap sm:ml-auto">
           <select
             aria-label="Filter by provider"
             value={provider}
@@ -219,7 +219,7 @@ export function SkuMappings() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by SKU or name..."
-            className="border rounded-md px-3 py-1.5 text-sm w-56"
+            className="border rounded-md px-3 py-1.5 text-sm w-40 sm:w-56"
           />
           <button
             onClick={handleSmartPricing}
@@ -264,8 +264,8 @@ export function SkuMappings() {
         </div>
       )}
 
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="border rounded-lg overflow-x-auto">
+        <table className="w-full text-sm min-w-[520px]">
           <thead className="bg-muted/50">
             <tr>
               <th className="text-left px-4 py-3 font-medium w-8">Pri</th>

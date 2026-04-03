@@ -267,39 +267,37 @@ export function AiMap() {
       {/* Step 3: Review */}
       {step === 'review' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-sm text-muted-foreground mr-auto">
               {drafts.length} suggestions — {highConfidenceCount} high confidence (≥80%),{' '}
               {selectedCount} selected
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => toggleAll(true)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
-              >
-                <CheckSquare className="h-3 w-3" />
-                Select all
-              </button>
-              <button
-                onClick={() => toggleAll(false)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
-              >
-                <Square className="h-3 w-3" />
-                Deselect all
-              </button>
-              <button
-                onClick={() =>
-                  setDrafts((prev) => prev.map((d) => ({ ...d, selected: d.confidence >= 0.8 })))
-                }
-                className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
-              >
-                High confidence only
-              </button>
-            </div>
+            <button
+              onClick={() => toggleAll(true)}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
+            >
+              <CheckSquare className="h-3 w-3" />
+              Select all
+            </button>
+            <button
+              onClick={() => toggleAll(false)}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
+            >
+              <Square className="h-3 w-3" />
+              Deselect all
+            </button>
+            <button
+              onClick={() =>
+                setDrafts((prev) => prev.map((d) => ({ ...d, selected: d.confidence >= 0.8 })))
+              }
+              className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
+            >
+              High confidence only
+            </button>
           </div>
 
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="border rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[700px]">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="px-3 py-2 w-8"></th>
