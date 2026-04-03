@@ -1907,6 +1907,12 @@ describe('Admin Routes', () => {
   // ── POST /sku-mappings/ai-map ─────────────────────────────────────────────
 
   describe('POST /sku-mappings/ai-map', () => {
+    beforeEach(() => {
+      // Multi-provider discovery: return a single provider so the per-provider loop
+      // behaves identically to the old single-provider path in existing tests.
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }]);
+    });
+
     it('returns draft mappings from OpenAI', async () => {
       adminMocks.mockGetAllVariants.mockResolvedValue([
         { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
@@ -2165,6 +2171,10 @@ describe('Admin Routes', () => {
   // ── POST /sku-mappings/ai-map — vector path ───────────────────────────────
 
   describe('POST /sku-mappings/ai-map — vector path', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }]);
+    });
+
     it('uses findTopCandidates instead of full catalog when isVectorAvailable returns true', async () => {
       adminMocks.mockIsVectorAvailable.mockResolvedValue(true);
       adminMocks.mockEmbedBatch.mockResolvedValue([[0.1, 0.2, 0.3]]);
@@ -2263,11 +2273,224 @@ describe('Admin Routes', () => {
       // findTopCandidates should NOT be called in fallback mode
       expect(adminMocks.mockFindTopCandidates).not.toHaveBeenCalled();
     });
+
+    it('short-circuits immediately on fatal OpenAI error in vector path', async () => {
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(true);
+      adminMocks.mockEmbedBatch.mockResolvedValue([[0.1, 0.2, 0.3]]);
+      adminMocks.mockFindTopCandidates.mockResolvedValue([
+        makeCatalogItem({ id: 'cat-firoam', productName: 'Japan 1GB', region: 'JP' }),
+      ]);
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-firoam', productName: 'Japan 1GB', region: 'JP' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockRejectedValueOnce(
+        new OpenAI.APIError(429, undefined, 'You exceeded your current quota', undefined),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(502);
+      expect(res.json().error).toMatch(/OpenAI error.*quota/);
+    });
+  });
+
+  // ── POST /sku-mappings/ai-map — multi-provider mode ───────────────────────
+
+  describe('POST /sku-mappings/ai-map — multi-provider mode', () => {
+    it('runs one matching pass per provider and returns drafts from all providers', async () => {
+      // Two active providers discovered via $queryRaw
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }, { provider: 'tgt' }]);
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      // unmappedOnly=false → no filter calls; prismaCatalog.findMany called twice (once per provider)
+      vi.mocked(prismaCatalog.findMany)
+        .mockResolvedValueOnce([
+          makeCatalogItem({ id: 'firoam-jp', productName: 'Japan 1GB', provider: 'firoam' }),
+        ])
+        .mockResolvedValueOnce([
+          makeCatalogItem({ id: 'tgt-jp', productName: 'Japan 1GB TGT', provider: 'tgt' }),
+        ]);
+      adminMocks.mockOpenAiCreate
+        .mockResolvedValueOnce({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  mappings: [
+                    {
+                      shopifySku: 'ESIM-JP-1GB',
+                      catalogId: 'firoam-jp',
+                      confidence: 0.9,
+                      reason: 'FiRoam match',
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        })
+        .mockResolvedValueOnce({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  mappings: [
+                    {
+                      shopifySku: 'ESIM-JP-1GB',
+                      catalogId: 'tgt-jp',
+                      confidence: 0.85,
+                      reason: 'TGT match',
+                    },
+                  ],
+                }),
+              },
+            },
+          ],
+        });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const { drafts } = res.json();
+      // Both providers should produce a draft
+      expect(drafts).toHaveLength(2);
+      expect(drafts.map((d: { provider: string }) => d.provider).sort()).toEqual(['firoam', 'tgt']);
+      // GPT called once per provider
+      expect(adminMocks.mockOpenAiCreate).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips provider with empty catalog and still processes remaining providers', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }, { provider: 'tgt' }]);
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      // firoam catalog empty → skipped; tgt has entries
+      vi.mocked(prismaCatalog.findMany)
+        .mockResolvedValueOnce([]) // firoam catalog empty
+        .mockResolvedValueOnce([
+          makeCatalogItem({ id: 'tgt-jp', productName: 'Japan TGT', provider: 'tgt' }),
+        ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'ESIM-JP-1GB',
+                    catalogId: 'tgt-jp',
+                    confidence: 0.85,
+                    reason: 'TGT',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const { drafts } = res.json();
+      expect(drafts).toHaveLength(1);
+      expect(drafts[0].provider).toBe('tgt');
+      expect(adminMocks.mockOpenAiCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns empty drafts when no active providers are in catalog', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([]); // no active providers
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().drafts).toHaveLength(0);
+    });
+
+    it('applies unmapped filter per-provider so SKUs mapped to one provider still get mapped to others', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }, { provider: 'tgt' }]);
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-JP-1GB', variantId: 'gid://1', productTitle: 'Japan', variantTitle: '1GB' },
+      ]);
+      // ESIM-JP-1GB is already mapped to firoam but NOT to tgt
+      vi.mocked(prisma.providerSkuMapping.findMany)
+        .mockResolvedValueOnce([{ shopifySku: 'ESIM-JP-1GB' } as never]) // firoam already mapped
+        .mockResolvedValueOnce([]); // tgt not mapped
+      // firoam is filtered out entirely (no SKUs remain), so catalog is only fetched for tgt
+      vi.mocked(prismaCatalog.findMany).mockResolvedValueOnce([
+        makeCatalogItem({ id: 'tgt-jp', productName: 'Japan 1GB TGT', provider: 'tgt' }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'ESIM-JP-1GB',
+                    catalogId: 'tgt-jp',
+                    confidence: 0.85,
+                    reason: 'TGT match',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: {}, // unmappedOnly defaults to true
+      });
+
+      expect(res.statusCode).toBe(200);
+      const { drafts } = res.json();
+      // Only TGT draft — firoam was filtered out as already mapped
+      expect(drafts).toHaveLength(1);
+      expect(drafts[0].provider).toBe('tgt');
+    });
   });
 
   // ── GET /sku-mappings/ai-map/stream ──────────────────────────────────────
 
   describe('GET /sku-mappings/ai-map/stream', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }]);
+    });
+
     it('returns SSE response with progress and done events', async () => {
       adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
       adminMocks.mockGetAllVariants.mockResolvedValue([
