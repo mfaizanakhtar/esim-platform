@@ -113,3 +113,20 @@ model ProviderSkuCatalog {
   @@index([skuId])
   @@index([isActive])
 }
+
+model AiMapJob {
+  id               String    @id @default(cuid())
+  status           String    @default("running") // running | done | error | interrupted
+  provider         String?
+  unmappedOnly     Boolean   @default(true)
+  totalBatches     Int?
+  completedBatches Int       @default(0)
+  foundSoFar       Int       @default(0)
+  draftsJson       Json      @default("[]")
+  warning          String?
+  error            String?
+  createdAt        DateTime  @default(now())
+  completedAt      DateTime?
+
+  @@map("AiMapJob")
+}

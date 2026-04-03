@@ -56,6 +56,13 @@ vi.mock('~/db/prisma', () => ({
       count: vi.fn(),
       upsert: vi.fn(),
     },
+    aiMapJob: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
   },
@@ -2898,6 +2905,260 @@ describe('Admin Routes', () => {
 
     it('returns 401 without admin key', async () => {
       const res = await app.inject({ method: 'POST', url: '/sku-mappings/bulk', payload: {} });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // AI Map Jobs — persistent background job endpoints
+  // ---------------------------------------------------------------------------
+
+  describe('POST /sku-mappings/ai-map/jobs', () => {
+    const prismaAiMapJob = (
+      prisma as unknown as { aiMapJob: Record<string, ReturnType<typeof vi.fn>> }
+    ).aiMapJob;
+
+    beforeEach(() => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }]);
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-EU-1GB', productTitle: 'EU 1GB', variantTitle: '1GB' },
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify([
+                {
+                  shopify_sku: 'ESIM-EU-1GB',
+                  catalog_id: 'cat-1',
+                  confidence: 0.9,
+                  reason: 'Good match',
+                },
+              ]),
+            },
+          },
+        ],
+      });
+    });
+
+    it('creates job record and returns 201 with jobId immediately', async () => {
+      prismaAiMapJob.create.mockResolvedValue({ id: 'job-001', status: 'running' });
+      prismaAiMapJob.update.mockResolvedValue({});
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map/jobs',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam', unmappedOnly: true },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = res.json<{ jobId: string }>();
+      expect(body.jobId).toBe('job-001');
+      expect(prismaAiMapJob.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'running', provider: 'firoam' }),
+        }),
+      );
+    });
+
+    it('returns 500 when OPENAI_API_KEY is not set', async () => {
+      const orig = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map/jobs',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+      process.env.OPENAI_API_KEY = orig;
+      expect(res.statusCode).toBe(500);
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map/jobs',
+        payload: {},
+      });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe('GET /sku-mappings/ai-map/jobs', () => {
+    const prismaAiMapJob = (
+      prisma as unknown as { aiMapJob: Record<string, ReturnType<typeof vi.fn>> }
+    ).aiMapJob;
+
+    it('returns list of jobs without draftsJson', async () => {
+      const mockJobs = [
+        {
+          id: 'job-1',
+          status: 'done',
+          provider: null,
+          unmappedOnly: true,
+          totalBatches: 2,
+          completedBatches: 2,
+          foundSoFar: 5,
+          warning: null,
+          error: null,
+          createdAt: new Date(),
+          completedAt: new Date(),
+        },
+      ];
+      prismaAiMapJob.findMany.mockResolvedValue(mockJobs);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ jobs: unknown[] }>();
+      expect(body.jobs).toHaveLength(1);
+      expect(body.jobs[0]).toMatchObject({ id: 'job-1', status: 'done' });
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({ method: 'GET', url: '/sku-mappings/ai-map/jobs' });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe('GET /sku-mappings/ai-map/jobs/:id', () => {
+    const prismaAiMapJob = (
+      prisma as unknown as { aiMapJob: Record<string, ReturnType<typeof vi.fn>> }
+    ).aiMapJob;
+
+    it('returns full job with draftsJson', async () => {
+      const mockJob = { id: 'job-1', status: 'done', draftsJson: [{ shopifySku: 'ESIM-EU-1GB' }] };
+      prismaAiMapJob.findUnique.mockResolvedValue(mockJob);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs/job-1',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ job: typeof mockJob }>();
+      expect(body.job.id).toBe('job-1');
+      expect(body.job.draftsJson).toHaveLength(1);
+    });
+
+    it('returns 404 when job not found', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue(null);
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs/missing',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({ method: 'GET', url: '/sku-mappings/ai-map/jobs/job-1' });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe('DELETE /sku-mappings/ai-map/jobs/:id', () => {
+    const prismaAiMapJob = (
+      prisma as unknown as { aiMapJob: Record<string, ReturnType<typeof vi.fn>> }
+    ).aiMapJob;
+
+    it('deletes job and returns ok', async () => {
+      prismaAiMapJob.delete.mockResolvedValue({ id: 'job-1' });
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/sku-mappings/ai-map/jobs/job-1',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json<{ ok: boolean }>().ok).toBe(true);
+    });
+
+    it('returns 404 when job does not exist', async () => {
+      prismaAiMapJob.delete.mockRejectedValue(new Error('Not found'));
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/sku-mappings/ai-map/jobs/missing',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({ method: 'DELETE', url: '/sku-mappings/ai-map/jobs/job-1' });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe('GET /sku-mappings/ai-map/jobs/:id/stream', () => {
+    const prismaAiMapJob = (
+      prisma as unknown as { aiMapJob: Record<string, ReturnType<typeof vi.fn>> }
+    ).aiMapJob;
+
+    it('emits progress then done events for a completed job', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue({
+        status: 'done',
+        totalBatches: 2,
+        completedBatches: 2,
+        foundSoFar: 3,
+        error: null,
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs/job-done/stream',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('text/event-stream');
+      expect(res.body).toContain('event: progress');
+      expect(res.body).toContain('event: done');
+    });
+
+    it('emits error event when job status is error', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue({
+        status: 'error',
+        totalBatches: 1,
+        completedBatches: 0,
+        foundSoFar: 0,
+        error: 'OpenAI quota exceeded',
+      });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs/job-err/stream',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('event: error');
+      expect(res.body).toContain('OpenAI quota exceeded');
+    });
+
+    it('emits error event when job is not found', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs/missing/stream',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('event: error');
+      expect(res.body).toContain('Job not found');
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs/job-1/stream',
+      });
       expect(res.statusCode).toBe(401);
     });
   });
