@@ -23,11 +23,19 @@ export async function embedText(text: string, openai: OpenAI): Promise<number[]>
 
 export async function embedBatch(texts: string[], openai: OpenAI): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const res = await openai.embeddings.create({
-    model: 'text-embedding-3-small',
-    input: texts,
-  });
-  return res.data.map((d) => d.embedding);
+  // OpenAI limits embedding batches to 2048 inputs — chunk if needed
+  const CHUNK_SIZE = 2048;
+  if (texts.length <= CHUNK_SIZE) {
+    const res = await openai.embeddings.create({ model: 'text-embedding-3-small', input: texts });
+    return res.data.map((d) => d.embedding);
+  }
+  const results: number[][] = [];
+  for (let i = 0; i < texts.length; i += CHUNK_SIZE) {
+    const chunk = texts.slice(i, i + CHUNK_SIZE);
+    const res = await openai.embeddings.create({ model: 'text-embedding-3-small', input: chunk });
+    results.push(...res.data.map((d) => d.embedding));
+  }
+  return results;
 }
 
 export async function storeEmbedding(catalogId: string, embedding: number[]): Promise<void> {
