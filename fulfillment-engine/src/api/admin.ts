@@ -1281,6 +1281,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no', // disable proxy/CDN buffering so events reach the browser immediately
       ...(requestOrigin
         ? {
             'Access-Control-Allow-Origin': requestOrigin,

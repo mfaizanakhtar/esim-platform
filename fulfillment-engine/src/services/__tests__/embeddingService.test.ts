@@ -121,6 +121,26 @@ describe('embedBatch', () => {
       input: ['text1', 'text2'],
     });
   });
+
+  it('chunks inputs larger than 2048 into separate API calls', async () => {
+    const mockCreate = getMockEmbeddingsCreate();
+    // 2049 texts → chunk 1 (2048) + chunk 2 (1)
+    const chunk1Embeddings = Array.from({ length: 2048 }, (_, i) => ({ embedding: [i * 0.001] }));
+    const chunk2Embeddings = [{ embedding: [999.0] }];
+    mockCreate
+      .mockResolvedValueOnce({ data: chunk1Embeddings })
+      .mockResolvedValueOnce({ data: chunk2Embeddings });
+
+    const texts = Array.from({ length: 2049 }, (_, i) => `text${i}`);
+    const openai = new OpenAI({ apiKey: 'test' });
+    const result = await embedBatch(texts, openai);
+
+    expect(result).toHaveLength(2049);
+    expect(result[2048]).toEqual([999.0]);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockCreate.mock.calls[0][0].input).toHaveLength(2048);
+    expect(mockCreate.mock.calls[1][0].input).toHaveLength(1);
+  });
 });
 
 describe('storeEmbedding', () => {
