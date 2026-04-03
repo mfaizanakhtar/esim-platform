@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { EsimDelivery, ProviderSkuMapping } from '@prisma/client';
-import { Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // vi.hoisted: runs before vi.mock factories AND before static imports.
