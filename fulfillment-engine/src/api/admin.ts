@@ -1610,9 +1610,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       });
       reply.raw.flushHeaders();
 
+      const heartbeat = setInterval(() => {
+        if (!reply.raw.destroyed) reply.raw.write(': heartbeat\n\n');
+      }, 15_000);
+
       let closed = false;
       request.raw.on('close', () => {
         closed = true;
+        clearInterval(heartbeat);
       });
 
       const send = (event: string, data: unknown) => {
@@ -1654,17 +1659,23 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           }
 
           if (job.status === 'running') {
-            send('progress', {
-              batch: job.completedBatches,
-              totalBatches: job.totalBatches ?? 0,
-              foundSoFar: job.foundSoFar,
-            });
+            // Only emit progress once totalBatches is known (set after the first batch completes).
+            // Before that the job is still initializing (fetching Shopify SKUs / embeddings).
+            if (job.totalBatches !== null) {
+              send('progress', {
+                batch: job.completedBatches,
+                totalBatches: job.totalBatches,
+                foundSoFar: job.foundSoFar,
+              });
+            }
           } else if (job.status === 'done') {
-            send('progress', {
-              batch: job.completedBatches,
-              totalBatches: job.totalBatches ?? job.completedBatches,
-              foundSoFar: job.foundSoFar,
-            });
+            if ((job.totalBatches ?? 0) > 0) {
+              send('progress', {
+                batch: job.completedBatches,
+                totalBatches: job.totalBatches,
+                foundSoFar: job.foundSoFar,
+              });
+            }
             send('done', {});
             break;
           } else {
@@ -1688,6 +1699,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           });
         }
 
+        clearInterval(heartbeat);
         if (!reply.raw.destroyed) reply.raw.end();
       };
 

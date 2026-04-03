@@ -74,6 +74,8 @@ export function useAiMapJob() {
 
       setJobId(id);
       setStatus('running');
+      setProgress(null);
+      setDrafts([]);
       setError(null);
 
       const url = buildJobSseUrl(id);
@@ -152,6 +154,15 @@ export function useAiMapJob() {
                 if (d.message) msg = d.message;
               } catch {
                 // use default
+              }
+              // Load any partial drafts saved before the error so they're reviewable
+              try {
+                const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
+                  `/sku-mappings/ai-map/jobs/${id}`,
+                );
+                setDrafts(result.job.draftsJson ?? []);
+              } catch {
+                // ignore — drafts are optional on error
               }
               setError(msg);
               setStatus('error');
