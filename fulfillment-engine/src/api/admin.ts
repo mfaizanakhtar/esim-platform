@@ -1274,11 +1274,20 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       unmappedOnly?: string;
     };
 
+    // The CORS plugin doesn't run after reply.hijack(), so we must set CORS headers manually.
+    const requestOrigin = request.headers.origin;
     reply.hijack();
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
+      ...(requestOrigin
+        ? {
+            'Access-Control-Allow-Origin': requestOrigin,
+            'Access-Control-Allow-Credentials': 'true',
+            Vary: 'Origin',
+          }
+        : {}),
     });
     reply.raw.flushHeaders();
 
