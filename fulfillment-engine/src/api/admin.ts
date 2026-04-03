@@ -1041,102 +1041,125 @@ export default function adminRoutes(
       let batchWarning: string | undefined;
 
       if (useVectorSearch && skuEmbeddings) {
-        // Vector path: group 10 SKUs per GPT call, fetch their candidates in parallel.
-        // 10x fewer API calls vs 1-per-SKU, keeping each prompt small (~20 candidates × 10 SKUs).
+        // Vector path: split batch into groups of 10 SKUs, run ALL groups in parallel.
+        // Each group: parallel DB candidate fetches + 1 GPT call.
+        // Net: 1 batch ≈ max(group_time) ≈ 3s instead of sum(group_times).
         const VECTOR_GROUP = 10;
-        for (let g = 0; g < batch.length; g += VECTOR_GROUP) {
-          const group = batch.slice(g, g + VECTOR_GROUP);
-          const groupStart = i + g;
 
-          // Fetch top-20 candidates for each SKU in parallel
-          const groupCandidates = await Promise.all(
-            group.map(async (_, j) => {
-              try {
-                const topRows = await findTopCandidates(
-                  skuEmbeddings![groupStart + j],
-                  provider,
-                  20,
-                );
-                if (topRows.length === 0) return catalogCompact;
-                return topRows.map((c) => ({
-                  id: (c as { id: string }).id,
-                  provider: (c as { provider: string }).provider,
-                  productName: (c as { productName: string }).productName,
-                  region: (c as { region: string | null }).region,
-                  dataAmount: (c as { dataAmount: string | null }).dataAmount,
-                  validity: (c as { validity: string | null }).validity,
-                  netPrice: (c as { netPrice: unknown }).netPrice,
-                }));
-              } catch {
-                return catalogCompact;
-              }
-            }),
-          );
+        type GroupDraft = AiMappingDraftInternal[];
+        const groupResults = await Promise.all(
+          Array.from({ length: Math.ceil(batch.length / VECTOR_GROUP) }, (_, gi) => {
+            const group = batch.slice(gi * VECTOR_GROUP, (gi + 1) * VECTOR_GROUP);
+            const groupStart = i + gi * VECTOR_GROUP;
+            return (async (): Promise<{
+              drafts: GroupDraft;
+              warning?: string;
+              fatal?: unknown;
+            }> => {
+              // Fetch top-20 candidates for each SKU in the group in parallel
+              const groupCandidates = await Promise.all(
+                group.map(async (_, j) => {
+                  try {
+                    const topRows = await findTopCandidates(
+                      skuEmbeddings![groupStart + j],
+                      provider,
+                      20,
+                    );
+                    if (topRows.length === 0) return catalogCompact;
+                    return topRows.map((c) => ({
+                      id: (c as { id: string }).id,
+                      provider: (c as { provider: string }).provider,
+                      productName: (c as { productName: string }).productName,
+                      region: (c as { region: string | null }).region,
+                      dataAmount: (c as { dataAmount: string | null }).dataAmount,
+                      validity: (c as { validity: string | null }).validity,
+                      netPrice: (c as { netPrice: unknown }).netPrice,
+                    }));
+                  } catch {
+                    return catalogCompact;
+                  }
+                }),
+              );
 
-          const skuInputs = group.map((variant, j) => ({
-            sku: variant.sku,
-            displayName:
-              [variant.productTitle, variant.variantTitle].filter(Boolean).join(' - ') ||
-              variant.sku,
-            candidates: groupCandidates[j],
-          }));
+              const skuInputs = group.map((variant, j) => ({
+                sku: variant.sku,
+                displayName:
+                  [variant.productTitle, variant.variantTitle].filter(Boolean).join(' - ') ||
+                  variant.sku,
+                candidates: groupCandidates[j],
+              }));
 
-          const systemPrompt =
-            'You are an eSIM product matcher. For each Shopify SKU you are given its top-20 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Return only JSON.';
-          const userPrompt = `Match each Shopify SKU to its best catalog entry:
+              const systemPrompt =
+                'You are an eSIM product matcher. For each Shopify SKU you are given its top-20 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Return only JSON.';
+              const userPrompt = `Match each Shopify SKU to its best catalog entry:
 ${JSON.stringify(skuInputs)}
 
 Return JSON: { "mappings": [{ "shopifySku": string, "catalogId": string, "confidence": number (0-1), "reason": string }] }
 Only include mappings with confidence >= 0.3. If no good match for a SKU, omit it.`;
 
-          try {
-            const completion = await openai.chat.completions.create({
-              model: 'gpt-4o-mini',
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt },
-              ],
-              response_format: { type: 'json_object' },
-              temperature: 0.1,
-            });
-            const raw = completion.choices[0]?.message?.content;
-            if (!raw) continue;
-            const parsed = JSON.parse(raw) as {
-              mappings?: Array<{
-                shopifySku: string;
-                catalogId: string;
-                confidence: number;
-                reason: string;
-              }>;
+              try {
+                const completion = await openai.chat.completions.create({
+                  model: 'gpt-4o-mini',
+                  messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userPrompt },
+                  ],
+                  response_format: { type: 'json_object' },
+                  temperature: 0.1,
+                });
+                const raw = completion.choices[0]?.message?.content;
+                if (!raw) return { drafts: [] };
+                const parsed = JSON.parse(raw) as {
+                  mappings?: Array<{
+                    shopifySku: string;
+                    catalogId: string;
+                    confidence: number;
+                    reason: string;
+                  }>;
+                };
+                const drafts: GroupDraft = [];
+                for (const match of parsed.mappings ?? []) {
+                  const entry = catalogEntries.find((e) => e.id === match.catalogId);
+                  if (!entry) continue;
+                  drafts.push({
+                    shopifySku: match.shopifySku,
+                    catalogId: match.catalogId,
+                    productName: entry.productName,
+                    region: entry.region,
+                    dataAmount: entry.dataAmount,
+                    validity: entry.validity,
+                    netPrice: entry.netPrice,
+                    provider: entry.provider,
+                    confidence: match.confidence,
+                    reason: match.reason,
+                  });
+                }
+                return { drafts };
+              } catch (err) {
+                logger.error({ err, skus: group.map((v) => v.sku) }, 'OpenAI group match failed');
+                const msg = err instanceof Error ? err.message : String(err);
+                const isFatal =
+                  err instanceof OpenAI.APIError &&
+                  (err.status === 401 || err.status === 429 || err.code === 'insufficient_quota');
+                return { drafts: [], warning: msg, fatal: isFatal ? err : undefined };
+              }
+            })();
+          }),
+        );
+
+        for (const result of groupResults) {
+          partialDrafts.push(...result.drafts);
+          if (result.warning) batchWarning = result.warning;
+          if (result.fatal) {
+            foundSoFar += partialDrafts.length;
+            yield {
+              batch: batchNum,
+              totalBatches,
+              foundSoFar,
+              partialDrafts,
+              warning: batchWarning,
             };
-            for (const match of parsed.mappings ?? []) {
-              const entry = catalogEntries.find((e) => e.id === match.catalogId);
-              if (!entry) continue;
-              partialDrafts.push({
-                shopifySku: match.shopifySku,
-                catalogId: match.catalogId,
-                productName: entry.productName,
-                region: entry.region,
-                dataAmount: entry.dataAmount,
-                validity: entry.validity,
-                netPrice: entry.netPrice,
-                provider: entry.provider,
-                confidence: match.confidence,
-                reason: match.reason,
-              });
-            }
-          } catch (err) {
-            logger.error({ err, skus: group.map((v) => v.sku) }, 'OpenAI group match failed');
-            const msg = err instanceof Error ? err.message : String(err);
-            const isFatal =
-              err instanceof OpenAI.APIError &&
-              (err.status === 401 || err.status === 429 || err.code === 'insufficient_quota');
-            batchWarning = msg;
-            if (isFatal) {
-              foundSoFar += partialDrafts.length;
-              yield { batch: batchNum, totalBatches, foundSoFar, partialDrafts, warning: msg };
-              throw err;
-            }
+            throw result.fatal;
           }
         }
       } else {
