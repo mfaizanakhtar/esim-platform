@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import type { AiMappingDraft } from '@/lib/types';
 import { apiClient, buildJobSseUrl, getApiKey } from '@/lib/api';
 
@@ -14,6 +14,16 @@ type StartParams = {
   provider?: string;
   unmappedOnly?: boolean;
 };
+
+function handle401(): never {
+  try {
+    sessionStorage.removeItem('esim-admin-api-key');
+  } catch {
+    // ignore
+  }
+  window.location.href = '/login';
+  throw new Error('Unauthorized');
+}
 
 export function useAiMapJob() {
   const [jobId, setJobId] = useState<string | null>(null);
@@ -31,6 +41,9 @@ export function useAiMapJob() {
       abortRef.current = null;
     }
   }, []);
+
+  // Abort the stream on unmount
+  useEffect(() => closeStream, [closeStream]);
 
   const cancel = useCallback(() => {
     closeStream();
@@ -74,6 +87,10 @@ export function useAiMapJob() {
           },
         });
 
+        if (response.status === 401) {
+          handle401();
+        }
+
         if (!response.ok || !response.body) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -113,16 +130,19 @@ export function useAiMapJob() {
               }
             } else if (eventType === 'done') {
               explicitEnd = true;
-              // Fetch full drafts from DB
+              // Fetch full drafts from DB — only advance to done if fetch succeeds
               try {
                 const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
                   `/sku-mappings/ai-map/jobs/${id}`,
                 );
                 setDrafts(result.job.draftsJson ?? []);
-              } catch {
-                // leave drafts empty — user will see empty review
+                setStatus('done');
+              } catch (fetchErr) {
+                setError(
+                  fetchErr instanceof Error ? fetchErr.message : 'Failed to load completed job drafts',
+                );
+                setStatus('error');
               }
-              setStatus('done');
               return;
             } else if (eventType === 'error') {
               explicitEnd = true;
@@ -140,7 +160,11 @@ export function useAiMapJob() {
           }
         }
 
-        if (!explicitEnd) setStatus('done');
+        // Stream closed without an explicit done/error — treat as connection loss, not completion
+        if (!explicitEnd) {
+          setError('Stream closed unexpectedly. Check Past Jobs to resume.');
+          setStatus('error');
+        }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return; // cancelled
         setError(err instanceof Error ? err.message : 'Unknown error');

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { EsimDelivery, ProviderSkuMapping } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
 // vi.hoisted: runs before vi.mock factories AND before static imports.
@@ -3079,7 +3080,11 @@ describe('Admin Routes', () => {
     });
 
     it('returns 404 when job does not exist', async () => {
-      prismaAiMapJob.delete.mockRejectedValue(new Error('Not found'));
+      const p2025 = new Prisma.PrismaClientKnownRequestError('Record not found', {
+        code: 'P2025',
+        clientVersion: '5.0.0',
+      });
+      prismaAiMapJob.delete.mockRejectedValue(p2025);
       const res = await app.inject({
         method: 'DELETE',
         url: '/sku-mappings/ai-map/jobs/missing',

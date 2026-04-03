@@ -1554,8 +1554,13 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       const { id } = request.params as { id: string };
       try {
         await prisma.aiMapJob.delete({ where: { id } });
-      } catch {
-        return reply.code(404).send({ error: 'Job not found' });
+      } catch (err) {
+        // P2025 = "Record to delete does not exist"
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+          return reply.code(404).send({ error: 'Job not found' });
+        }
+        logger.error({ err }, 'Failed to delete AI map job');
+        return reply.code(500).send({ error: 'Failed to delete job' });
       }
 
       return reply.send({ ok: true });
@@ -1654,13 +1659,18 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             break;
           }
 
-          // Wait 2s before next poll
+          // Wait 2s before next poll — clean up the close listener whether the
+          // timer or the close event fires first to avoid MaxListenersExceeded.
           await new Promise<void>((resolve) => {
-            const t = setTimeout(resolve, 2000);
-            request.raw.once('close', () => {
+            const onClose = () => {
               clearTimeout(t);
               resolve();
-            });
+            };
+            const t = setTimeout(() => {
+              request.raw.removeListener('close', onClose);
+              resolve();
+            }, 2000);
+            request.raw.once('close', onClose);
           });
         }
 
