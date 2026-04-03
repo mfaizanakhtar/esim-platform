@@ -3111,6 +3111,34 @@ describe('Admin Routes', () => {
       prisma as unknown as { aiMapJob: Record<string, ReturnType<typeof vi.fn>> }
     ).aiMapJob;
 
+    it('polls through running state then emits done', async () => {
+      prismaAiMapJob.findUnique
+        .mockResolvedValueOnce({
+          status: 'running',
+          totalBatches: 2,
+          completedBatches: 1,
+          foundSoFar: 2,
+          error: null,
+        })
+        .mockResolvedValueOnce({
+          status: 'done',
+          totalBatches: 2,
+          completedBatches: 2,
+          foundSoFar: 4,
+          error: null,
+        });
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs/job-running/stream',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('event: progress');
+      expect(res.body).toContain('event: done');
+    }, 10000);
+
     it('emits progress then done events for a completed job', async () => {
       prismaAiMapJob.findUnique.mockResolvedValue({
         status: 'done',
@@ -3164,6 +3192,20 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('event: error');
       expect(res.body).toContain('Job not found');
+    });
+
+    it('emits error event when DB read throws', async () => {
+      prismaAiMapJob.findUnique.mockRejectedValue(new Error('DB connection lost'));
+
+      const res = await app.inject({
+        method: 'GET',
+        url: '/sku-mappings/ai-map/jobs/job-db-err/stream',
+        headers: AUTH,
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('event: error');
+      expect(res.body).toContain('Failed to read job state');
     });
 
     it('returns 401 without admin key', async () => {
