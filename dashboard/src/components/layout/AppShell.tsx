@@ -31,8 +31,8 @@ export function AppShell() {
 
       {/* Sidebar — fixed+off-screen on mobile, static in-flow on desktop */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-56 border-r flex flex-col bg-background transition-transform duration-200 md:static md:translate-x-0 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed inset-y-0 left-0 z-50 w-56 border-r flex flex-col bg-background transition-transform duration-200 md:static md:translate-x-0 md:visible ${
+          sidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
         }`}
       >
         <div className="p-4 border-b flex items-center justify-between">
