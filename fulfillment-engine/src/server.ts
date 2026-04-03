@@ -54,6 +54,7 @@ export default async function buildServer() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'x-admin-key', 'Accept'],
   });
 
   // Configure rate limiting to prevent abuse
