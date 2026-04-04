@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import type { AiMappingDraft } from '@/lib/types';
+import type { AiMappingDraft, UnmatchedSku } from '@/lib/types';
 import { apiClient, buildJobSseUrl, getApiKey } from '@/lib/api';
 
 type JobStatus = 'idle' | 'starting' | 'running' | 'done' | 'error';
@@ -30,6 +30,7 @@ export function useAiMapJob() {
   const [status, setStatus] = useState<JobStatus>('idle');
   const [progress, setProgress] = useState<JobProgress | null>(null);
   const [drafts, setDrafts] = useState<AiMappingDraft[]>([]);
+  const [unmatchedSkus, setUnmatchedSkus] = useState<UnmatchedSku[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Holds the active fetch AbortController for the SSE stream
@@ -58,6 +59,7 @@ export function useAiMapJob() {
     setStatus('idle');
     setProgress(null);
     setDrafts([]);
+    setUnmatchedSkus([]);
     setError(null);
   }, [closeStream]);
 
@@ -76,6 +78,7 @@ export function useAiMapJob() {
       setStatus('running');
       setProgress(null);
       setDrafts([]);
+      setUnmatchedSkus([]);
       setError(null);
 
       const url = buildJobSseUrl(id);
@@ -134,10 +137,11 @@ export function useAiMapJob() {
               explicitEnd = true;
               // Fetch full drafts from DB — only advance to done if fetch succeeds
               try {
-                const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
-                  `/sku-mappings/ai-map/jobs/${id}`,
-                );
+                const result = await apiClient.get<{
+                  job: { draftsJson: AiMappingDraft[]; unmatchedSkusJson?: UnmatchedSku[] };
+                }>(`/sku-mappings/ai-map/jobs/${id}`);
                 setDrafts(result.job.draftsJson ?? []);
+                setUnmatchedSkus(result.job.unmatchedSkusJson ?? []);
                 setStatus('done');
               } catch (fetchErr) {
                 setError(
@@ -157,10 +161,11 @@ export function useAiMapJob() {
               }
               // Load any partial drafts saved before the error so they're reviewable
               try {
-                const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
-                  `/sku-mappings/ai-map/jobs/${id}`,
-                );
+                const result = await apiClient.get<{
+                  job: { draftsJson: AiMappingDraft[]; unmatchedSkusJson?: UnmatchedSku[] };
+                }>(`/sku-mappings/ai-map/jobs/${id}`);
                 setDrafts(result.job.draftsJson ?? []);
+                setUnmatchedSkus(result.job.unmatchedSkusJson ?? []);
               } catch {
                 // ignore — drafts are optional on error
               }
@@ -192,6 +197,7 @@ export function useAiMapJob() {
       setStatus('starting');
       setProgress(null);
       setDrafts([]);
+      setUnmatchedSkus([]);
       setError(null);
       setJobId(null);
 
@@ -210,5 +216,5 @@ export function useAiMapJob() {
     [closeStream, connectToStream],
   );
 
-  return { jobId, status, progress, drafts, error, start, cancel, reset, connectToStream };
+  return { jobId, status, progress, drafts, unmatchedSkus, error, start, cancel, reset, connectToStream };
 }

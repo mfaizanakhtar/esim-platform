@@ -913,6 +913,66 @@ export default function adminRoutes(
     return reply.send({ skus: allVariants });
   });
 
+  /**
+   * POST /admin/shopify-skus/bulk-delete
+   * Delete Shopify product variants (and their parent products when all variants are removed).
+   * Body: { skus: string[] }
+   * Response: { deleted: number; skipped: number; errors: string[] }
+   */
+  app.post('/shopify-skus/bulk-delete', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = (request.body ?? {}) as { skus?: string[] };
+    if (!Array.isArray(body.skus) || body.skus.length === 0) {
+      return reply.code(400).send({ error: 'skus array is required' });
+    }
+
+    let shopify: ReturnType<typeof getShopifyClient>;
+    try {
+      shopify = getShopifyClient();
+    } catch {
+      return reply.code(502).send({ error: 'shopify_unavailable' });
+    }
+
+    // Batch-lookup variant + product GIDs (chunks of 50 to respect Shopify query limits)
+    const lookupMap = await shopify.getVariantGidsBySkus(body.skus);
+
+    const skipped = body.skus.filter((s) => !lookupMap.has(s)).length;
+
+    // Group variants by product so we can decide: delete whole product vs. just variants
+    const productMap = new Map<string, { variantGids: string[]; totalVariantCount: number }>();
+    for (const { variantGid, productGid, productVariantCount } of lookupMap.values()) {
+      const existing = productMap.get(productGid);
+      if (existing) {
+        existing.variantGids.push(variantGid);
+      } else {
+        productMap.set(productGid, {
+          variantGids: [variantGid],
+          totalVariantCount: productVariantCount,
+        });
+      }
+    }
+
+    let deleted = 0;
+    const errors: string[] = [];
+
+    for (const [productGid, { variantGids, totalVariantCount }] of productMap) {
+      try {
+        if (variantGids.length >= totalVariantCount) {
+          // All variants being removed — delete the product entirely
+          await shopify.deleteProduct(productGid);
+        } else {
+          await shopify.deleteVariants(productGid, variantGids);
+        }
+        deleted += variantGids.length;
+      } catch (err) {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+
+    return reply.send({ deleted, skipped, errors });
+  });
+
   // ---------------------------------------------------------------------------
   // AI Bulk Mapping — shared generator + POST (sync) + GET (SSE stream)
   // ---------------------------------------------------------------------------
@@ -930,12 +990,21 @@ export default function adminRoutes(
     reason: string;
   };
 
+  type AiMapInputSku = {
+    sku: string;
+    variantId: string;
+    productTitle: string;
+    variantTitle: string;
+  };
+
   type AiMapProgressEvent = {
     batch: number;
     totalBatches: number;
     foundSoFar: number;
     partialDrafts: AiMappingDraftInternal[];
     warning?: string;
+    /** Union of all SKUs submitted to AI across all providers. Only present on the first yield (batch === 1). */
+    allInputSkus?: AiMapInputSku[];
   };
 
   type AiMapGenParams = {
@@ -962,10 +1031,15 @@ export default function adminRoutes(
     const fromShopify = !Array.isArray(providedSkus) || providedSkus.length === 0;
 
     // 1. Resolve Shopify SKUs
-    let shopifySkuList: Array<{ sku: string; productTitle: string; variantTitle: string }>;
+    let shopifySkuList: AiMapInputSku[];
 
     if (!fromShopify) {
-      shopifySkuList = providedSkus!.map((sku) => ({ sku, productTitle: '', variantTitle: '' }));
+      shopifySkuList = providedSkus!.map((sku) => ({
+        sku,
+        variantId: '',
+        productTitle: '',
+        variantTitle: '',
+      }));
     } else {
       try {
         const shopify = getShopifyClient();
@@ -1030,6 +1104,12 @@ export default function adminRoutes(
     }
 
     if (providerRuns.length === 0) return;
+
+    // Compute the union of all SKUs actually submitted across all provider runs.
+    // Stored in the job record so completed/errored jobs can surface unmatched SKUs.
+    const allInputSkuSet = new Set<string>();
+    for (const { skus } of providerRuns) for (const v of skus) allInputSkuSet.add(v.sku);
+    const allInputSkus: AiMapInputSku[] = shopifySkuList.filter((v) => allInputSkuSet.has(v.sku));
 
     // 3. Total batches spans all providers
     const totalBatches = providerRuns.reduce(
@@ -1208,6 +1288,7 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                 foundSoFar,
                 partialDrafts,
                 warning: batchWarning,
+                ...(batchNum === 1 ? { allInputSkus } : {}),
               };
               throw result.fatal;
             }
@@ -1275,14 +1356,28 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             batchWarning = msg;
             if (isFatal) {
               foundSoFar += partialDrafts.length;
-              yield { batch: batchNum, totalBatches, foundSoFar, partialDrafts, warning: msg };
+              yield {
+                batch: batchNum,
+                totalBatches,
+                foundSoFar,
+                partialDrafts,
+                warning: msg,
+                ...(batchNum === 1 ? { allInputSkus } : {}),
+              };
               throw err;
             }
           }
         }
 
         foundSoFar += partialDrafts.length;
-        yield { batch: batchNum, totalBatches, foundSoFar, partialDrafts, warning: batchWarning };
+        yield {
+          batch: batchNum,
+          totalBatches,
+          foundSoFar,
+          partialDrafts,
+          warning: batchWarning,
+          ...(batchNum === 1 ? { allInputSkus } : {}),
+        };
       }
     }
   }
@@ -1427,8 +1522,19 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
   async function runAiMapJobAsync(jobId: string, params: AiMapGenParams): Promise<void> {
     const allDrafts: AiMappingDraftInternal[] = [];
     let totalBatchesSet = false;
+    let capturedInputSkus: AiMapInputSku[] | null = null;
+
+    const computeUnmatched = (): AiMapInputSku[] => {
+      if (!capturedInputSkus) return [];
+      const matchedSet = new Set(allDrafts.map((d) => d.shopifySku));
+      return capturedInputSkus.filter((v) => !matchedSet.has(v.sku));
+    };
+
     try {
       for await (const evt of aiMapBatchGenerator(params)) {
+        if (evt.allInputSkus && capturedInputSkus === null) {
+          capturedInputSkus = evt.allInputSkus;
+        }
         if (!totalBatchesSet) {
           await prisma.aiMapJob.update({
             where: { id: jobId },
@@ -1449,7 +1555,11 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       }
       await prisma.aiMapJob.update({
         where: { id: jobId },
-        data: { status: 'done', completedAt: new Date() },
+        data: {
+          status: 'done',
+          completedAt: new Date(),
+          unmatchedSkusJson: computeUnmatched() as unknown as Prisma.JsonArray,
+        },
       });
     } catch (err) {
       logger.error({ err, jobId }, 'AI map job failed');
@@ -1457,7 +1567,12 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       try {
         await prisma.aiMapJob.update({
           where: { id: jobId },
-          data: { status: 'error', error: msg, completedAt: new Date() },
+          data: {
+            status: 'error',
+            error: msg,
+            completedAt: new Date(),
+            unmatchedSkusJson: computeUnmatched() as unknown as Prisma.JsonArray,
+          },
         });
       } catch (updateErr) {
         logger.error({ err: updateErr, jobId }, 'Failed to persist AI map job failure state');

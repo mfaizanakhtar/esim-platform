@@ -766,3 +766,133 @@ describe('getAllVariants', () => {
     expect(result[1].sku).toBe('ESIM-JP-5GB');
   });
 });
+
+// ---------------------------------------------------------------------------
+// getVariantGidsBySkus
+// ---------------------------------------------------------------------------
+describe('getVariantGidsBySkus', () => {
+  it('returns empty map for empty input without calling Shopify', async () => {
+    const client = makeClient();
+    const result = await client.getVariantGidsBySkus([]);
+    expect(result.size).toBe(0);
+  });
+
+  it('returns variant and product GIDs for found SKUs', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          sku_0: {
+            edges: [
+              {
+                node: {
+                  id: 'gid://shopify/ProductVariant/111',
+                  product: {
+                    id: 'gid://shopify/Product/999',
+                    variants: { totalCount: 3 },
+                  },
+                },
+              },
+            ],
+          },
+          sku_1: { edges: [] }, // not found
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.getVariantGidsBySkus(['ESIM-US-1GB', 'ESIM-XX-MISSING']);
+
+    expect(result.size).toBe(1);
+    expect(result.get('ESIM-US-1GB')).toEqual({
+      variantGid: 'gid://shopify/ProductVariant/111',
+      productGid: 'gid://shopify/Product/999',
+      productVariantCount: 3,
+    });
+    expect(result.has('ESIM-XX-MISSING')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteProduct
+// ---------------------------------------------------------------------------
+describe('deleteProduct', () => {
+  it('calls productDelete mutation and resolves on success', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productDelete: {
+            deletedProductId: 'gid://shopify/Product/999',
+            userErrors: [],
+          },
+        },
+      });
+
+    const client = makeClient();
+    await expect(client.deleteProduct('gid://shopify/Product/999')).resolves.toBeUndefined();
+  });
+
+  it('throws when Shopify returns userErrors', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productDelete: {
+            deletedProductId: null,
+            userErrors: [{ field: 'id', message: 'Product not found' }],
+          },
+        },
+      });
+
+    const client = makeClient();
+    await expect(client.deleteProduct('gid://shopify/Product/999')).rejects.toThrow(
+      'Product not found',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// deleteVariants
+// ---------------------------------------------------------------------------
+describe('deleteVariants', () => {
+  it('calls productVariantsBulkDelete mutation and resolves on success', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariantsBulkDelete: {
+            product: { id: 'gid://shopify/Product/999' },
+            userErrors: [],
+          },
+        },
+      });
+
+    const client = makeClient();
+    await expect(
+      client.deleteVariants('gid://shopify/Product/999', ['gid://shopify/ProductVariant/111']),
+    ).resolves.toBeUndefined();
+  });
+
+  it('throws when Shopify returns userErrors', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          productVariantsBulkDelete: {
+            product: null,
+            userErrors: [{ field: 'variantsIds', message: 'Variant not found' }],
+          },
+        },
+      });
+
+    const client = makeClient();
+    await expect(
+      client.deleteVariants('gid://shopify/Product/999', ['gid://shopify/ProductVariant/999']),
+    ).rejects.toThrow('Variant not found');
+  });
+});

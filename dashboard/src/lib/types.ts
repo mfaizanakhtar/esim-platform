@@ -145,6 +145,13 @@ export interface ApiErrorResponse {
   error: string;
 }
 
+export interface UnmatchedSku {
+  sku: string;
+  variantId: string;
+  productTitle: string;
+  variantTitle: string;
+}
+
 export interface AiMapJob {
   id: string;
   status: 'running' | 'done' | 'error' | 'interrupted';
@@ -157,6 +164,7 @@ export interface AiMapJob {
   error: string | null;
   createdAt: string;
   completedAt: string | null;
-  // draftsJson only present on GET /jobs/:id
+  // only present on GET /jobs/:id
   draftsJson?: AiMappingDraft[];
+  unmatchedSkusJson?: UnmatchedSku[];
 }

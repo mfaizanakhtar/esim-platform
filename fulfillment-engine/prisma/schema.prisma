@@ -122,7 +122,8 @@ model AiMapJob {
   totalBatches     Int?
   completedBatches Int       @default(0)
   foundSoFar       Int       @default(0)
-  draftsJson       Json      @default("[]")
+  draftsJson          Json      @default("[]")
+  unmatchedSkusJson   Json      @default("[]")
   warning          String?
   error            String?
   createdAt        DateTime  @default(now())

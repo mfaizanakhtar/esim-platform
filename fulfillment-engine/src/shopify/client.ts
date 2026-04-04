@@ -750,6 +750,119 @@ export class ShopifyClient {
   }
 
   /**
+   * Batch-lookup variant GID, product GID, and total variant count by SKU.
+   * Sends one GraphQL request per 50 SKUs using aliased queries.
+   * SKUs not found in Shopify are simply absent from the returned Map.
+   */
+  async getVariantGidsBySkus(
+    skus: string[],
+  ): Promise<Map<string, { variantGid: string; productGid: string; productVariantCount: number }>> {
+    if (skus.length === 0) return new Map();
+    const token = await this.getAccessToken();
+    const CHUNK = 50;
+    const result = new Map<
+      string,
+      { variantGid: string; productGid: string; productVariantCount: number }
+    >();
+
+    for (let i = 0; i < skus.length; i += CHUNK) {
+      const chunk = skus.slice(i, i + CHUNK);
+      const aliases = chunk
+        .map((sku, idx) => {
+          const escaped = sku.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+          return `sku_${idx}: productVariants(first: 1, query: "sku:\\"${escaped}\\"") {
+            edges { node { id product { id variants { totalCount } } } }
+          }`;
+        })
+        .join('\n');
+
+      const response = await axios.post(
+        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        { query: `query batchGetVariants { ${aliases} }` },
+        { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+      );
+
+      const data = (response.data?.data ?? {}) as Record<string, unknown>;
+      for (let j = 0; j < chunk.length; j++) {
+        const alias = data[`sku_${j}`] as
+          | {
+              edges: Array<{
+                node: { id: string; product: { id: string; variants: { totalCount: number } } };
+              }>;
+            }
+          | undefined;
+        const edge = alias?.edges?.[0];
+        if (edge?.node?.id && edge.node.product?.id) {
+          result.set(chunk[j], {
+            variantGid: edge.node.id,
+            productGid: edge.node.product.id,
+            productVariantCount: edge.node.product.variants?.totalCount ?? 1,
+          });
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Delete an entire Shopify product (and all its variants).
+   */
+  async deleteProduct(productGid: string): Promise<void> {
+    const token = await this.getAccessToken();
+    const mutation = `
+      mutation productDelete($input: ProductDeleteInput!) {
+        productDelete(input: $input) {
+          deletedProductId
+          userErrors { field message }
+        }
+      }
+    `;
+    const response = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      { query: mutation, variables: { input: { id: productGid } } },
+      { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+    );
+    const result = response.data?.data?.productDelete as
+      | { deletedProductId?: string; userErrors: Array<{ message: string }> }
+      | undefined;
+    if (result?.userErrors?.length) {
+      throw new Error(
+        `Shopify productDelete errors: ${result.userErrors.map((e) => e.message).join(', ')}`,
+      );
+    }
+  }
+
+  /**
+   * Delete specific variants from a product.
+   * Use deleteProduct() instead when removing all variants of a product.
+   */
+  async deleteVariants(productGid: string, variantGids: string[]): Promise<void> {
+    const token = await this.getAccessToken();
+    const mutation = `
+      mutation productVariantsBulkDelete($productId: ID!, $variantsIds: [ID!]!) {
+        productVariantsBulkDelete(productId: $productId, variantsIds: $variantsIds) {
+          product { id }
+          userErrors { field message }
+        }
+      }
+    `;
+    const response = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      { query: mutation, variables: { productId: productGid, variantsIds: variantGids } },
+      { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+    );
+    const result = response.data?.data?.productVariantsBulkDelete as
+      | { product: unknown; userErrors: Array<{ message: string }> }
+      | undefined;
+    if (result?.userErrors?.length) {
+      throw new Error(
+        `Shopify productVariantsBulkDelete errors: ${result.userErrors.map((e) => e.message).join(', ')}`,
+      );
+    }
+  }
+
+  /**
    * Initialize token on startup (optional but recommended)
    */
   async initialize(): Promise<void> {

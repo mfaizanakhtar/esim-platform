@@ -1,0 +1,2 @@
+ALTER TABLE "AiMapJob"
+  ADD COLUMN "unmatchedSkusJson" JSONB NOT NULL DEFAULT '[]';
