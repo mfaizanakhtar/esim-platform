@@ -18,6 +18,9 @@ const adminMocks = vi.hoisted(() => {
     mockFiroamGetSkus: vi.fn(),
     mockFiroamGetPackages: vi.fn(),
     mockGetAllVariants: vi.fn(),
+    mockGetVariantGidsBySkus: vi.fn(),
+    mockDeleteProduct: vi.fn(),
+    mockDeleteVariants: vi.fn(),
     mockOpenAiCreate: vi.fn(),
     mockOpenAiEmbeddingsCreate: vi.fn(),
     mockIsVectorAvailable: vi.fn().mockResolvedValue(false),
@@ -103,6 +106,9 @@ vi.mock('~/utils/crypto', () => ({
 vi.mock('~/shopify/client', () => ({
   getShopifyClient: vi.fn(() => ({
     getAllVariants: adminMocks.mockGetAllVariants,
+    getVariantGidsBySkus: adminMocks.mockGetVariantGidsBySkus,
+    deleteProduct: adminMocks.mockDeleteProduct,
+    deleteVariants: adminMocks.mockDeleteVariants,
   })),
 }));
 
@@ -3214,6 +3220,284 @@ describe('Admin Routes', () => {
         url: '/sku-mappings/ai-map/jobs/job-1/stream',
       });
       expect(res.statusCode).toBe(401);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /shopify-skus/bulk-delete
+  // ---------------------------------------------------------------------------
+  describe('POST /shopify-skus/bulk-delete', () => {
+    it('returns 400 when skus array is missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 400 when skus array is empty', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: [] },
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('calls deleteProduct when all variants of a product are being deleted', async () => {
+      adminMocks.mockGetVariantGidsBySkus.mockResolvedValue(
+        new Map([
+          [
+            'ESIM-EU-1GB',
+            {
+              variantGid: 'gid://shopify/ProductVariant/1',
+              productGid: 'gid://shopify/Product/10',
+              productVariantCount: 1,
+            },
+          ],
+        ]),
+      );
+      adminMocks.mockDeleteProduct.mockResolvedValue(undefined);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: ['ESIM-EU-1GB'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{
+        deleted: number;
+        skipped: number;
+        deletedVariantIds: string[];
+        errors: string[];
+      }>();
+      expect(body.deleted).toBe(1);
+      expect(body.skipped).toBe(0);
+      expect(body.errors).toHaveLength(0);
+      expect(body.deletedVariantIds).toEqual(['gid://shopify/ProductVariant/1']);
+      expect(adminMocks.mockDeleteProduct).toHaveBeenCalledWith('gid://shopify/Product/10');
+      expect(adminMocks.mockDeleteVariants).not.toHaveBeenCalled();
+    });
+
+    it('calls deleteVariants when only some variants of a product are being deleted', async () => {
+      adminMocks.mockGetVariantGidsBySkus.mockResolvedValue(
+        new Map([
+          [
+            'ESIM-EU-1GB',
+            {
+              variantGid: 'gid://shopify/ProductVariant/1',
+              productGid: 'gid://shopify/Product/10',
+              productVariantCount: 3,
+            },
+          ],
+        ]),
+      );
+      adminMocks.mockDeleteVariants.mockResolvedValue(undefined);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: ['ESIM-EU-1GB'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{
+        deleted: number;
+        skipped: number;
+        deletedVariantIds: string[];
+        errors: string[];
+      }>();
+      expect(body.deleted).toBe(1);
+      expect(body.deletedVariantIds).toEqual(['gid://shopify/ProductVariant/1']);
+      expect(adminMocks.mockDeleteVariants).toHaveBeenCalledWith('gid://shopify/Product/10', [
+        'gid://shopify/ProductVariant/1',
+      ]);
+      expect(adminMocks.mockDeleteProduct).not.toHaveBeenCalled();
+    });
+
+    it('counts skipped SKUs not found in Shopify', async () => {
+      adminMocks.mockGetVariantGidsBySkus.mockResolvedValue(new Map()); // nothing found
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: ['ESIM-XX-MISSING', 'ESIM-YY-MISSING'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ deleted: number; skipped: number; errors: string[] }>();
+      expect(body.deleted).toBe(0);
+      expect(body.skipped).toBe(2);
+      expect(body.errors).toHaveLength(0);
+    });
+
+    it('accumulates errors from failed Shopify mutations (non-fatal)', async () => {
+      adminMocks.mockGetVariantGidsBySkus.mockResolvedValue(
+        new Map([
+          [
+            'ESIM-EU-1GB',
+            {
+              variantGid: 'gid://shopify/ProductVariant/1',
+              productGid: 'gid://shopify/Product/10',
+              productVariantCount: 1,
+            },
+          ],
+        ]),
+      );
+      adminMocks.mockDeleteProduct.mockRejectedValue(
+        new Error('Shopify productDelete errors: not found'),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: ['ESIM-EU-1GB'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ deleted: number; skipped: number; errors: string[] }>();
+      expect(body.deleted).toBe(0);
+      expect(body.errors).toHaveLength(1);
+      expect(body.errors[0]).toContain('not found');
+    });
+
+    it('returns 502 when getVariantGidsBySkus throws', async () => {
+      adminMocks.mockGetVariantGidsBySkus.mockRejectedValue(
+        new Error('Shopify GraphQL errors: network'),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: ['ESIM-EU-1GB'] },
+      });
+
+      expect(res.statusCode).toBe(502);
+    });
+
+    it('returns deletedVariantIds empty when deletion fails', async () => {
+      adminMocks.mockGetVariantGidsBySkus.mockResolvedValue(
+        new Map([
+          [
+            'ESIM-EU-1GB',
+            {
+              variantGid: 'gid://shopify/ProductVariant/1',
+              productGid: 'gid://shopify/Product/10',
+              productVariantCount: 1,
+            },
+          ],
+        ]),
+      );
+      adminMocks.mockDeleteProduct.mockRejectedValue(new Error('Shopify error'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: ['ESIM-EU-1GB'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ deletedVariantIds: string[]; errors: string[] }>();
+      expect(body.deletedVariantIds).toHaveLength(0);
+      expect(body.errors).toHaveLength(1);
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        payload: { skus: ['ESIM-EU-1GB'] },
+      });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // runAiMapJobAsync — unmatched SKU tracking
+  // ---------------------------------------------------------------------------
+  describe('POST /sku-mappings/ai-map/jobs — unmatched SKU tracking', () => {
+    const prismaAiMapJob = (
+      prisma as unknown as { aiMapJob: Record<string, ReturnType<typeof vi.fn>> }
+    ).aiMapJob;
+
+    it('stores unmatched SKUs in job record when some SKUs have no draft', async () => {
+      prismaAiMapJob.create.mockResolvedValue({ id: 'job-unmatched', status: 'running' });
+      prismaAiMapJob.update.mockResolvedValue({});
+
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-1', productName: 'EU 1GB' }),
+      ]);
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        {
+          sku: 'ESIM-EU-1GB',
+          variantId: 'gid://shopify/ProductVariant/1',
+          productTitle: 'EU 1GB',
+          variantTitle: '1GB',
+        },
+        {
+          sku: 'ESIM-EU-5GB',
+          variantId: 'gid://shopify/ProductVariant/2',
+          productTitle: 'EU 5GB',
+          variantTitle: '5GB',
+        },
+      ]);
+      // Only ESIM-EU-1GB gets a draft — ESIM-EU-5GB is unmatched
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'ESIM-EU-1GB',
+                    catalogId: 'cat-1',
+                    confidence: 0.9,
+                    reason: 'match',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map/jobs',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam', unmappedOnly: false },
+      });
+
+      // Wait for background runner to complete
+      const doneCall = await vi.waitFor(
+        () => {
+          const call = prismaAiMapJob.update.mock.calls.find(
+            (c) => (c[0] as { data: { status?: string } }).data?.status === 'done',
+          );
+          expect(call).toBeDefined();
+          return call;
+        },
+        { timeout: 2000 },
+      );
+
+      const unmatchedArg = (doneCall![0] as { data: { unmatchedSkusJson?: unknown[] } }).data
+        ?.unmatchedSkusJson;
+      expect(Array.isArray(unmatchedArg)).toBe(true);
+      expect((unmatchedArg as Array<{ sku: string }>).some((v) => v.sku === 'ESIM-EU-5GB')).toBe(
+        true,
+      );
     });
   });
 });

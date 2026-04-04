@@ -5,11 +5,15 @@ import { useBulkCreateMappings } from '@/hooks/useSkuMappingMutations';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { useAiMapJob } from '@/hooks/useAiMapJob';
 import { apiClient } from '@/lib/api';
-import type { AiMappingDraft, AiMapJob } from '@/lib/types';
-import { ArrowLeft, Brain, CheckSquare, Square, ChevronDown, ChevronRight } from 'lucide-react';
+import type { AiMappingDraft, AiMapJob, UnmatchedSku } from '@/lib/types';
+import { ArrowLeft, Brain, CheckSquare, Square, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface DraftRow extends AiMappingDraft {
+  selected: boolean;
+}
+
+interface UnmatchedRow extends UnmatchedSku {
   selected: boolean;
 }
 
@@ -81,6 +85,14 @@ export function AiMap() {
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [jobsActionError, setJobsActionError] = useState<string | null>(null);
 
+  // Unmatched SKUs section
+  const [unmatchedRows, setUnmatchedRows] = useState<UnmatchedRow[]>([]);
+  const [unmatchedOpen, setUnmatchedOpen] = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<{ deleted: number; skipped: number; errors: string[] } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   const job = useAiMapJob();
   const bulkCreate = useBulkCreateMappings();
 
@@ -101,13 +113,29 @@ export function AiMap() {
         selected: d.confidence >= 0.8,
       }));
       setDrafts(rows);
+      setUnmatchedRows(job.unmatchedSkus.map((v) => ({ ...v, selected: false })));
+      setUnmatchedOpen(false);
+      setDeleteConfirming(false);
+      setDeleteLoading(false);
+      setDeleteResult(null);
+      setDeleteError(null);
       setStep('review');
       void queryClient.invalidateQueries({ queryKey: ['ai-map-jobs'] });
     }
-  }, [step, job.status, job.drafts, queryClient]);
+  }, [step, job.status, job.drafts, job.unmatchedSkus, queryClient]);
+
+  function resetUnmatchedState() {
+    setUnmatchedRows([]);
+    setUnmatchedOpen(false);
+    setDeleteConfirming(false);
+    setDeleteLoading(false);
+    setDeleteResult(null);
+    setDeleteError(null);
+  }
 
   async function runAi() {
     setBulkResult(null);
+    resetUnmatchedState();
     setStep('running');
     await job.start({
       provider: providerFilter || undefined,
@@ -121,14 +149,16 @@ export function AiMap() {
     try {
       if (pastJob.status === 'done' || pastJob.status === 'error') {
         // Load drafts (may be partial for errored jobs) and go straight to review
-        const result = await apiClient.get<{ job: { draftsJson: AiMappingDraft[] } }>(
-          `/sku-mappings/ai-map/jobs/${pastJob.id}`,
-        );
+        const result = await apiClient.get<{
+          job: { draftsJson: AiMappingDraft[]; unmatchedSkusJson?: UnmatchedSku[] };
+        }>(`/sku-mappings/ai-map/jobs/${pastJob.id}`);
         const rows: DraftRow[] = (result.job.draftsJson ?? []).map((d) => ({
           ...d,
           selected: d.confidence >= 0.8,
         }));
         setDrafts(rows);
+        resetUnmatchedState();
+        setUnmatchedRows((result.job.unmatchedSkusJson ?? []).map((v) => ({ ...v, selected: false })));
         setStep('review');
       } else if (pastJob.status === 'running') {
         // Reconnect to the live stream
@@ -193,8 +223,31 @@ export function AiMap() {
     );
   }
 
+  async function handleBulkDelete() {
+    const skus = unmatchedRows.filter((r) => r.selected).map((r) => r.sku);
+    setDeleteLoading(true);
+    setDeleteError(null);
+    try {
+      const result = await apiClient.post<{
+        deleted: number;
+        skipped: number;
+        deletedVariantIds: string[];
+        errors: string[];
+      }>('/shopify-skus/bulk-delete', { skus });
+      setDeleteResult(result);
+      const deletedIdSet = new Set(result.deletedVariantIds ?? []);
+      setUnmatchedRows((prev) => prev.filter((r) => !deletedIdSet.has(r.variantId)));
+      setDeleteConfirming(false);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
+
   const selectedCount = drafts.filter((d) => d.selected).length;
   const highConfidenceCount = drafts.filter((d) => d.confidence >= 0.8).length;
+  const selectedUnmatchedCount = unmatchedRows.filter((r) => r.selected).length;
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -423,6 +476,7 @@ export function AiMap() {
                 {job.drafts.length > 0 && (
                   <button
                     onClick={() => {
+                      resetUnmatchedState();
                       setDrafts(job.drafts.map((d) => ({ ...d, selected: d.confidence >= 0.8 })));
                       setStep('review');
                     }}
@@ -543,6 +597,141 @@ export function AiMap() {
               </tbody>
             </table>
           </div>
+
+          {/* Unmatched SKUs — collapsible section */}
+          {unmatchedRows.length > 0 && (
+            <div className="border rounded-lg overflow-hidden">
+              <button
+                onClick={() => setUnmatchedOpen((v) => !v)}
+                className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors text-left"
+              >
+                {unmatchedOpen ? (
+                  <ChevronDown className="h-4 w-4 shrink-0" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 shrink-0" />
+                )}
+                <span>
+                  Unmatched SKUs ({unmatchedRows.length}) — AI found no catalog match for these SKUs
+                </span>
+              </button>
+
+              {unmatchedOpen && (
+                <div className="border-t space-y-3 p-4">
+                  {/* Select controls */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setUnmatchedRows((prev) => prev.map((r) => ({ ...r, selected: true })))}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
+                    >
+                      <CheckSquare className="h-3 w-3" />
+                      Select all
+                    </button>
+                    <button
+                      onClick={() => setUnmatchedRows((prev) => prev.map((r) => ({ ...r, selected: false })))}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
+                    >
+                      <Square className="h-3 w-3" />
+                      Deselect all
+                    </button>
+                  </div>
+
+                  {/* Table */}
+                  <div className="border rounded overflow-x-auto">
+                    <table className="w-full text-sm min-w-[500px]">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="px-3 py-2 w-8"></th>
+                          <th className="text-left px-3 py-2 font-medium">SKU</th>
+                          <th className="text-left px-3 py-2 font-medium">Product</th>
+                          <th className="text-left px-3 py-2 font-medium">Variant</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {unmatchedRows.map((row, idx) => (
+                          <tr
+                            key={row.sku}
+                            role="checkbox"
+                            aria-checked={row.selected}
+                            tabIndex={0}
+                            className={`cursor-pointer transition-colors ${row.selected ? 'bg-red-50' : 'hover:bg-muted/20'}`}
+                            onClick={() =>
+                              setUnmatchedRows((prev) =>
+                                prev.map((r, i) => (i === idx ? { ...r, selected: !r.selected } : r)),
+                              )
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === ' ' || e.key === 'Enter') {
+                                e.preventDefault();
+                                setUnmatchedRows((prev) =>
+                                  prev.map((r, i) => (i === idx ? { ...r, selected: !r.selected } : r)),
+                                );
+                              }
+                            }}
+                          >
+                            <td className="px-3 py-2" aria-hidden="true">
+                              {row.selected ? (
+                                <CheckSquare className="h-4 w-4 text-red-600" />
+                              ) : (
+                                <Square className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </td>
+                            <td className="px-3 py-2 font-mono text-xs">{row.sku}</td>
+                            <td className="px-3 py-2 text-xs">{row.productTitle}</td>
+                            <td className="px-3 py-2 text-xs">{row.variantTitle}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Delete footer */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    {!deleteConfirming ? (
+                      <button
+                        onClick={() => setDeleteConfirming(true)}
+                        disabled={selectedUnmatchedCount === 0}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete {selectedUnmatchedCount} from Shopify
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-red-700 font-medium">
+                          This permanently deletes from Shopify. Confirm?
+                        </span>
+                        <button
+                          onClick={() => void handleBulkDelete()}
+                          disabled={deleteLoading}
+                          className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+                        >
+                          {deleteLoading ? 'Deleting…' : 'Yes, delete'}
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirming(false)}
+                          disabled={deleteLoading}
+                          className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )}
+
+                    {deleteResult && (
+                      <span className="text-xs text-green-700">
+                        Deleted {deleteResult.deleted}
+                        {deleteResult.skipped > 0 && `, ${deleteResult.skipped} not found in Shopify`}
+                        {deleteResult.errors.length > 0 && ` (${deleteResult.errors.length} errors)`}
+                      </span>
+                    )}
+                    {deleteError && (
+                      <span className="text-xs text-red-600">{deleteError}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-between items-center">
             <button
