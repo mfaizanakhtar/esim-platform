@@ -917,7 +917,7 @@ export default function adminRoutes(
    * POST /admin/shopify-skus/bulk-delete
    * Delete Shopify product variants (and their parent products when all variants are removed).
    * Body: { skus: string[] }
-   * Response: { deleted: number; skipped: number; errors: string[] }
+   * Response: { deleted: number; skipped: number; deletedVariantIds: string[]; errors: string[] }
    */
   app.post('/shopify-skus/bulk-delete', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
@@ -935,7 +935,13 @@ export default function adminRoutes(
     }
 
     // Batch-lookup variant + product GIDs (chunks of 50 to respect Shopify query limits)
-    const lookupMap = await shopify.getVariantGidsBySkus(body.skus);
+    let lookupMap: Awaited<ReturnType<typeof shopify.getVariantGidsBySkus>>;
+    try {
+      lookupMap = await shopify.getVariantGidsBySkus(body.skus);
+    } catch (err) {
+      logger.error({ err }, 'Shopify getVariantGidsBySkus failed');
+      return reply.code(502).send({ error: 'shopify_unavailable' });
+    }
 
     const skipped = body.skus.filter((s) => !lookupMap.has(s)).length;
 
@@ -955,6 +961,7 @@ export default function adminRoutes(
 
     let deleted = 0;
     const errors: string[] = [];
+    const successfulProductGids = new Set<string>();
 
     for (const [productGid, { variantGids, totalVariantCount }] of productMap) {
       try {
@@ -965,12 +972,21 @@ export default function adminRoutes(
           await shopify.deleteVariants(productGid, variantGids);
         }
         deleted += variantGids.length;
+        successfulProductGids.add(productGid);
       } catch (err) {
+        logger.error({ err, productGid }, 'Shopify bulk-delete failed for product');
         errors.push(err instanceof Error ? err.message : String(err));
       }
     }
 
-    return reply.send({ deleted, skipped, errors });
+    // Return stable variantIds of confirmed-deleted rows so the frontend can
+    // filter by identity rather than pruning all selected SKUs
+    const deletedVariantIds: string[] = [];
+    for (const { variantGid, productGid } of lookupMap.values()) {
+      if (successfulProductGids.has(productGid)) deletedVariantIds.push(variantGid);
+    }
+
+    return reply.send({ deleted, skipped, deletedVariantIds, errors });
   });
 
   // ---------------------------------------------------------------------------
@@ -1523,9 +1539,12 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     const allDrafts: AiMappingDraftInternal[] = [];
     let totalBatchesSet = false;
     let capturedInputSkus: AiMapInputSku[] | null = null;
+    // If any batch emits a warning the run is incomplete — don't populate unmatched
+    // because unevaluated SKUs would be falsely listed as having no catalog match.
+    let hasWarning = false;
 
     const computeUnmatched = (): AiMapInputSku[] => {
-      if (!capturedInputSkus) return [];
+      if (!capturedInputSkus || hasWarning) return [];
       const matchedSet = new Set(allDrafts.map((d) => d.shopifySku));
       return capturedInputSkus.filter((v) => !matchedSet.has(v.sku));
     };
@@ -1535,6 +1554,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         if (evt.allInputSkus && capturedInputSkus === null) {
           capturedInputSkus = evt.allInputSkus;
         }
+        if (evt.warning) hasWarning = true;
         if (!totalBatchesSet) {
           await prisma.aiMapJob.update({
             where: { id: jobId },
@@ -1571,7 +1591,8 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             status: 'error',
             error: msg,
             completedAt: new Date(),
-            unmatchedSkusJson: computeUnmatched() as unknown as Prisma.JsonArray,
+            // Don't persist unmatched on error — run was incomplete
+            unmatchedSkusJson: [] as unknown as Prisma.JsonArray,
           },
         });
       } catch (updateErr) {

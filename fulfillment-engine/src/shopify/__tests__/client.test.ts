@@ -811,6 +811,18 @@ describe('getVariantGidsBySkus', () => {
     });
     expect(result.has('ESIM-XX-MISSING')).toBe(false);
   });
+
+  it('throws when Shopify returns top-level GraphQL errors', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        errors: [{ message: 'Throttled' }],
+      });
+
+    const client = makeClient();
+    await expect(client.getVariantGidsBySkus(['ESIM-US-1GB'])).rejects.toThrow('Throttled');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -850,6 +862,18 @@ describe('deleteProduct', () => {
     const client = makeClient();
     await expect(client.deleteProduct('gid://shopify/Product/999')).rejects.toThrow(
       'Product not found',
+    );
+  });
+
+  it('throws when Shopify returns top-level GraphQL errors', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { errors: [{ message: 'Access denied' }] });
+
+    const client = makeClient();
+    await expect(client.deleteProduct('gid://shopify/Product/999')).rejects.toThrow(
+      'Access denied',
     );
   });
 });
@@ -894,5 +918,17 @@ describe('deleteVariants', () => {
     await expect(
       client.deleteVariants('gid://shopify/Product/999', ['gid://shopify/ProductVariant/999']),
     ).rejects.toThrow('Variant not found');
+  });
+
+  it('throws when Shopify returns top-level GraphQL errors', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { errors: [{ message: 'Access denied' }] });
+
+    const client = makeClient();
+    await expect(
+      client.deleteVariants('gid://shopify/Product/999', ['gid://shopify/ProductVariant/999']),
+    ).rejects.toThrow('Access denied');
   });
 });

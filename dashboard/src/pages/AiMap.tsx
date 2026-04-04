@@ -216,13 +216,15 @@ export function AiMap() {
     setDeleteLoading(true);
     setDeleteError(null);
     try {
-      const result = await apiClient.post<{ deleted: number; skipped: number; errors: string[] }>(
-        '/shopify-skus/bulk-delete',
-        { skus },
-      );
+      const result = await apiClient.post<{
+        deleted: number;
+        skipped: number;
+        deletedVariantIds: string[];
+        errors: string[];
+      }>('/shopify-skus/bulk-delete', { skus });
       setDeleteResult(result);
-      const deletedSet = new Set(skus);
-      setUnmatchedRows((prev) => prev.filter((r) => !deletedSet.has(r.sku)));
+      const deletedIdSet = new Set(result.deletedVariantIds ?? []);
+      setUnmatchedRows((prev) => prev.filter((r) => !deletedIdSet.has(r.variantId)));
       setDeleteConfirming(false);
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Delete failed');

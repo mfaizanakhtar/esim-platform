@@ -782,6 +782,10 @@ export class ShopifyClient {
         { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
       );
 
+      const topErrors = response.data?.errors as Array<{ message: string }> | undefined;
+      if (topErrors?.length) {
+        throw new Error(`Shopify GraphQL errors: ${topErrors.map((e) => e.message).join(', ')}`);
+      }
       const data = (response.data?.data ?? {}) as Record<string, unknown>;
       for (let j = 0; j < chunk.length; j++) {
         const alias = data[`sku_${j}`] as
@@ -823,6 +827,10 @@ export class ShopifyClient {
       { query: mutation, variables: { input: { id: productGid } } },
       { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
     );
+    const topErrors = response.data?.errors as Array<{ message: string }> | undefined;
+    if (topErrors?.length) {
+      throw new Error(`Shopify GraphQL errors: ${topErrors.map((e) => e.message).join(', ')}`);
+    }
     const result = response.data?.data?.productDelete as
       | { deletedProductId?: string; userErrors: Array<{ message: string }> }
       | undefined;
@@ -852,6 +860,10 @@ export class ShopifyClient {
       { query: mutation, variables: { productId: productGid, variantsIds: variantGids } },
       { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
     );
+    const topErrors = response.data?.errors as Array<{ message: string }> | undefined;
+    if (topErrors?.length) {
+      throw new Error(`Shopify GraphQL errors: ${topErrors.map((e) => e.message).join(', ')}`);
+    }
     const result = response.data?.data?.productVariantsBulkDelete as
       | { product: unknown; userErrors: Array<{ message: string }> }
       | undefined;

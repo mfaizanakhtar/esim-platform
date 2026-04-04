@@ -3270,10 +3270,16 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json<{ deleted: number; skipped: number; errors: string[] }>();
+      const body = res.json<{
+        deleted: number;
+        skipped: number;
+        deletedVariantIds: string[];
+        errors: string[];
+      }>();
       expect(body.deleted).toBe(1);
       expect(body.skipped).toBe(0);
       expect(body.errors).toHaveLength(0);
+      expect(body.deletedVariantIds).toEqual(['gid://shopify/ProductVariant/1']);
       expect(adminMocks.mockDeleteProduct).toHaveBeenCalledWith('gid://shopify/Product/10');
       expect(adminMocks.mockDeleteVariants).not.toHaveBeenCalled();
     });
@@ -3301,8 +3307,14 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json<{ deleted: number; skipped: number; errors: string[] }>();
+      const body = res.json<{
+        deleted: number;
+        skipped: number;
+        deletedVariantIds: string[];
+        errors: string[];
+      }>();
       expect(body.deleted).toBe(1);
+      expect(body.deletedVariantIds).toEqual(['gid://shopify/ProductVariant/1']);
       expect(adminMocks.mockDeleteVariants).toHaveBeenCalledWith('gid://shopify/Product/10', [
         'gid://shopify/ProductVariant/1',
       ]);
@@ -3355,6 +3367,49 @@ describe('Admin Routes', () => {
       expect(body.deleted).toBe(0);
       expect(body.errors).toHaveLength(1);
       expect(body.errors[0]).toContain('not found');
+    });
+
+    it('returns 502 when getVariantGidsBySkus throws', async () => {
+      adminMocks.mockGetVariantGidsBySkus.mockRejectedValue(
+        new Error('Shopify GraphQL errors: network'),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: ['ESIM-EU-1GB'] },
+      });
+
+      expect(res.statusCode).toBe(502);
+    });
+
+    it('returns deletedVariantIds empty when deletion fails', async () => {
+      adminMocks.mockGetVariantGidsBySkus.mockResolvedValue(
+        new Map([
+          [
+            'ESIM-EU-1GB',
+            {
+              variantGid: 'gid://shopify/ProductVariant/1',
+              productGid: 'gid://shopify/Product/10',
+              productVariantCount: 1,
+            },
+          ],
+        ]),
+      );
+      adminMocks.mockDeleteProduct.mockRejectedValue(new Error('Shopify error'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-skus/bulk-delete',
+        headers: JSON_HEADERS,
+        payload: { skus: ['ESIM-EU-1GB'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json<{ deletedVariantIds: string[]; errors: string[] }>();
+      expect(body.deletedVariantIds).toHaveLength(0);
+      expect(body.errors).toHaveLength(1);
     });
 
     it('returns 401 without admin key', async () => {
