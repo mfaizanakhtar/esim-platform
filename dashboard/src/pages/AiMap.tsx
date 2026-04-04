@@ -114,6 +114,9 @@ export function AiMap() {
       }));
       setDrafts(rows);
       setUnmatchedRows(job.unmatchedSkus.map((v) => ({ ...v, selected: false })));
+      setUnmatchedOpen(false);
+      setDeleteConfirming(false);
+      setDeleteLoading(false);
       setDeleteResult(null);
       setDeleteError(null);
       setStep('review');
@@ -121,8 +124,18 @@ export function AiMap() {
     }
   }, [step, job.status, job.drafts, job.unmatchedSkus, queryClient]);
 
+  function resetUnmatchedState() {
+    setUnmatchedRows([]);
+    setUnmatchedOpen(false);
+    setDeleteConfirming(false);
+    setDeleteLoading(false);
+    setDeleteResult(null);
+    setDeleteError(null);
+  }
+
   async function runAi() {
     setBulkResult(null);
+    resetUnmatchedState();
     setStep('running');
     await job.start({
       provider: providerFilter || undefined,
@@ -144,9 +157,8 @@ export function AiMap() {
           selected: d.confidence >= 0.8,
         }));
         setDrafts(rows);
+        resetUnmatchedState();
         setUnmatchedRows((result.job.unmatchedSkusJson ?? []).map((v) => ({ ...v, selected: false })));
-        setDeleteResult(null);
-        setDeleteError(null);
         setStep('review');
       } else if (pastJob.status === 'running') {
         // Reconnect to the live stream
@@ -464,6 +476,7 @@ export function AiMap() {
                 {job.drafts.length > 0 && (
                   <button
                     onClick={() => {
+                      resetUnmatchedState();
                       setDrafts(job.drafts.map((d) => ({ ...d, selected: d.confidence >= 0.8 })));
                       setStep('review');
                     }}
