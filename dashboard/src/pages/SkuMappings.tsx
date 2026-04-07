@@ -113,7 +113,7 @@ export function SkuMappings() {
     [setSearchParams],
   );
 
-  const { data: shopifySkusData, isLoading: skusLoading } = useShopifySkus({
+  const { data: shopifySkusData, isLoading: skusLoading, isFetching: skusFetching } = useShopifySkus({
     page,
     pageSize: PAGE_SIZE,
     search: debouncedSearch || undefined,
@@ -125,6 +125,7 @@ export function SkuMappings() {
   });
 
   const isLoading = skusLoading || mappingsLoading;
+  const isFetching = skusFetching;
   const total = shopifySkusData?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages);
@@ -293,7 +294,7 @@ export function SkuMappings() {
               <th className="text-left px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={`divide-y transition-opacity duration-150 ${isFetching && !isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
             {isLoading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>

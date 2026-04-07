@@ -38,6 +38,7 @@ export function useCatalog(params: UseCatalogParams = {}) {
   return useQuery({
     queryKey: ['catalog', { provider, search, isActive, limit, offset }],
     queryFn: () => apiClient.get<CatalogPage<CatalogItem>>(`/provider-catalog?${searchParams.toString()}`),
+    placeholderData: (prev) => prev,
   });
 }
 

@@ -103,7 +103,7 @@ function CatalogTab({ provider }: { provider: string }) {
     setPage(0);
   }, [debouncedSearch, setPage]);
 
-  const { data, isLoading } = useCatalog({
+  const { data, isLoading, isFetching } = useCatalog({
     provider,
     search: debouncedSearch || undefined,
     limit: PAGE_SIZE,
@@ -138,7 +138,7 @@ function CatalogTab({ provider }: { provider: string }) {
               <th className="text-left px-4 py-3 font-medium">Region</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={`divide-y transition-opacity duration-150 ${isFetching && !isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
             {isLoading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
