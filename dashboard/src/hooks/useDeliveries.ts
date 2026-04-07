@@ -19,7 +19,6 @@ export function useDeliveries(params: UseDeliveriesParams = {}) {
   return useQuery({
     queryKey: ['deliveries', { status, limit, offset }],
     queryFn: () => apiClient.get<DeliveriesPage<Delivery>>(`/deliveries?${searchParams.toString()}`),
-    placeholderData: (prev) => prev,
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return false;

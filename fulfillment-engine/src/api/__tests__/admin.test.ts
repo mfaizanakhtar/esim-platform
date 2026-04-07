@@ -3227,6 +3227,40 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(404);
     });
 
+    it('returns 404 when prisma.delete throws P2025 (race condition)', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue({ status: 'done' });
+      const p2025 = Object.assign(new Error('Record not found'), {
+        code: 'P2025',
+        name: 'PrismaClientKnownRequestError',
+        clientVersion: '0',
+        meta: {},
+      });
+      Object.setPrototypeOf(
+        p2025,
+        (await import('@prisma/client')).Prisma.PrismaClientKnownRequestError.prototype,
+      );
+      prismaAiMapJob.delete.mockRejectedValue(p2025);
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/sku-mappings/ai-map/jobs/job-1',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 500 when prisma.delete throws unexpected error', async () => {
+      prismaAiMapJob.findUnique.mockResolvedValue({ status: 'done' });
+      prismaAiMapJob.delete.mockRejectedValue(new Error('DB connection lost'));
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/sku-mappings/ai-map/jobs/job-1',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(500);
+    });
+
     it('returns 401 without admin key', async () => {
       const res = await app.inject({ method: 'DELETE', url: '/sku-mappings/ai-map/jobs/job-1' });
       expect(res.statusCode).toBe(401);

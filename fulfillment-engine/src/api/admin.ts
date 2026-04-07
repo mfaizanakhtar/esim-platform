@@ -1826,13 +1826,12 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       }, 15_000);
 
       let closed = false;
-      request.raw.on(
-        'close',
-        /* v8 ignore next 4 */ () => {
-          closed = true;
-          clearInterval(heartbeat);
-        },
-      );
+      /* v8 ignore start */
+      request.raw.on('close', () => {
+        closed = true;
+        clearInterval(heartbeat);
+      });
+      /* v8 ignore stop */
 
       const send = (event: string, data: unknown) => {
         if (!reply.raw.destroyed) {
@@ -1901,11 +1900,12 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           // Wait 2s before next poll — clean up the close listener whether the
           // timer or the close event fires first to avoid MaxListenersExceeded.
           await new Promise<void>((resolve) => {
-            /* v8 ignore next 4 */
+            /* v8 ignore start */
             const onClose = () => {
               clearTimeout(t);
               resolve();
             };
+            /* v8 ignore stop */
             const t = setTimeout(() => {
               request.raw.removeListener('close', onClose);
               resolve();

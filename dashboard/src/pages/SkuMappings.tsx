@@ -113,19 +113,18 @@ export function SkuMappings() {
     [setSearchParams],
   );
 
-  const { data: shopifySkusData, isLoading: skusLoading, isFetching: skusFetching } = useShopifySkus({
+  const { data: shopifySkusData, isFetching: skusFetching } = useShopifySkus({
     page,
     pageSize: PAGE_SIZE,
     search: debouncedSearch || undefined,
     status: tab,
     provider: provider || undefined,
   });
-  const { data: mappingsData, isLoading: mappingsLoading } = useAllSkuMappings({
+  const { data: mappingsData, isFetching: mappingsFetching } = useAllSkuMappings({
     provider: provider || undefined,
   });
 
-  const isLoading = skusLoading || mappingsLoading;
-  const isFetching = skusFetching;
+  const isFetching = skusFetching || mappingsFetching;
   const total = shopifySkusData?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages);
@@ -284,7 +283,7 @@ export function SkuMappings() {
       </div>
 
       <div className="border rounded-lg overflow-x-auto relative">
-        {isFetching && !isLoading && (
+        {isFetching && (
           <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden z-10 bg-gray-200">
             <div className="h-full w-1/3 bg-gray-900" style={{ animation: 'slideProgress 1.2s ease-in-out infinite' }} />
           </div>
@@ -300,7 +299,7 @@ export function SkuMappings() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {isLoading &&
+            {isFetching &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
                   {Array.from({ length: 5 }).map((__, j) => (
@@ -311,7 +310,7 @@ export function SkuMappings() {
                 </tr>
               ))}
 
-            {skuRows.map((row) => (
+            {!isFetching && skuRows.map((row) => (
               <tr key={row.shopifySku.sku} className="hover:bg-muted/20 transition-colors">
                 {/* SKU */}
                 <td className="px-4 py-3">
@@ -421,7 +420,7 @@ export function SkuMappings() {
               </tr>
             ))}
 
-            {!isLoading && skuRows.length === 0 && (
+            {!isFetching && skuRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                   {total === 0
