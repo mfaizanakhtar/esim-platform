@@ -18,6 +18,9 @@ import { useQueryClient } from '@tanstack/react-query';
 
 type TabFilter = 'all' | 'mapped' | 'unmapped';
 
+const PAGE_SIZE = 25;
+const EMPTY_MAPPINGS: SkuMapping[] = [];
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
   useEffect(() => {
@@ -63,6 +66,9 @@ export function SkuMappings() {
   const tabParam = searchParams.get('tab') as TabFilter | null;
   const tab: TabFilter = tabParam === 'mapped' || tabParam === 'unmapped' ? tabParam : 'all';
 
+  const pageParam = parseInt(searchParams.get('page') ?? '1', 10);
+  const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+
   useEffect(() => {
     setSearch(urlSearch);
   }, [urlSearch]);
@@ -76,6 +82,7 @@ export function SkuMappings() {
       const next = new URLSearchParams(prev);
       if (debouncedSearch) next.set('search', debouncedSearch);
       else next.delete('search');
+      next.delete('page');
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,50 +94,64 @@ export function SkuMappings() {
         const next = new URLSearchParams(prev);
         if (value) next.set(key, value);
         else next.delete(key);
+        next.delete('page');
         return next;
       });
     },
     [setSearchParams],
   );
 
-  const { data: shopifySkusData, isLoading: skusLoading } = useShopifySkus();
+  const setPage = useCallback(
+    (p: number) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (p <= 1) next.delete('page');
+        else next.set('page', String(p));
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const { data: shopifySkusData, isLoading: skusLoading } = useShopifySkus({
+    page,
+    pageSize: PAGE_SIZE,
+    search: debouncedSearch || undefined,
+    status: tab,
+    provider: provider || undefined,
+  });
   const { data: mappingsData, isLoading: mappingsLoading } = useAllSkuMappings({
     provider: provider || undefined,
   });
 
   const isLoading = skusLoading || mappingsLoading;
+  const total = shopifySkusData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const clampedPage = Math.min(page, totalPages);
 
-  // Build unified SKU rows
-  const skuRows = useMemo<SkuRow[]>(() => {
-    const allMappings = mappingsData?.mappings ?? [];
-    const bySkuMap = new Map<string, SkuMapping[]>();
-    for (const m of allMappings) {
-      const arr = bySkuMap.get(m.shopifySku) ?? [];
+  // Build mapping lookup for chip display (all mappings from DB)
+  const mappingsBySku = useMemo(() => {
+    const map = new Map<string, SkuMapping[]>();
+    for (const m of mappingsData?.mappings ?? []) {
+      const arr = map.get(m.shopifySku) ?? [];
       arr.push(m);
-      bySkuMap.set(m.shopifySku, arr);
+      map.set(m.shopifySku, arr);
     }
-    return (shopifySkusData?.skus ?? []).map((s) => ({
-      shopifySku: s,
-      parsed: parseShopifySku(s.sku),
-      mappings: (bySkuMap.get(s.sku) ?? []).sort((a, b) => a.priority - b.priority),
-    }));
-  }, [shopifySkusData, mappingsData]);
+    return map;
+  }, [mappingsData]);
 
-  // Apply filters
-  const filteredRows = useMemo(() => {
-    let rows = skuRows;
-    if (tab === 'mapped') rows = rows.filter((r) => r.mappings.length > 0);
-    if (tab === 'unmapped') rows = rows.filter((r) => r.mappings.length === 0);
-    if (debouncedSearch) {
-      const q = debouncedSearch.toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.shopifySku.sku.toLowerCase().includes(q) ||
-          r.shopifySku.productTitle.toLowerCase().includes(q),
-      );
-    }
-    return rows;
-  }, [skuRows, tab, debouncedSearch]);
+  // Current page rows (server already filtered + paginated)
+  const skuRows = useMemo<SkuRow[]>(
+    () =>
+      (shopifySkusData?.skus ?? []).map((s) => ({
+        shopifySku: s,
+        parsed: parseShopifySku(s.sku),
+        mappings: (mappingsBySku.get(s.sku) ?? EMPTY_MAPPINGS).sort(
+          (a, b) => a.priority - b.priority,
+        ),
+      })),
+    [shopifySkusData, mappingsBySku],
+  );
 
   const createMutation = useCreateSkuMapping();
   const updateMutation = useUpdateSkuMapping();
@@ -166,8 +187,6 @@ export function SkuMappings() {
     });
   }
 
-  const mappedCount = skuRows.filter((r) => r.mappings.length > 0).length;
-  const unmappedCount = skuRows.filter((r) => r.mappings.length === 0).length;
 
   return (
     <div className="space-y-4">
@@ -248,21 +267,17 @@ export function SkuMappings() {
 
       {/* Filter tabs */}
       <div className="flex gap-1 border-b">
-        {([
-          ['all', `All (${skuRows.length})`],
-          ['mapped', `Mapped (${mappedCount})`],
-          ['unmapped', `Unmapped (${unmappedCount})`],
-        ] as [TabFilter, string][]).map(([t, label]) => (
+        {(['all', 'mapped', 'unmapped'] as TabFilter[]).map((t) => (
           <button
             key={t}
             onClick={() => setFilter('tab', t === 'all' ? '' : t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize ${
               tab === t
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {label}
+            {t}
           </button>
         ))}
       </div>
@@ -290,7 +305,7 @@ export function SkuMappings() {
                 </tr>
               ))}
 
-            {filteredRows.map((row) => (
+            {skuRows.map((row) => (
               <tr key={row.shopifySku.sku} className="hover:bg-muted/20 transition-colors">
                 {/* SKU */}
                 <td className="px-4 py-3">
@@ -400,10 +415,10 @@ export function SkuMappings() {
               </tr>
             ))}
 
-            {!isLoading && filteredRows.length === 0 && (
+            {!isLoading && skuRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  {skuRows.length === 0
+                  {total === 0
                     ? 'No Shopify SKUs found. Make sure Shopify is connected.'
                     : 'No SKUs match the current filter.'}
                 </td>
@@ -413,13 +428,63 @@ export function SkuMappings() {
         </table>
       </div>
 
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {(clampedPage - 1) * PAGE_SIZE + 1}–{Math.min(clampedPage * PAGE_SIZE, total)}{' '}
+            of {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(clampedPage - 1)}
+              disabled={clampedPage <= 1}
+              className="px-3 py-1.5 border rounded-md hover:bg-muted transition-colors disabled:opacity-40"
+            >
+              ← Prev
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter((p) => p === 1 || p === totalPages || Math.abs(p - clampedPage) <= 2)
+              .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+                if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…');
+                acc.push(p);
+                return acc;
+              }, [])
+              .map((p, i) =>
+                p === '…' ? (
+                  <span key={`ellipsis-${i}`} className="px-2">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p as number)}
+                    className={`px-3 py-1.5 border rounded-md transition-colors ${
+                      p === clampedPage
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'hover:bg-muted'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ),
+              )}
+            <button
+              onClick={() => setPage(clampedPage + 1)}
+              disabled={clampedPage >= totalPages}
+              className="px-3 py-1.5 border rounded-md hover:bg-muted transition-colors disabled:opacity-40"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Per-SKU mapping modal */}
       {modalSku && (
         <SkuMappingModal
           sku={modalSku}
-          existingMappings={
-            skuRows.find((r) => r.shopifySku.sku === modalSku.sku)?.mappings ?? []
-          }
+          existingMappings={mappingsBySku.get(modalSku.sku) ?? EMPTY_MAPPINGS}
           onClose={() => setModalSku(null)}
           onSaved={() => {
             setModalSku(null);

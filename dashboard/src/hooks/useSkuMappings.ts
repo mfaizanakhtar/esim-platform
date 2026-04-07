@@ -30,16 +30,29 @@ export function useSkuMappings(params: UseSkuMappingsParams = {}) {
   });
 }
 
-export function useShopifySkus(params: { unmappedOnly?: boolean; provider?: string } = {}) {
-  const { unmappedOnly, provider } = params;
+export function useShopifySkus(
+  params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: 'all' | 'mapped' | 'unmapped';
+    provider?: string;
+  } = {},
+) {
+  const { page = 1, pageSize = 25, search, status = 'all', provider } = params;
+  const offset = (page - 1) * pageSize;
   const sp = new URLSearchParams();
-  if (unmappedOnly) sp.set('unmappedOnly', 'true');
+  sp.set('limit', String(pageSize));
+  sp.set('offset', String(offset));
+  if (status !== 'all') sp.set('status', status);
+  if (search) sp.set('search', search);
   if (provider) sp.set('provider', provider);
   const url = `/shopify-skus?${sp.toString()}`;
   return useQuery({
-    queryKey: ['shopify-skus', params],
-    queryFn: () => apiClient.get<{ skus: ShopifySku[] }>(url),
+    queryKey: ['shopify-skus', { page, pageSize, search, status, provider }],
+    queryFn: () => apiClient.get<{ skus: ShopifySku[]; total: number }>(url),
     staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 }
 
