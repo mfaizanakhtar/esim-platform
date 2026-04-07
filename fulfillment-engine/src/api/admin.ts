@@ -315,10 +315,20 @@ export default function adminRoutes(
     if (!requireAdminKey(request, reply)) return;
 
     const query = request.query as { provider?: string };
-    const where = query.provider ? { provider: query.provider } : {};
-    const { count } = await prisma.providerSkuMapping.deleteMany({ where });
+    const provider = typeof query.provider === 'string' ? query.provider.trim() : undefined;
+    if (query.provider !== undefined && !provider) {
+      return reply.code(400).send({ error: 'provider cannot be empty' });
+    }
+    const where = provider ? { provider } : {};
 
-    return reply.send({ deleted: count });
+    try {
+      const { count } = await prisma.providerSkuMapping.deleteMany({ where });
+      logger.warn({ provider: provider ?? 'all', deleted: count }, 'Cleared SKU mappings');
+      return reply.send({ deleted: count });
+    } catch (err) {
+      logger.error({ err, provider: provider ?? 'all' }, 'Failed to clear SKU mappings');
+      return reply.code(500).send({ error: 'Failed to clear SKU mappings' });
+    }
   });
 
   /**
