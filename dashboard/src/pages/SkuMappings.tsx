@@ -358,13 +358,26 @@ export function SkuMappings() {
                     </span>
                   ) : (
                     <div className="flex flex-col gap-1">
-                      {row.mappings.map((m, idx) => (
+                      {row.mappings.map((m, idx) => {
+                        const prev = row.mappings[idx - 1];
+                        const next = row.mappings[idx + 1];
+                        const canMoveUp =
+                          idx > 0 &&
+                          !m.priorityLocked && !m.mappingLocked &&
+                          !prev.priorityLocked && !prev.mappingLocked &&
+                          !reorderMutation.isPending;
+                        const canMoveDown =
+                          idx < row.mappings.length - 1 &&
+                          !m.priorityLocked && !m.mappingLocked &&
+                          !next.priorityLocked && !next.mappingLocked &&
+                          !reorderMutation.isPending;
+                        return (
                         <div key={m.id} className="flex items-center gap-1">
                           {/* Priority up/down */}
                           <div className="flex flex-col">
                             <button
                               onClick={() => moveMapping(row.shopifySku.sku, row.mappings, idx, idx - 1)}
-                              disabled={idx === 0 || m.priorityLocked || m.mappingLocked || reorderMutation.isPending}
+                              disabled={!canMoveUp}
                               className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
                               title="Higher priority"
                             >
@@ -372,7 +385,7 @@ export function SkuMappings() {
                             </button>
                             <button
                               onClick={() => moveMapping(row.shopifySku.sku, row.mappings, idx, idx + 1)}
-                              disabled={idx === row.mappings.length - 1 || m.priorityLocked || m.mappingLocked || reorderMutation.isPending}
+                              disabled={!canMoveDown}
                               className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
                               title="Lower priority"
                             >
@@ -413,7 +426,8 @@ export function SkuMappings() {
                             <Trash2 className="h-3 w-3" />
                           </button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </td>
@@ -448,12 +462,16 @@ export function SkuMappings() {
             {!isFetching && skuRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  {tab === 'unmapped'
-                    ? 'All SKUs are mapped!'
-                    : tab === 'mapped'
-                      ? 'No mapped SKUs yet.'
-                      : debouncedSearch || provider
-                        ? 'No SKUs match the current filter.'
+                  {debouncedSearch || provider
+                    ? tab === 'unmapped'
+                      ? 'No unmapped SKUs match the current filter.'
+                      : tab === 'mapped'
+                        ? 'No mapped SKUs match the current filter.'
+                        : 'No SKUs match the current filter.'
+                    : tab === 'unmapped'
+                      ? 'All SKUs are mapped!'
+                      : tab === 'mapped'
+                        ? 'No mapped SKUs yet.'
                         : 'No Shopify SKUs found. Make sure Shopify is connected.'}
                 </td>
               </tr>
