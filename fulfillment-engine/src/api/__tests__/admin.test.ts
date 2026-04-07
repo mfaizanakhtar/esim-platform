@@ -1049,7 +1049,9 @@ describe('Admin Routes', () => {
       });
       expect(res.statusCode).toBe(200);
       expect(res.json()).toEqual({ deleted: 10 });
-      expect(prisma.providerSkuMapping.deleteMany).toHaveBeenCalledWith({ where: { provider: 'firoam' } });
+      expect(prisma.providerSkuMapping.deleteMany).toHaveBeenCalledWith({
+        where: { provider: 'firoam' },
+      });
     });
 
     it('returns 400 when provider is empty string', async () => {
