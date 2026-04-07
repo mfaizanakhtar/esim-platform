@@ -31,6 +31,7 @@ export function useCreateSkuMapping() {
       apiClient.post<SkuMapping>('/sku-mappings', data),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+      void qc.invalidateQueries({ queryKey: ['shopify-skus'] });
     },
   });
 }
@@ -42,6 +43,7 @@ export function useUpdateSkuMapping() {
       apiClient.put<SkuMapping>(`/sku-mappings/${id}`, data),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+      void qc.invalidateQueries({ queryKey: ['shopify-skus'] });
     },
   });
 }
@@ -73,6 +75,7 @@ export function useToggleSkuMapping() {
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+      void qc.invalidateQueries({ queryKey: ['shopify-skus'] });
     },
   });
 }
@@ -83,6 +86,7 @@ export function useDeleteSkuMapping() {
     mutationFn: (id: string) => apiClient.delete<{ ok: boolean }>(`/sku-mappings/${id}`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+      void qc.invalidateQueries({ queryKey: ['shopify-skus'] });
     },
   });
 }
@@ -94,6 +98,7 @@ export function useReorderMappings() {
       apiClient.put<{ ok: boolean }>('/sku-mappings/reorder', { shopifySku, orderedIds }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+      void qc.invalidateQueries({ queryKey: ['shopify-skus'] });
     },
   });
 }
@@ -108,6 +113,7 @@ export function useSmartPricing() {
       ),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+      void qc.invalidateQueries({ queryKey: ['shopify-skus'] });
     },
   });
 }
@@ -132,6 +138,7 @@ export function useBulkCreateMappings() {
     }) => apiClient.post<BulkCreateResult>('/sku-mappings/bulk', { mappings: inputs, forceReplace }),
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ['sku-mappings'] });
+      void qc.invalidateQueries({ queryKey: ['shopify-skus'] });
     },
   });
 }
