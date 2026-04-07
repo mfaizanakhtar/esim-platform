@@ -12,14 +12,7 @@ import { MappingForm } from '@/components/sku-mappings/MappingForm';
 import { SkuMappingModal } from '@/components/sku-mappings/SkuMappingModal';
 import type { SkuMapping, ShopifySku } from '@/lib/types';
 import { parseShopifySku } from '@/utils/parseShopifySku';
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Sparkles,
-  Brain,
-  Trash,
-} from 'lucide-react';
+import { Plus, Pencil, Trash2, Sparkles, Brain } from 'lucide-react';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { useQueryClient } from '@tanstack/react-query';
 
