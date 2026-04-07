@@ -901,8 +901,10 @@ export default function adminRoutes(
           : 'all';
     const providerFilter = query.provider || undefined;
     const search = (query.search ?? '').toLowerCase().trim();
-    const limit = Math.min(parseInt(query.limit ?? '25', 10) || 25, 200);
-    const offset = parseInt(query.offset ?? '0', 10) || 0;
+    const parsedLimit = Number.parseInt(query.limit ?? '25', 10);
+    const parsedOffset = Number.parseInt(query.offset ?? '0', 10);
+    const limit = Math.min(Math.max(1, Number.isFinite(parsedLimit) ? parsedLimit : 25), 200);
+    const offset = Math.max(0, Number.isFinite(parsedOffset) ? parsedOffset : 0);
 
     let allVariants: Array<{
       sku: string;
@@ -921,11 +923,20 @@ export default function adminRoutes(
     // Apply status (mapped / unmapped) filter
     let filtered = allVariants;
     if (status !== 'all') {
-      const mappedSkus = await prisma.providerSkuMapping.findMany({
-        select: { shopifySku: true },
-        distinct: ['shopifySku'],
-        ...(providerFilter ? { where: { provider: providerFilter } } : {}),
-      });
+      let mappedSkus: Array<{ shopifySku: string }>;
+      try {
+        mappedSkus = await prisma.providerSkuMapping.findMany({
+          select: { shopifySku: true },
+          distinct: ['shopifySku'],
+          ...(providerFilter ? { where: { provider: providerFilter } } : {}),
+        });
+      } catch (err) {
+        logger.error(
+          { err, status, providerFilter },
+          'Failed to query mapped SKUs for status filter',
+        );
+        return reply.code(500).send({ error: 'db_unavailable' });
+      }
       const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
       filtered =
         status === 'unmapped'
