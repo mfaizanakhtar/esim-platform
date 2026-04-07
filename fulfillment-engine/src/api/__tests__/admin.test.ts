@@ -3929,8 +3929,13 @@ describe('Admin Routes', () => {
       });
 
       // Give background runner time to hit both catch branches
-      await new Promise((r) => setTimeout(r, 100));
-      // No assertion needed beyond no unhandled rejection — the catch swallows the updateErr
+      // Use vi.waitFor so CI timing doesn't cause flakiness
+      await vi.waitFor(
+        () => {
+          expect(prismaAiMapJobStructured.update).toHaveBeenCalled();
+        },
+        { timeout: 2000 },
+      );
     });
 
     it('runs unmapped filter and processes SKUs through the matching loop', async () => {
