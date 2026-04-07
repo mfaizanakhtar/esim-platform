@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { LayoutDashboard, Map as MapIcon, Package, LogOut, Menu, X } from 'lucide-react';
 
@@ -8,6 +8,43 @@ const navItems = [
   { to: '/sku-mappings', label: 'SKU Mappings', icon: MapIcon },
   { to: '/catalog', label: 'Catalog', icon: Package },
 ];
+
+function TopProgressBar() {
+  const location = useLocation();
+  const [visible, setVisible] = useState(false);
+  const [width, setWidth] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevLocation = useRef(`${location.pathname}${location.search}${location.hash}`);
+
+  useEffect(() => {
+    const currentLocation = `${location.pathname}${location.search}${location.hash}`;
+    if (prevLocation.current === currentLocation) return;
+    prevLocation.current = currentLocation;
+
+    setWidth(0);
+    setVisible(true);
+    const t1 = setTimeout(() => setWidth(80), 10);
+    const t2 = setTimeout(() => {
+      setWidth(100);
+      timerRef.current = setTimeout(() => setVisible(false), 300);
+    }, 200);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [location.pathname, location.search, location.hash]);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      className="fixed top-0 left-0 z-[100] h-0.5 bg-primary transition-all ease-out"
+      style={{ width: `${width}%`, transitionDuration: width === 100 ? '150ms' : '200ms' }}
+    />
+  );
+}
 
 export function AppShell() {
   const logout = useAuthStore((s) => s.logout);
@@ -21,6 +58,8 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
+      <TopProgressBar />
+
       {/* Mobile overlay backdrop */}
       {sidebarOpen && (
         <div
@@ -29,7 +68,7 @@ export function AppShell() {
         />
       )}
 
-      {/* Sidebar — fixed+off-screen on mobile, static in-flow on desktop */}
+      {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 w-56 border-r flex flex-col bg-white transition-transform duration-200 md:static md:translate-x-0 md:visible ${
           sidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
@@ -52,6 +91,7 @@ export function AppShell() {
             <NavLink
               key={to}
               to={to}
+              end={false}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
