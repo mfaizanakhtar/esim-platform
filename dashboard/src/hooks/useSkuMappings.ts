@@ -87,5 +87,6 @@ export function useAllSkuMappings(params: Omit<UseSkuMappingsParams, 'limit' | '
   return {
     data,
     isLoading: phase1.isLoading || (needsMore && phase2.isLoading),
+    isFetching: phase1.isFetching || (needsMore && phase2.isFetching),
   };
 }
