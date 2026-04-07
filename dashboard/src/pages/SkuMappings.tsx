@@ -120,11 +120,11 @@ export function SkuMappings() {
     status: tab,
     provider: provider || undefined,
   });
-  const { data: mappingsData } = useAllSkuMappings({
+  const { data: mappingsData, isFetching: mappingsFetching } = useAllSkuMappings({
     provider: provider || undefined,
   });
 
-  const isFetching = skusFetching;
+  const isFetching = skusFetching || mappingsFetching;
   const total = shopifySkusData?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages);
