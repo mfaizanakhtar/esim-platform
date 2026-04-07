@@ -306,6 +306,22 @@ export default function adminRoutes(
   });
 
   /**
+   * DELETE /admin/sku-mappings
+   * Delete ALL SKU mappings (optionally scoped to one provider).
+   * Query: provider=firoam|tgt — delete only that provider's mappings
+   * Response: { deleted: number }
+   */
+  app.delete('/sku-mappings', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const query = request.query as { provider?: string };
+    const where = query.provider ? { provider: query.provider } : {};
+    const { count } = await prisma.providerSkuMapping.deleteMany({ where });
+
+    return reply.send({ deleted: count });
+  });
+
+  /**
    * GET /admin/sku-mappings/:id
    * Get a single SKU mapping by ID.
    */
