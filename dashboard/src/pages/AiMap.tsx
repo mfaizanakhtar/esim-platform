@@ -4,9 +4,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useBulkCreateMappings } from '@/hooks/useSkuMappingMutations';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { useAiMapJob } from '@/hooks/useAiMapJob';
+import { useStructuredMap } from '@/hooks/useStructuredMap';
 import { apiClient } from '@/lib/api';
 import type { AiMappingDraft, AiMapJob, UnmatchedSku } from '@/lib/types';
-import { ArrowLeft, Brain, CheckSquare, Square, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { ArrowLeft, Brain, Cpu, CheckSquare, Square, ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface DraftRow extends AiMappingDraft {
@@ -57,6 +58,7 @@ export function AiMap() {
 
   const providerFilter = searchParams.get('provider') ?? '';
   const unmappedOnly = searchParams.get('unmapped') !== 'false';
+  const [mode, setMode] = useState<'ai' | 'structured'>('ai');
   const [forceReplace, setForceReplace] = useState(false);
   const [requireData, setRequireData] = useState(true);
   const [requireValidity, setRequireValidity] = useState(true);
@@ -99,7 +101,10 @@ export function AiMap() {
   const [deleteResult, setDeleteResult] = useState<{ deleted: number; skipped: number; errors: string[] } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const job = useAiMapJob();
+  const aiJob = useAiMapJob();
+  const structuredJob = useStructuredMap();
+  // Unified interface — whichever mode is active
+  const job = mode === 'ai' ? aiJob : structuredJob;
   const bulkCreate = useBulkCreateMappings();
 
   // Past jobs list — poll every 5s when panel is open
@@ -143,11 +148,22 @@ export function AiMap() {
     setBulkResult(null);
     resetUnmatchedState();
     setStep('running');
-    await job.start({
-      provider: providerFilter || undefined,
-      unmappedOnly: forceReplace ? false : unmappedOnly,
-      relaxOptions: { requireData, requireValidity },
-    });
+    if (mode === 'ai') {
+      await aiJob.start({
+        provider: providerFilter || undefined,
+        unmappedOnly: forceReplace ? false : unmappedOnly,
+        relaxOptions: { requireData, requireValidity },
+      });
+    } else {
+      await structuredJob.start({
+        provider: providerFilter || undefined,
+        unmappedOnly: forceReplace ? false : unmappedOnly,
+        relaxOptions: {
+          relaxData: !requireData,
+          relaxValidity: !requireValidity,
+        },
+      });
+    }
   }
 
   async function resumeJob(pastJob: AiMapJob) {
@@ -284,8 +300,8 @@ export function AiMap() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Brain className="h-6 w-6" />
-          AI Auto-Map
+          {mode === 'ai' ? <Brain className="h-6 w-6" /> : <Cpu className="h-6 w-6" />}
+          {mode === 'ai' ? 'AI Auto-Map' : 'Structured Auto-Map'}
         </h1>
       </div>
 
@@ -293,14 +309,27 @@ export function AiMap() {
       {step === 'configure' && (
         <div className="space-y-4">
           <div className="border rounded-lg p-6 space-y-5 max-w-md">
+              <div className="flex rounded-md border overflow-hidden text-sm font-medium">
+              <button
+                onClick={() => setMode('ai')}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 transition-colors ${mode === 'ai' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                <Brain className="h-4 w-4" />
+                AI
+              </button>
+              <button
+                onClick={() => setMode('structured')}
+                className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 transition-colors ${mode === 'structured' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+              >
+                <Cpu className="h-4 w-4" />
+                Structured
+              </button>
+            </div>
+
             <p className="text-sm text-muted-foreground">
-              AI will match your Shopify SKU names to provider catalog entries based on region, data
-              amount, and validity. Review and approve suggestions before they are saved.
-              <br />
-              <span className="mt-1 inline-block">
-                Tip: select a specific provider to add that provider&apos;s mappings to SKUs that are
-                already mapped elsewhere — existing mappings are never overwritten.
-              </span>
+              {mode === 'ai'
+                ? 'AI will match your Shopify SKU names to provider catalog entries based on region, data amount, and validity. Review and approve suggestions before they are saved.'
+                : 'Structured matching parses SKU attributes deterministically using the catalog\'s parsed data — no AI cost, instant results. Best used after a catalog sync with parsed attributes.'}
             </p>
 
             <div className="space-y-1">
@@ -388,8 +417,8 @@ export function AiMap() {
               onClick={() => void runAi()}
               className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
-              <Brain className="h-4 w-4" />
-              Run AI Mapping
+              {mode === 'ai' ? <Brain className="h-4 w-4" /> : <Cpu className="h-4 w-4" />}
+              {mode === 'ai' ? 'Run AI Mapping' : 'Run Structured Mapping'}
             </button>
 
             <div className="border-t pt-4 space-y-2">
@@ -532,7 +561,7 @@ export function AiMap() {
       {/* Step 2: Running */}
       {step === 'running' && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
-          <Brain className="h-10 w-10 animate-pulse" />
+          {mode === 'ai' ? <Brain className="h-10 w-10 animate-pulse" /> : <Cpu className="h-10 w-10 animate-pulse" />}
           {job.progress ? (
             <div className="text-center space-y-2">
               <p className="text-sm font-medium text-foreground">
