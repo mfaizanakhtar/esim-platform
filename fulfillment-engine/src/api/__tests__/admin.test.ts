@@ -53,6 +53,7 @@ vi.mock('~/db/prisma', () => ({
       create: vi.fn(),
       update: vi.fn(),
       count: vi.fn(),
+      deleteMany: vi.fn(),
     },
     providerSkuCatalog: {
       findMany: vi.fn(),
@@ -1025,6 +1026,52 @@ describe('Admin Routes', () => {
           data: expect.objectContaining({ providerConfig: { extra: 'value' } }),
         }),
       );
+    });
+  });
+
+  // ── DELETE /sku-mappings (clear all) ───────────────────────────────────
+
+  describe('DELETE /sku-mappings', () => {
+    it('deletes all mappings when no provider filter', async () => {
+      vi.mocked(prisma.providerSkuMapping.deleteMany).mockResolvedValue({ count: 42 });
+      const res = await app.inject({ method: 'DELETE', url: '/sku-mappings', headers: AUTH });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ deleted: 42 });
+      expect(prisma.providerSkuMapping.deleteMany).toHaveBeenCalledWith({ where: {} });
+    });
+
+    it('deletes only provider mappings when provider filter supplied', async () => {
+      vi.mocked(prisma.providerSkuMapping.deleteMany).mockResolvedValue({ count: 10 });
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/sku-mappings?provider=firoam',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ deleted: 10 });
+      expect(prisma.providerSkuMapping.deleteMany).toHaveBeenCalledWith({
+        where: { provider: 'firoam' },
+      });
+    });
+
+    it('returns 400 when provider is empty string', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/sku-mappings?provider=',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 500 when deleteMany throws', async () => {
+      vi.mocked(prisma.providerSkuMapping.deleteMany).mockRejectedValue(new Error('db error'));
+      const res = await app.inject({ method: 'DELETE', url: '/sku-mappings', headers: AUTH });
+      expect(res.statusCode).toBe(500);
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({ method: 'DELETE', url: '/sku-mappings' });
+      expect(res.statusCode).toBe(401);
     });
   });
 

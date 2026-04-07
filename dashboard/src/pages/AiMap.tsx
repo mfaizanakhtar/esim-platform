@@ -86,6 +86,10 @@ export function AiMap() {
   const [pastJobsOpen, setPastJobsOpen] = useState(false);
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [jobsActionError, setJobsActionError] = useState<string | null>(null);
+  const [clearConfirming, setClearConfirming] = useState(false);
+  const [clearLoading, setClearLoading] = useState(false);
+  const [clearResult, setClearResult] = useState<{ deleted: number } | null>(null);
+  const [clearError, setClearError] = useState<string | null>(null);
 
   // Unmatched SKUs section
   const [unmatchedRows, setUnmatchedRows] = useState<UnmatchedRow[]>([]);
@@ -248,6 +252,24 @@ export function AiMap() {
     }
   }
 
+  async function handleClearMappings() {
+    setClearLoading(true);
+    setClearError(null);
+    setClearResult(null);
+    try {
+      const url = providerFilter ? `/sku-mappings?provider=${providerFilter}` : '/sku-mappings';
+      const result = await apiClient.delete<{ deleted: number }>(url);
+      setClearResult(result);
+      setClearConfirming(false);
+      void queryClient.invalidateQueries({ queryKey: ['sku-mappings'] });
+      void queryClient.invalidateQueries({ queryKey: ['shopify-skus'] });
+    } catch (err) {
+      setClearError(err instanceof Error ? err.message : 'Failed to clear mappings');
+    } finally {
+      setClearLoading(false);
+    }
+  }
+
   const selectedCount = drafts.filter((d) => d.selected).length;
   const highConfidenceCount = drafts.filter((d) => d.confidence >= 0.8).length;
   const selectedUnmatchedCount = unmatchedRows.filter((r) => r.selected).length;
@@ -369,6 +391,54 @@ export function AiMap() {
               <Brain className="h-4 w-4" />
               Run AI Mapping
             </button>
+
+            <div className="border-t pt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Danger Zone
+              </p>
+              {!clearConfirming ? (
+                <button
+                  onClick={() => { setClearConfirming(true); setClearResult(null); setClearError(null); }}
+                  className="text-sm text-red-600 hover:text-red-700 underline underline-offset-2"
+                >
+                  {providerFilter
+                    ? `Clear all ${providerLabel(providerFilter)} mappings`
+                    : 'Clear all mappings'}
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
+                    This will permanently delete{' '}
+                    <strong>
+                      {providerFilter ? `all ${providerLabel(providerFilter)} mappings` : 'every mapping across all providers'}
+                    </strong>
+                    . This cannot be undone.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void handleClearMappings()}
+                      disabled={clearLoading}
+                      className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      {clearLoading ? 'Clearing...' : 'Yes, delete all'}
+                    </button>
+                    <button
+                      onClick={() => setClearConfirming(false)}
+                      disabled={clearLoading}
+                      className="px-3 py-1.5 text-sm border rounded-md hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {clearError && <p className="text-sm text-red-600">{clearError}</p>}
+                </div>
+              )}
+              {clearResult && (
+                <p className="text-sm text-muted-foreground">
+                  Cleared {clearResult.deleted} mapping{clearResult.deleted !== 1 ? 's' : ''}.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Past Jobs panel */}

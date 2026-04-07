@@ -306,6 +306,32 @@ export default function adminRoutes(
   });
 
   /**
+   * DELETE /admin/sku-mappings
+   * Delete ALL SKU mappings (optionally scoped to one provider).
+   * Query: provider=firoam|tgt — delete only that provider's mappings
+   * Response: { deleted: number }
+   */
+  app.delete('/sku-mappings', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const query = request.query as { provider?: string };
+    const provider = typeof query.provider === 'string' ? query.provider.trim() : undefined;
+    if (query.provider !== undefined && !provider) {
+      return reply.code(400).send({ error: 'provider cannot be empty' });
+    }
+    const where = provider ? { provider } : {};
+
+    try {
+      const { count } = await prisma.providerSkuMapping.deleteMany({ where });
+      logger.warn({ provider: provider ?? 'all', deleted: count }, 'Cleared SKU mappings');
+      return reply.send({ deleted: count });
+    } catch (err) {
+      logger.error({ err, provider: provider ?? 'all' }, 'Failed to clear SKU mappings');
+      return reply.code(500).send({ error: 'Failed to clear SKU mappings' });
+    }
+  });
+
+  /**
    * GET /admin/sku-mappings/:id
    * Get a single SKU mapping by ID.
    */
