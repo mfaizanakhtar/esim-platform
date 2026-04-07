@@ -95,6 +95,7 @@ export function AppShell() {
                 key={to}
                 to={to}
                 onClick={() => setSidebarOpen(false)}
+                aria-current={isActive ? 'page' : undefined}
                 className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
                   isActive
                     ? 'bg-gray-900 text-white'
