@@ -29,6 +29,7 @@ const adminMocks = vi.hoisted(() => {
     mockStoreEmbedding: vi.fn().mockResolvedValue(undefined),
     mockBackfillMissingEmbeddings: vi.fn().mockResolvedValue(0),
     mockBuildCatalogText: vi.fn().mockReturnValue(''),
+    mockParseCatalogEntry: vi.fn().mockResolvedValue(null),
   };
 });
 
@@ -146,6 +147,7 @@ vi.mock('~/services/embeddingService', () => ({
   backfillMissingEmbeddings: (...args: unknown[]) =>
     adminMocks.mockBackfillMissingEmbeddings(...args),
   buildCatalogText: (...args: unknown[]) => adminMocks.mockBuildCatalogText(...args),
+  parseCatalogEntry: (...args: unknown[]) => adminMocks.mockParseCatalogEntry(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -1543,6 +1545,73 @@ describe('Admin Routes', () => {
       expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
     });
 
+    it('stores parsedJson after FiRoam sync when parseCatalogEntry returns a result', async () => {
+      adminMocks.mockFiroamGetSkus.mockResolvedValue({
+        skus: [{ skuid: 200, display: 'EU', countryCode: 'EU' }],
+      });
+      adminMocks.mockFiroamGetPackages.mockResolvedValue({
+        packageData: {
+          skuid: 200,
+          detailId: null,
+          countrycode: 'EU',
+          imageUrl: '',
+          display: 'Europe',
+          displayEn: 'Europe',
+          supportCountry: ['DE', 'FR'],
+          expirydate: null,
+          countryImageUrlDtoList: [],
+          esimPackageDtoList: [
+            {
+              flows: 1,
+              days: 7,
+              unit: 'GB',
+              price: 3.0,
+              priceid: 60,
+              flowType: 1,
+              countryImageUrlDtoList: null,
+              showName: '1GB 7 Days',
+              pid: 200,
+              premark: '',
+              expireDays: 0,
+              networkDtoList: [],
+              supportDaypass: 0,
+              openCardFee: 0,
+              minDay: 0,
+              singleDiscountDay: 0,
+              singleDiscount: 0,
+              maxDiscount: 0,
+              maxDay: 0,
+              mustDate: 0,
+              apiCode: 'EU-1GB-7D',
+            },
+          ],
+        },
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem({ id: 'cat-eu-1' }));
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({ id: 'cat-eu-1', productName: 'Europe 1GB', region: 'EU' }),
+      ] as unknown as []);
+      adminMocks.mockEmbedBatch.mockResolvedValue([[0.1, 0.2, 0.3]]);
+      adminMocks.mockStoreEmbedding.mockResolvedValue(undefined);
+      adminMocks.mockParseCatalogEntry.mockResolvedValueOnce({
+        regionCodes: ['EU'],
+        dataMb: 1024,
+        validityDays: 7,
+      });
+      vi.mocked(prisma.$executeRaw).mockResolvedValue(1 as never);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, provider: 'firoam' });
+      expect(vi.mocked(prisma.$executeRaw)).toHaveBeenCalled();
+    });
+
     it('stores embeddings after TGT sync when entries are returned', async () => {
       adminMocks.mockTgtListProducts.mockResolvedValue({
         total: 1,
@@ -1564,6 +1633,58 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true, embedded: 1 });
       expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
+    });
+
+    it('stores parsedJson after TGT sync when parseCatalogEntry returns a result', async () => {
+      adminMocks.mockTgtListProducts.mockResolvedValue({
+        total: 1,
+        products: [
+          {
+            productCode: 'TGT-EU-1GB-7D',
+            productName: 'EU 1GB 7D',
+            productType: 'DATA_PACK',
+            countryCodeList: ['DE'],
+            netPrice: 1.0,
+            validityPeriod: 7,
+            dataTotal: 1,
+            dataUnit: 'GB',
+            cardType: null,
+            activeType: null,
+          },
+        ],
+      });
+      vi.mocked(prismaCatalog.upsert).mockResolvedValue(makeCatalogItem({ id: 'tgt-cat-1' }));
+      // Embedding skipped (no OPENAI_API_KEY check for embedding, just return empty for findMany)
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({
+          id: 'tgt-cat-1',
+          productName: 'EU 1GB 7D',
+          region: null,
+          dataAmount: '1GB',
+          validity: '7 days',
+        }),
+      ] as unknown as []);
+      adminMocks.mockEmbedBatch.mockResolvedValue([[0.1, 0.2]]);
+      adminMocks.mockStoreEmbedding.mockResolvedValue(undefined);
+      // parseCatalogEntry returns a result
+      adminMocks.mockParseCatalogEntry.mockResolvedValueOnce({
+        regionCodes: ['EU'],
+        dataMb: 1024,
+        validityDays: 7,
+      });
+      vi.mocked(prisma.$executeRaw).mockResolvedValue(1 as never);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/sync',
+        headers: JSON_HEADERS,
+        payload: { provider: 'tgt', pageSize: 100, maxPages: 1 },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, provider: 'tgt' });
+      // parsedJson was stored
+      expect(vi.mocked(prisma.$executeRaw)).toHaveBeenCalled();
     });
   });
 
@@ -3498,6 +3619,401 @@ describe('Admin Routes', () => {
       expect((unmatchedArg as Array<{ sku: string }>).some((v) => v.sku === 'ESIM-EU-5GB')).toBe(
         true,
       );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /provider-catalog/parse-all
+  // ---------------------------------------------------------------------------
+
+  describe('POST /provider-catalog/parse-all', () => {
+    it('returns ok with parsed count when entries are processed', async () => {
+      // Advisory lock acquired
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ acquired: true }]);
+      // First batch: 1 row; second batch: empty (done)
+      vi.mocked(prisma.$queryRaw)
+        .mockResolvedValueOnce([
+          {
+            id: 'cat-1',
+            productName: 'EU 1GB 7D',
+            region: 'EU',
+            countryCodes: null,
+            dataAmount: '1GB',
+            validity: '7 days',
+          },
+        ])
+        .mockResolvedValueOnce([]);
+      // parseCatalogEntry returns a result
+      adminMocks.mockParseCatalogEntry.mockResolvedValueOnce({
+        regionCodes: ['EU'],
+        dataMb: 1024,
+        validityDays: 7,
+      });
+      vi.mocked(prisma.$executeRaw).mockResolvedValue(1 as never);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/parse-all',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { ok: boolean; parsed: number };
+      expect(body.ok).toBe(true);
+      expect(typeof body.parsed).toBe('number');
+    });
+
+    it('returns 500 when OPENAI_API_KEY is not set', async () => {
+      const saved = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/parse-all',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+      process.env.OPENAI_API_KEY = saved;
+      expect(res.statusCode).toBe(500);
+    });
+
+    it('returns ok with 0 parsed when advisory lock not acquired', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ acquired: false }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/parse-all',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { ok: boolean; parsed: number };
+      expect(body.ok).toBe(true);
+      expect(body.parsed).toBe(0);
+    });
+
+    it('uses provider filter when specified', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ acquired: true }]);
+      // Provider-filtered query returns empty (done immediately)
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([]);
+      vi.mocked(prisma.$executeRaw).mockResolvedValue(undefined as never);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/parse-all',
+        headers: JSON_HEADERS,
+        payload: { provider: 'firoam' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { ok: boolean; parsed: number };
+      expect(body.ok).toBe(true);
+      expect(body.parsed).toBe(0);
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/provider-catalog/parse-all',
+        headers: { 'content-type': 'application/json' },
+        payload: {},
+      });
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /sku-mappings/structured-match
+  // ---------------------------------------------------------------------------
+
+  describe('POST /sku-mappings/structured-match', () => {
+    it('returns parsed attributes and drafts for a parseable SKU', async () => {
+      // JSONB query returns one matching catalog row
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-1',
+          provider: 'firoam',
+          productName: 'EU 1GB 7D Plan',
+          region: 'EU',
+          dataAmount: '1GB',
+          validity: '7 days',
+          netPrice: '1.50',
+          parsedJson: { regionCodes: ['EU'], dataMb: 1024, validityDays: 7 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'ESIM-EU-1GB-7D' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as {
+        drafts: Array<{ shopifySku: string; confidence: number }>;
+        parsed: { regionCode: string; dataMb: number; validityDays: number } | null;
+      };
+      expect(body.parsed).toEqual({ regionCode: 'EU', dataMb: 1024, validityDays: 7 });
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].shopifySku).toBe('ESIM-EU-1GB-7D');
+      expect(body.drafts[0].confidence).toBe(1.0);
+    });
+
+    it('returns empty drafts for an unparseable SKU', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'NOT-A-VALID-SKU' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { drafts: unknown[]; parsed: null };
+      expect(body.parsed).toBeNull();
+      expect(body.drafts).toHaveLength(0);
+    });
+
+    it('returns 400 when sku is missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: { 'content-type': 'application/json' },
+        payload: { sku: 'ESIM-EU-1GB-7D' },
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('applies relaxData option — partial match returns 0.8 confidence', async () => {
+      // Catalog has 2GB but we relax data matching
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-2',
+          provider: 'firoam',
+          productName: 'EU 2GB 7D Plan',
+          region: 'EU',
+          dataAmount: '2GB',
+          validity: '7 days',
+          netPrice: '2.00',
+          parsedJson: { regionCodes: ['EU'], dataMb: 2048, validityDays: 7 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'ESIM-EU-1GB-7D', relaxOptions: { relaxData: true } },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as {
+        drafts: Array<{ confidence: number }>;
+      };
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].confidence).toBe(0.8); // region + validity match, data relaxed
+    });
+
+    it('uses provider-filtered JSONB query when provider is specified', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-p1',
+          provider: 'firoam',
+          productName: 'EU 1GB 7D Plan',
+          region: 'EU',
+          dataAmount: '1GB',
+          validity: '7 days',
+          netPrice: '1.50',
+          parsedJson: { regionCodes: ['EU'], dataMb: 1024, validityDays: 7 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'ESIM-EU-1GB-7D', provider: 'firoam' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { drafts: Array<{ confidence: number }> };
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].confidence).toBe(1.0);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /sku-mappings/structured-map/jobs
+  // ---------------------------------------------------------------------------
+
+  describe('POST /sku-mappings/structured-map/jobs', () => {
+    const prismaAiMapJobStructured = (
+      prisma as unknown as {
+        aiMapJob: {
+          create: ReturnType<typeof vi.fn>;
+          update: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).aiMapJob;
+
+    it('creates a job and returns 201 with jobId', async () => {
+      prismaAiMapJobStructured.create.mockResolvedValue({ id: 'struct-job-1' });
+      adminMocks.mockGetAllVariants.mockResolvedValue([]);
+      prismaAiMapJobStructured.update.mockResolvedValue({});
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-map/jobs',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = JSON.parse(res.body) as { jobId: string };
+      expect(body.jobId).toBe('struct-job-1');
+    });
+
+    it('returns 401 without admin key', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-map/jobs',
+        headers: { 'content-type': 'application/json' },
+        payload: {},
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('marks job as error when Shopify fetch fails', async () => {
+      prismaAiMapJobStructured.create.mockResolvedValue({ id: 'struct-job-err' });
+      adminMocks.mockGetAllVariants.mockRejectedValue(new Error('shopify down'));
+      prismaAiMapJobStructured.update.mockResolvedValue({});
+
+      await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-map/jobs',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      await vi.waitFor(
+        () => {
+          const call = prismaAiMapJobStructured.update.mock.calls.find(
+            (c) => (c[0] as { data: { status?: string } }).data?.status === 'error',
+          );
+          expect(call).toBeDefined();
+        },
+        { timeout: 2000 },
+      );
+    });
+
+    it('handles updateErr catch branch when error state update fails', async () => {
+      prismaAiMapJobStructured.create.mockResolvedValue({ id: 'struct-job-update-err' });
+      adminMocks.mockGetAllVariants.mockRejectedValue(new Error('shopify down'));
+      // Make the update itself throw — triggers the catch (updateErr) branch
+      prismaAiMapJobStructured.update.mockRejectedValue(new Error('db connection lost'));
+
+      await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-map/jobs',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: false },
+      });
+
+      // Give background runner time to hit both catch branches
+      await new Promise((r) => setTimeout(r, 100));
+      // No assertion needed beyond no unhandled rejection — the catch swallows the updateErr
+    });
+
+    it('runs unmapped filter and processes SKUs through the matching loop', async () => {
+      prismaAiMapJobStructured.create.mockResolvedValue({ id: 'struct-job-loop' });
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        {
+          sku: 'ESIM-EU-1GB-7D',
+          title: 'EU 1GB',
+          productTitle: 'EU Plan',
+          variantId: '1',
+          price: '5.00',
+        },
+        {
+          sku: 'ESIM-JP-2GB-30D',
+          title: 'JP 2GB',
+          productTitle: 'JP Plan',
+          variantId: '2',
+          price: '8.00',
+        },
+      ]);
+      // unmappedOnly defaults to true — filter path runs
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+      // JSONB query returns no matches for both SKUs
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
+      prismaAiMapJobStructured.update.mockResolvedValue({});
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-map/jobs',
+        headers: JSON_HEADERS,
+        payload: { unmappedOnly: true },
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      await vi.waitFor(
+        () => {
+          // At least one progress update call with completedBatches
+          const progressCall = prismaAiMapJobStructured.update.mock.calls.find(
+            (c) =>
+              (c[0] as { data: { completedBatches?: number } }).data?.completedBatches !==
+              undefined,
+          );
+          expect(progressCall).toBeDefined();
+        },
+        { timeout: 2000 },
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /sku-mappings/structured-match — additional branch coverage
+  // ---------------------------------------------------------------------------
+
+  describe('POST /sku-mappings/structured-match — region-only match', () => {
+    it('returns 0.6 confidence when both data and validity are relaxed', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-3',
+          provider: 'firoam',
+          productName: 'EU 2GB 30D Plan',
+          region: 'EU',
+          dataAmount: '2GB',
+          validity: '30 days',
+          netPrice: '3.00',
+          parsedJson: { regionCodes: ['EU'], dataMb: 2048, validityDays: 30 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: {
+          sku: 'ESIM-EU-1GB-7D',
+          relaxOptions: { relaxData: true, relaxValidity: true },
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { drafts: Array<{ confidence: number }> };
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].confidence).toBe(0.6); // region only — data and validity both differ
     });
   });
 });

@@ -43,6 +43,70 @@ export async function storeEmbedding(catalogId: string, embedding: number[]): Pr
   await prisma.$executeRaw`UPDATE "ProviderSkuCatalog" SET embedding = ${vectorStr}::vector WHERE id = ${catalogId}`;
 }
 
+export interface ParsedCatalogAttributes {
+  regionCodes: string[];
+  dataMb: number;
+  validityDays: number;
+}
+
+/**
+ * Use AI to parse a catalog entry into structured { regionCodes, dataMb, validityDays }.
+ * Returns null on any error — non-blocking, caller should handle gracefully.
+ */
+export async function parseCatalogEntry(
+  entry: {
+    productName: string;
+    region: string | null;
+    countryCodes: unknown;
+    dataAmount: string | null;
+    validity: string | null;
+  },
+  openai: OpenAI,
+): Promise<ParsedCatalogAttributes | null> {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Parse this eSIM product into { "regionCodes": string[], "dataMb": number, "validityDays": number }. dataMb: 1GB=1024. regionCodes should be ISO 3166-1 alpha-2 country codes or short region codes like EU, US, APAC, GLOBAL. Return only JSON.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            productName: entry.productName,
+            region: entry.region,
+            countryCodes: entry.countryCodes,
+            dataAmount: entry.dataAmount,
+            validity: entry.validity,
+          }),
+        },
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0,
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ParsedCatalogAttributes>;
+    if (
+      !Array.isArray(parsed.regionCodes) ||
+      typeof parsed.dataMb !== 'number' ||
+      typeof parsed.validityDays !== 'number'
+    ) {
+      return null;
+    }
+    return {
+      regionCodes: parsed.regionCodes as string[],
+      dataMb: parsed.dataMb,
+      validityDays: parsed.validityDays,
+    };
+  } catch (err) {
+    logger.warn({ err, productName: entry.productName }, 'parseCatalogEntry failed');
+    return null;
+  }
+}
+
 type CandidateRow = {
   id: string;
   provider: string;

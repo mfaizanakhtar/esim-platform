@@ -101,6 +101,7 @@ model ProviderSkuCatalog {
   cardType      String?
   activeType    String?
   rawPayload    Json?
+  parsedJson    Json?                // { regionCodes: string[], dataMb: number, validityDays: number }
   isActive      Boolean              @default(true)
   lastSyncedAt  DateTime             @default(now())
   createdAt     DateTime             @default(now())

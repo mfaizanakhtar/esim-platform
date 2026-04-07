@@ -1,30 +1,22 @@
-import { useState, useEffect, useCallback, useRef, Fragment } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useAllSkuMappings } from '@/hooks/useSkuMappings';
+import { useAllSkuMappings, useShopifySkus } from '@/hooks/useSkuMappings';
 import {
   useCreateSkuMapping,
   useUpdateSkuMapping,
   useToggleSkuMapping,
   useDeleteSkuMapping,
-  useReorderMappings,
   useSmartPricing,
 } from '@/hooks/useSkuMappingMutations';
 import { MappingForm } from '@/components/sku-mappings/MappingForm';
-import type { SkuMapping } from '@/lib/types';
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  ChevronUp,
-  ChevronDown,
-  Lock,
-  Unlock,
-  Sparkles,
-  Brain,
-} from 'lucide-react';
+import { SkuMappingModal } from '@/components/sku-mappings/SkuMappingModal';
+import type { SkuMapping, ShopifySku } from '@/lib/types';
+import { parseShopifySku } from '@/utils/parseShopifySku';
+import { Plus, Pencil, Trash2, Sparkles, Brain } from 'lucide-react';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
+import { useQueryClient } from '@tanstack/react-query';
 
-// useAllSkuMappings fetches in two phases to load every record regardless of count
+type TabFilter = 'all' | 'mapped' | 'unmapped';
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -35,30 +27,20 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-/** Group and sort mappings by shopifySku then by priority */
-function groupBySku(mappings: SkuMapping[]): Map<string, SkuMapping[]> {
-  const map = new Map<string, SkuMapping[]>();
-  for (const m of mappings) {
-    const group = map.get(m.shopifySku) ?? [];
-    group.push(m);
-    map.set(m.shopifySku, group);
-  }
-  // Sort each group by priority
-  for (const [key, group] of map) {
-    map.set(
-      key,
-      group.slice().sort((a, b) => a.priority - b.priority),
-    );
-  }
-  return map;
+interface SkuRow {
+  shopifySku: ShopifySku;
+  parsed: ReturnType<typeof parseShopifySku>;
+  mappings: SkuMapping[];
 }
 
 export function SkuMappings() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<SkuMapping | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [modalSku, setModalSku] = useState<ShopifySku | null>(null);
   const [smartPricingResult, setSmartPricingResult] = useState<{
     updated: number;
     skipped: number;
@@ -72,16 +54,14 @@ export function SkuMappings() {
   const providers = providersData?.providers ?? [];
 
   const providerParam = searchParams.get('provider');
-  // Keep the URL param while providers are still loading to avoid a spurious unfiltered request
   const provider = !providersData
     ? (providerParam ?? '')
     : providers.includes(providerParam ?? '')
       ? (providerParam ?? '')
       : '';
 
-  const statusParam = searchParams.get('status');
-  const status: '' | 'active' | 'inactive' =
-    statusParam === 'active' || statusParam === 'inactive' ? statusParam : '';
+  const tabParam = searchParams.get('tab') as TabFilter | null;
+  const tab: TabFilter = tabParam === 'mapped' || tabParam === 'unmapped' ? tabParam : 'all';
 
   useEffect(() => {
     setSearch(urlSearch);
@@ -113,25 +93,50 @@ export function SkuMappings() {
     [setSearchParams],
   );
 
-  const { data, isLoading } = useAllSkuMappings({
+  const { data: shopifySkusData, isLoading: skusLoading } = useShopifySkus();
+  const { data: mappingsData, isLoading: mappingsLoading } = useAllSkuMappings({
     provider: provider || undefined,
-    isActive: status === 'active' ? true : status === 'inactive' ? false : undefined,
-    search: debouncedSearch || undefined,
   });
 
-  const grouped = data ? groupBySku(data.mappings) : new Map<string, SkuMapping[]>();
+  const isLoading = skusLoading || mappingsLoading;
+
+  // Build unified SKU rows
+  const skuRows = useMemo<SkuRow[]>(() => {
+    const allMappings = mappingsData?.mappings ?? [];
+    const bySkuMap = new Map<string, SkuMapping[]>();
+    for (const m of allMappings) {
+      const arr = bySkuMap.get(m.shopifySku) ?? [];
+      arr.push(m);
+      bySkuMap.set(m.shopifySku, arr);
+    }
+    return (shopifySkusData?.skus ?? []).map((s) => ({
+      shopifySku: s,
+      parsed: parseShopifySku(s.sku),
+      mappings: (bySkuMap.get(s.sku) ?? []).sort((a, b) => a.priority - b.priority),
+    }));
+  }, [shopifySkusData, mappingsData]);
+
+  // Apply filters
+  const filteredRows = useMemo(() => {
+    let rows = skuRows;
+    if (tab === 'mapped') rows = rows.filter((r) => r.mappings.length > 0);
+    if (tab === 'unmapped') rows = rows.filter((r) => r.mappings.length === 0);
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase();
+      rows = rows.filter(
+        (r) =>
+          r.shopifySku.sku.toLowerCase().includes(q) ||
+          r.shopifySku.productTitle.toLowerCase().includes(q),
+      );
+    }
+    return rows;
+  }, [skuRows, tab, debouncedSearch]);
 
   const createMutation = useCreateSkuMapping();
   const updateMutation = useUpdateSkuMapping();
   const toggleMutation = useToggleSkuMapping();
   const deleteMutation = useDeleteSkuMapping();
-  const reorderMutation = useReorderMappings();
   const smartPricingMutation = useSmartPricing();
-
-  function openCreate() {
-    setEditing(null);
-    setSheetOpen(true);
-  }
 
   function openEdit(mapping: SkuMapping) {
     setEditing(mapping);
@@ -153,41 +158,16 @@ export function SkuMappings() {
     deleteMutation.mutate(id, { onSuccess: () => setDeleteConfirm(null) });
   }
 
-  function canMove(group: SkuMapping[], idxA: number, idxB: number): boolean {
-    return !group[idxA].priorityLocked && !group[idxA].mappingLocked &&
-           !group[idxB].priorityLocked && !group[idxB].mappingLocked;
-  }
-
-  function moveUp(sku: string, index: number) {
-    const group = grouped.get(sku);
-    if (!group || index === 0 || !canMove(group, index, index - 1)) return;
-    const reordered = [...group];
-    [reordered[index - 1], reordered[index]] = [reordered[index], reordered[index - 1]];
-    reorderMutation.mutate({ shopifySku: sku, orderedIds: reordered.map((m) => m.id) });
-  }
-
-  function moveDown(sku: string, index: number) {
-    const group = grouped.get(sku);
-    if (!group || index === group.length - 1 || !canMove(group, index, index + 1)) return;
-    const reordered = [...group];
-    [reordered[index], reordered[index + 1]] = [reordered[index + 1], reordered[index]];
-    reorderMutation.mutate({ shopifySku: sku, orderedIds: reordered.map((m) => m.id) });
-  }
-
-  function togglePriorityLock(mapping: SkuMapping) {
-    updateMutation.mutate({ id: mapping.id, priorityLocked: !mapping.priorityLocked });
-  }
-
-  function toggleMappingLock(mapping: SkuMapping) {
-    updateMutation.mutate({ id: mapping.id, mappingLocked: !mapping.mappingLocked });
-  }
-
   function handleSmartPricing() {
     setSmartPricingResult(null);
     smartPricingMutation.mutate(undefined, {
-      onSuccess: (result) => setSmartPricingResult({ updated: result.updated, skipped: result.skipped }),
+      onSuccess: (result) =>
+        setSmartPricingResult({ updated: result.updated, skipped: result.skipped }),
     });
   }
+
+  const mappedCount = skuRows.filter((r) => r.mappings.length > 0).length;
+  const unmappedCount = skuRows.filter((r) => r.mappings.length === 0).length;
 
   return (
     <div className="space-y-4">
@@ -202,23 +182,15 @@ export function SkuMappings() {
           >
             <option value="">All Providers</option>
             {providers.map((p) => (
-              <option key={p} value={p}>{providerLabel(p)}</option>
+              <option key={p} value={p}>
+                {providerLabel(p)}
+              </option>
             ))}
-          </select>
-          <select
-            aria-label="Filter by status"
-            value={status}
-            onChange={(e) => setFilter('status', e.target.value)}
-            className="border rounded-md px-3 py-1.5 text-sm"
-          >
-            <option value="">All Status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
           </select>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by SKU or name..."
+            placeholder="Search by SKU or product..."
             className="border rounded-md px-3 py-1.5 text-sm w-40 sm:w-56"
           />
           <button
@@ -238,7 +210,10 @@ export function SkuMappings() {
             AI Auto-Map
           </button>
           <button
-            onClick={openCreate}
+            onClick={() => {
+              setEditing(null);
+              setSheetOpen(true);
+            }}
             className="flex items-center gap-2 px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
             <Plus className="h-4 w-4" />
@@ -250,9 +225,13 @@ export function SkuMappings() {
       {smartPricingResult && (
         <div className="flex items-center justify-between px-4 py-2 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
           <span>
-            Smart pricing complete: {smartPricingResult.updated} updated, {smartPricingResult.skipped} skipped.
+            Smart pricing complete: {smartPricingResult.updated} updated,{' '}
+            {smartPricingResult.skipped} skipped.
           </span>
-          <button onClick={() => setSmartPricingResult(null)} className="text-green-600 hover:text-green-800">
+          <button
+            onClick={() => setSmartPricingResult(null)}
+            className="text-green-600 hover:text-green-800"
+          >
             &times;
           </button>
         </div>
@@ -260,18 +239,42 @@ export function SkuMappings() {
 
       {smartPricingMutation.isError && (
         <div className="px-4 py-2 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
-          Smart pricing failed: {smartPricingMutation.error instanceof Error ? smartPricingMutation.error.message : 'Unknown error'}
+          Smart pricing failed:{' '}
+          {smartPricingMutation.error instanceof Error
+            ? smartPricingMutation.error.message
+            : 'Unknown error'}
         </div>
       )}
 
+      {/* Filter tabs */}
+      <div className="flex gap-1 border-b">
+        {([
+          ['all', `All (${skuRows.length})`],
+          ['mapped', `Mapped (${mappedCount})`],
+          ['unmapped', `Unmapped (${unmappedCount})`],
+        ] as [TabFilter, string][]).map(([t, label]) => (
+          <button
+            key={t}
+            onClick={() => setFilter('tab', t === 'all' ? '' : t)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+              tab === t
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       <div className="border rounded-lg overflow-x-auto">
-        <table className="w-full text-sm min-w-[520px]">
+        <table className="w-full text-sm min-w-[600px]">
           <thead className="bg-muted/50">
             <tr>
-              <th className="text-left px-4 py-3 font-medium w-8">Pri</th>
-              <th className="text-left px-4 py-3 font-medium">Shopify SKU / Provider</th>
-              <th className="text-left px-4 py-3 font-medium">Product</th>
-              <th className="text-left px-4 py-3 font-medium">Active</th>
+              <th className="text-left px-4 py-3 font-medium">Shopify SKU</th>
+              <th className="text-left px-4 py-3 font-medium">Parsed</th>
+              <th className="text-left px-4 py-3 font-medium">Mappings</th>
+              <th className="text-left px-4 py-3 font-medium">Status</th>
               <th className="text-left px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
@@ -287,147 +290,122 @@ export function SkuMappings() {
                 </tr>
               ))}
 
-            {Array.from(grouped.entries()).map(([sku, group]) => (
-              <Fragment key={sku}>
-                {/* SKU group header */}
-                <tr className="bg-muted/30">
-                  <td colSpan={5} className="px-4 py-2">
-                    <span className="font-mono text-xs font-semibold text-foreground">{sku}</span>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {group.length} provider{group.length !== 1 ? 's' : ''}
+            {filteredRows.map((row) => (
+              <tr key={row.shopifySku.sku} className="hover:bg-muted/20 transition-colors">
+                {/* SKU */}
+                <td className="px-4 py-3">
+                  <p className="font-mono text-xs font-semibold">{row.shopifySku.sku}</p>
+                  {row.shopifySku.productTitle && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {row.shopifySku.productTitle}
+                      {row.shopifySku.variantTitle && ` · ${row.shopifySku.variantTitle}`}
+                    </p>
+                  )}
+                </td>
+
+                {/* Parsed */}
+                <td className="px-4 py-3">
+                  {row.parsed ? (
+                    <div className="text-xs space-y-0.5">
+                      <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                        {row.parsed.regionCode}
+                      </span>
+                      <p className="text-muted-foreground">
+                        {row.parsed.dataMb >= 1024
+                          ? `${row.parsed.dataMb / 1024}GB`
+                          : `${row.parsed.dataMb}MB`}{' '}
+                        · {row.parsed.validityDays}D
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </td>
+
+                {/* Mappings */}
+                <td className="px-4 py-3">
+                  {row.mappings.length === 0 ? (
+                    <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs">
+                      Unmapped
                     </span>
-                  </td>
-                </tr>
+                  ) : (
+                    <div className="flex flex-wrap gap-1">
+                      {row.mappings.map((m) => (
+                        <div key={m.id} className="flex items-center gap-1">
+                          <span className="inline-block px-2 py-0.5 bg-muted border rounded-full text-xs capitalize">
+                            {m.provider}
+                          </span>
+                          <button
+                            onClick={() => openEdit(m)}
+                            disabled={m.mappingLocked}
+                            className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-40"
+                            title={m.mappingLocked ? 'Unlock mapping to edit' : 'Edit mapping'}
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              toggleMutation.mutate({ id: m.id, isActive: !m.isActive });
+                            }}
+                            disabled={m.mappingLocked}
+                            className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
+                              m.isActive ? 'bg-green-500' : 'bg-gray-300'
+                            } ${m.mappingLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={m.isActive ? 'Active' : 'Inactive'}
+                          >
+                            <span
+                              className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform ${
+                                m.isActive ? 'translate-x-3.5' : 'translate-x-0.5'
+                              }`}
+                            />
+                          </button>
+                          <button
+                            onClick={() => setDeleteConfirm(m.id)}
+                            disabled={m.mappingLocked}
+                            className="p-0.5 rounded hover:bg-muted text-red-500 transition-colors disabled:opacity-40"
+                            title={m.mappingLocked ? 'Unlock mapping to deactivate' : 'Deactivate'}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </td>
 
-                {/* Provider rows */}
-                {group.map((mapping, idx) => (
-                  <tr key={mapping.id} className="hover:bg-muted/20 transition-colors">
-                    {/* Priority number + up/down */}
-                    <td className="px-4 py-2">
-                      <div className="flex flex-col items-center gap-0.5">
-                        <button
-                          onClick={() => moveUp(sku, idx)}
-                          disabled={idx === 0 || reorderMutation.isPending || (idx > 0 && !canMove(group, idx, idx - 1))}
-                          className="p-0.5 rounded hover:bg-muted disabled:opacity-20 transition-colors"
-                          title={idx > 0 && !canMove(group, idx, idx - 1) ? 'Cannot reorder locked mappings' : 'Move up (higher priority)'}
-                        >
-                          <ChevronUp className="h-3 w-3" />
-                        </button>
-                        <span className="text-xs text-muted-foreground tabular-nums">{mapping.priority}</span>
-                        <button
-                          onClick={() => moveDown(sku, idx)}
-                          disabled={idx === group.length - 1 || reorderMutation.isPending || (idx < group.length - 1 && !canMove(group, idx, idx + 1))}
-                          className="p-0.5 rounded hover:bg-muted disabled:opacity-20 transition-colors"
-                          title={idx < group.length - 1 && !canMove(group, idx, idx + 1) ? 'Cannot reorder locked mappings' : 'Move down (lower priority)'}
-                        >
-                          <ChevronDown className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </td>
+                {/* Status */}
+                <td className="px-4 py-3">
+                  {row.mappings.length > 0 ? (
+                    <span className="inline-block px-2 py-0.5 bg-green-100 text-green-800 rounded-full text-xs font-medium">
+                      Mapped
+                    </span>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">
+                      Unmapped
+                    </span>
+                  )}
+                </td>
 
-                    {/* Provider name (indented under SKU) */}
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-2 pl-4">
-                        <span className="capitalize text-sm">{mapping.provider}</span>
-                        {mapping.priorityLocked && (
-                          <Lock className="h-3 w-3 text-amber-500" aria-label="Priority locked" />
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-2 text-sm max-w-xs truncate">
-                      {mapping.name ?? (
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {mapping.providerSku}
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-2">
-                      <button
-                        onClick={() =>
-                          toggleMutation.mutate({ id: mapping.id, isActive: !mapping.isActive })
-                        }
-                        disabled={mapping.mappingLocked}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                          mapping.isActive ? 'bg-green-500' : 'bg-gray-300'
-                        } ${mapping.mappingLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        title={mapping.mappingLocked ? 'Mapping is locked' : undefined}
-                      >
-                        <span
-                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                            mapping.isActive ? 'translate-x-5' : 'translate-x-1'
-                          }`}
-                        />
-                      </button>
-                    </td>
-
-                    <td className="px-4 py-2">
-                      <div className="flex items-center gap-1">
-                        {/* Priority lock toggle — always available */}
-                        <button
-                          onClick={() => togglePriorityLock(mapping)}
-                          className={`p-1 rounded hover:bg-muted transition-colors ${
-                            mapping.priorityLocked ? 'text-amber-500' : 'text-muted-foreground'
-                          }`}
-                          title={mapping.priorityLocked ? 'Unlock priority' : 'Lock priority'}
-                          aria-label={mapping.priorityLocked ? 'Unlock priority' : 'Lock priority'}
-                        >
-                          {mapping.priorityLocked ? (
-                            <Lock className="h-4 w-4" />
-                          ) : (
-                            <Unlock className="h-4 w-4" />
-                          )}
-                        </button>
-
-                        {/* Mapping lock toggle — always available (only way to unlock) */}
-                        <button
-                          onClick={() => toggleMappingLock(mapping)}
-                          className={`p-1 rounded hover:bg-muted transition-colors ${
-                            mapping.mappingLocked ? 'text-red-500' : 'text-muted-foreground'
-                          }`}
-                          title={mapping.mappingLocked ? 'Unlock mapping (allow edits)' : 'Lock mapping (prevent edits)'}
-                          aria-label={mapping.mappingLocked ? 'Unlock mapping (allow edits)' : 'Lock mapping (prevent edits)'}
-                        >
-                          {mapping.mappingLocked ? (
-                            <Lock className="h-4 w-4" />
-                          ) : (
-                            <Unlock className="h-4 w-4" />
-                          )}
-                        </button>
-
-                        <button
-                          onClick={() => openEdit(mapping)}
-                          disabled={mapping.mappingLocked}
-                          className={`p-1 rounded hover:bg-muted transition-colors ${
-                            mapping.mappingLocked ? 'opacity-40 cursor-not-allowed' : ''
-                          }`}
-                          title={mapping.mappingLocked ? 'Unlock mapping to edit' : 'Edit'}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-
-                        <button
-                          onClick={() => setDeleteConfirm(mapping.id)}
-                          disabled={mapping.mappingLocked}
-                          className={`p-1 rounded hover:bg-muted text-red-500 transition-colors ${
-                            mapping.mappingLocked ? 'opacity-40 cursor-not-allowed' : ''
-                          }`}
-                          title={mapping.mappingLocked ? 'Unlock mapping to deactivate' : 'Deactivate'}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </Fragment>
+                {/* Actions */}
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setModalSku(row.shopifySku)}
+                      className="px-2 py-1 text-xs border rounded-md hover:bg-muted transition-colors"
+                    >
+                      Map
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ))}
 
-            {data?.mappings.length === 0 && (
+            {!isLoading && filteredRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  No SKU mappings found.
+                  {skuRows.length === 0
+                    ? 'No Shopify SKUs found. Make sure Shopify is connected.'
+                    : 'No SKUs match the current filter.'}
                 </td>
               </tr>
             )}
@@ -435,7 +413,22 @@ export function SkuMappings() {
         </table>
       </div>
 
-      {/* Sheet (slide-in form) */}
+      {/* Per-SKU mapping modal */}
+      {modalSku && (
+        <SkuMappingModal
+          sku={modalSku}
+          existingMappings={
+            skuRows.find((r) => r.shopifySku.sku === modalSku.sku)?.mappings ?? []
+          }
+          onClose={() => setModalSku(null)}
+          onSaved={() => {
+            setModalSku(null);
+            void queryClient.invalidateQueries({ queryKey: ['sku-mappings'] });
+          }}
+        />
+      )}
+
+      {/* Sheet (slide-in form for editing existing mappings) */}
       {sheetOpen && (
         <div className="fixed inset-0 z-50 flex">
           <div className="flex-1 bg-black/40" onClick={() => setSheetOpen(false)} />
@@ -456,7 +449,10 @@ export function SkuMappings() {
       {/* Delete confirm dialog */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleteConfirm(null)} />
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setDeleteConfirm(null)}
+          />
           <div className="relative bg-white rounded-lg shadow-xl p-6 w-full max-w-sm space-y-4">
             <h2 className="text-lg font-semibold">Deactivate Mapping?</h2>
             <p className="text-sm text-muted-foreground">

@@ -26,6 +26,7 @@ type FormValues = z.infer<typeof schema>;
 
 interface MappingFormProps {
   initial?: SkuMapping;
+  lockedSku?: string;
   onSubmit: (values: FormValues & { providerConfig?: Record<string, unknown> }) => void;
   onCancel: () => void;
   isPending: boolean;
@@ -43,7 +44,7 @@ function catalogLabel(item: CatalogItem): string {
   return base;
 }
 
-export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingFormProps) {
+export function MappingForm({ initial, lockedSku, onSubmit, onCancel, isPending }: MappingFormProps) {
   const {
     register,
     handleSubmit,
@@ -228,13 +229,22 @@ export function MappingForm({ initial, onSubmit, onCancel, isPending }: MappingF
 
       <div className="space-y-1">
         <label className="text-sm font-medium">Shopify SKU *</label>
-        <input
-          {...register('shopifySku')}
-          className="w-full border rounded-md px-3 py-2 text-sm"
-          placeholder="ESIM-US-5GB"
-        />
-        {errors.shopifySku && (
-          <p className="text-xs text-red-600">{errors.shopifySku.message}</p>
+        {lockedSku ? (
+          <>
+            <input type="hidden" {...register('shopifySku')} value={lockedSku} />
+            <p className="text-sm font-mono bg-muted rounded-md px-3 py-2">{lockedSku}</p>
+          </>
+        ) : (
+          <>
+            <input
+              {...register('shopifySku')}
+              className="w-full border rounded-md px-3 py-2 text-sm"
+              placeholder="ESIM-US-5GB"
+            />
+            {errors.shopifySku && (
+              <p className="text-xs text-red-600">{errors.shopifySku.message}</p>
+            )}
+          </>
         )}
       </div>
 

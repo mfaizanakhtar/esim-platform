@@ -13,8 +13,7 @@ type JobProgress = {
 type StartParams = {
   provider?: string;
   unmappedOnly?: boolean;
-  shopifySkus?: string[];
-  relaxOptions?: { requireData?: boolean; requireValidity?: boolean };
+  relaxOptions?: { relaxValidity?: boolean; relaxData?: boolean };
 };
 
 function handle401(): never {
@@ -27,7 +26,7 @@ function handle401(): never {
   throw new Error('Unauthorized');
 }
 
-export function useAiMapJob() {
+export function useStructuredMap() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus>('idle');
   const [progress, setProgress] = useState<JobProgress | null>(null);
@@ -35,7 +34,6 @@ export function useAiMapJob() {
   const [unmatchedSkus, setUnmatchedSkus] = useState<UnmatchedSku[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Holds the active fetch AbortController for the SSE stream
   const abortRef = useRef<AbortController | null>(null);
 
   const closeStream = useCallback(() => {
@@ -45,12 +43,10 @@ export function useAiMapJob() {
     }
   }, []);
 
-  // Abort the stream on unmount
   useEffect(() => closeStream, [closeStream]);
 
   const cancel = useCallback(() => {
     closeStream();
-    // Background job keeps running — user can resume from Past Jobs panel
     setStatus('idle');
     setProgress(null);
   }, [closeStream]);
@@ -65,10 +61,6 @@ export function useAiMapJob() {
     setError(null);
   }, [closeStream]);
 
-  /**
-   * Connect to an existing job's SSE stream (e.g. when resuming from Past Jobs).
-   * Fetches final drafts from DB when the stream emits 'done'.
-   */
   const connectToStream = useCallback(
     async (id: string) => {
       closeStream();
@@ -131,13 +123,16 @@ export function useAiMapJob() {
                   totalBatches: number;
                   foundSoFar: number;
                 };
-                setProgress({ batch: evt.batch, totalBatches: evt.totalBatches, found: evt.foundSoFar });
+                setProgress({
+                  batch: evt.batch,
+                  totalBatches: evt.totalBatches,
+                  found: evt.foundSoFar,
+                });
               } catch {
                 // ignore parse errors
               }
             } else if (eventType === 'done') {
               explicitEnd = true;
-              // Fetch full drafts from DB — only advance to done if fetch succeeds
               try {
                 const result = await apiClient.get<{
                   job: { draftsJson: AiMappingDraft[]; unmatchedSkusJson?: UnmatchedSku[] };
@@ -147,7 +142,9 @@ export function useAiMapJob() {
                 setStatus('done');
               } catch (fetchErr) {
                 setError(
-                  fetchErr instanceof Error ? fetchErr.message : 'Failed to load completed job drafts',
+                  fetchErr instanceof Error
+                    ? fetchErr.message
+                    : 'Failed to load completed job drafts',
                 );
                 setStatus('error');
               }
@@ -161,7 +158,6 @@ export function useAiMapJob() {
               } catch {
                 // use default
               }
-              // Load any partial drafts saved before the error so they're reviewable
               try {
                 const result = await apiClient.get<{
                   job: { draftsJson: AiMappingDraft[]; unmatchedSkusJson?: UnmatchedSku[] };
@@ -169,7 +165,7 @@ export function useAiMapJob() {
                 setDrafts(result.job.draftsJson ?? []);
                 setUnmatchedSkus(result.job.unmatchedSkusJson ?? []);
               } catch {
-                // ignore — drafts are optional on error
+                // ignore
               }
               setError(msg);
               setStatus('error');
@@ -178,13 +174,12 @@ export function useAiMapJob() {
           }
         }
 
-        // Stream closed without an explicit done/error — treat as connection loss, not completion
         if (!explicitEnd) {
-          setError('Stream closed unexpectedly. Check Past Jobs to resume.');
+          setError('Stream closed unexpectedly.');
           setStatus('error');
         }
       } catch (err) {
-        if (err instanceof Error && err.name === 'AbortError') return; // cancelled
+        if (err instanceof Error && err.name === 'AbortError') return;
         setError(err instanceof Error ? err.message : 'Unknown error');
         setStatus('error');
       }
@@ -204,12 +199,14 @@ export function useAiMapJob() {
       setJobId(null);
 
       try {
-        const result = await apiClient.post<{ jobId: string }>('/sku-mappings/ai-map/jobs', {
-          provider: params.provider || undefined,
-          unmappedOnly: params.unmappedOnly !== false,
-          ...(params.shopifySkus ? { shopifySkus: params.shopifySkus } : {}),
-          ...(params.relaxOptions ? { relaxOptions: params.relaxOptions } : {}),
-        });
+        const result = await apiClient.post<{ jobId: string }>(
+          '/sku-mappings/structured-map/jobs',
+          {
+            provider: params.provider || undefined,
+            unmappedOnly: params.unmappedOnly !== false,
+            ...(params.relaxOptions ? { relaxOptions: params.relaxOptions } : {}),
+          },
+        );
 
         await connectToStream(result.jobId);
       } catch (err) {
@@ -220,5 +217,16 @@ export function useAiMapJob() {
     [closeStream, connectToStream],
   );
 
-  return { jobId, status, progress, drafts, unmatchedSkus, error, start, cancel, reset, connectToStream };
+  return {
+    jobId,
+    status,
+    progress,
+    drafts,
+    unmatchedSkus,
+    error,
+    start,
+    cancel,
+    reset,
+    connectToStream,
+  };
 }
