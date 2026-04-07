@@ -283,7 +283,12 @@ export function SkuMappings() {
         ))}
       </div>
 
-      <div className="border rounded-lg overflow-x-auto">
+      <div className="border rounded-lg overflow-x-auto relative">
+        {isFetching && !isLoading && (
+          <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden z-10 bg-gray-200">
+            <div className="h-full w-1/3 bg-gray-900" style={{ animation: 'slideProgress 1.2s ease-in-out infinite' }} />
+          </div>
+        )}
         <table className="w-full text-sm min-w-[600px]">
           <thead className="bg-muted/50">
             <tr>
@@ -294,7 +299,7 @@ export function SkuMappings() {
               <th className="text-left px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
-          <tbody className={`divide-y transition-opacity duration-150 ${isFetching && !isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          <tbody className="divide-y">
             {isLoading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
