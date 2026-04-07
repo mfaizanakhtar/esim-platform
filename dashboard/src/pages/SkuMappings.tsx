@@ -7,12 +7,13 @@ import {
   useToggleSkuMapping,
   useDeleteSkuMapping,
   useSmartPricing,
+  useReorderMappings,
 } from '@/hooks/useSkuMappingMutations';
 import { MappingForm } from '@/components/sku-mappings/MappingForm';
 import { SkuMappingModal } from '@/components/sku-mappings/SkuMappingModal';
 import type { SkuMapping, ShopifySku } from '@/lib/types';
 import { parseShopifySku } from '@/utils/parseShopifySku';
-import { Plus, Pencil, Trash2, Sparkles, Brain } from 'lucide-react';
+import { Plus, Pencil, Trash2, Sparkles, Brain, ChevronUp, ChevronDown } from 'lucide-react';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -158,6 +159,13 @@ export function SkuMappings() {
   const toggleMutation = useToggleSkuMapping();
   const deleteMutation = useDeleteSkuMapping();
   const smartPricingMutation = useSmartPricing();
+  const reorderMutation = useReorderMappings();
+
+  function moveMapping(shopifySku: string, mappings: SkuMapping[], fromIdx: number, toIdx: number) {
+    const reordered = [...mappings];
+    [reordered[fromIdx], reordered[toIdx]] = [reordered[toIdx], reordered[fromIdx]];
+    reorderMutation.mutate({ shopifySku, orderedIds: reordered.map((m) => m.id) });
+  }
 
   function openEdit(mapping: SkuMapping) {
     setEditing(mapping);
@@ -349,9 +357,28 @@ export function SkuMappings() {
                       Unmapped
                     </span>
                   ) : (
-                    <div className="flex flex-wrap gap-1">
-                      {row.mappings.map((m) => (
+                    <div className="flex flex-col gap-1">
+                      {row.mappings.map((m, idx) => (
                         <div key={m.id} className="flex items-center gap-1">
+                          {/* Priority up/down */}
+                          <div className="flex flex-col">
+                            <button
+                              onClick={() => moveMapping(row.shopifySku.sku, row.mappings, idx, idx - 1)}
+                              disabled={idx === 0 || m.priorityLocked || m.mappingLocked || reorderMutation.isPending}
+                              className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
+                              title="Higher priority"
+                            >
+                              <ChevronUp className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => moveMapping(row.shopifySku.sku, row.mappings, idx, idx + 1)}
+                              disabled={idx === row.mappings.length - 1 || m.priorityLocked || m.mappingLocked || reorderMutation.isPending}
+                              className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-30"
+                              title="Lower priority"
+                            >
+                              <ChevronDown className="h-3 w-3" />
+                            </button>
+                          </div>
                           <span className="inline-block px-2 py-0.5 bg-muted border rounded-full text-xs capitalize">
                             {m.provider}
                           </span>
@@ -364,9 +391,7 @@ export function SkuMappings() {
                             <Pencil className="h-3 w-3" />
                           </button>
                           <button
-                            onClick={() => {
-                              toggleMutation.mutate({ id: m.id, isActive: !m.isActive });
-                            }}
+                            onClick={() => toggleMutation.mutate({ id: m.id, isActive: !m.isActive })}
                             disabled={m.mappingLocked}
                             className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors ${
                               m.isActive ? 'bg-green-500' : 'bg-gray-300'
@@ -423,9 +448,13 @@ export function SkuMappings() {
             {!isFetching && skuRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  {total === 0
-                    ? 'No Shopify SKUs found. Make sure Shopify is connected.'
-                    : 'No SKUs match the current filter.'}
+                  {tab === 'unmapped'
+                    ? 'All SKUs are mapped!'
+                    : tab === 'mapped'
+                      ? 'No mapped SKUs yet.'
+                      : debouncedSearch || provider
+                        ? 'No SKUs match the current filter.'
+                        : 'No Shopify SKUs found. Make sure Shopify is connected.'}
                 </td>
               </tr>
             )}
