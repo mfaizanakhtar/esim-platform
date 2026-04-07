@@ -14,11 +14,12 @@ function TopProgressBar() {
   const [visible, setVisible] = useState(false);
   const [width, setWidth] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevPath = useRef(location.pathname);
+  const prevLocation = useRef(`${location.pathname}${location.search}${location.hash}`);
 
   useEffect(() => {
-    if (prevPath.current === location.pathname) return;
-    prevPath.current = location.pathname;
+    const currentLocation = `${location.pathname}${location.search}${location.hash}`;
+    if (prevLocation.current === currentLocation) return;
+    prevLocation.current = currentLocation;
 
     setWidth(0);
     setVisible(true);
@@ -33,7 +34,7 @@ function TopProgressBar() {
       clearTimeout(t2);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [location.pathname]);
+  }, [location.pathname, location.search, location.hash]);
 
   if (!visible) return null;
 
