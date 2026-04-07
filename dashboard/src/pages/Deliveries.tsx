@@ -68,7 +68,7 @@ export function Deliveries() {
       </div>
 
       <div className="border rounded-lg overflow-x-auto relative">
-        {isFetching && !isLoading && (
+        {isFetching && (
           <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden z-10 bg-gray-200">
             <div className="h-full w-1/3 bg-gray-900" style={{ animation: 'slideProgress 1.2s ease-in-out infinite' }} />
           </div>
@@ -84,7 +84,7 @@ export function Deliveries() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {isLoading &&
+            {isFetching &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
                   {Array.from({ length: 5 }).map((__, j) => (
@@ -95,7 +95,7 @@ export function Deliveries() {
                 </tr>
               ))}
 
-            {isError && (
+            {!isFetching && isError && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                   Failed to load deliveries. Check your connection or API key.
@@ -103,7 +103,7 @@ export function Deliveries() {
               </tr>
             )}
 
-            {data?.deliveries.map((delivery) => (
+            {!isFetching && data?.deliveries.map((delivery) => (
               <tr key={delivery.id} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3">
                   <Link
@@ -128,7 +128,7 @@ export function Deliveries() {
               </tr>
             ))}
 
-            {data?.deliveries.length === 0 && (
+            {!isFetching && data?.deliveries.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
                   No deliveries found.

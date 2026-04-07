@@ -52,7 +52,6 @@ export function useShopifySkus(
     queryKey: ['shopify-skus', { page, pageSize, search, status, provider }],
     queryFn: () => apiClient.get<{ skus: ShopifySku[]; total: number }>(url),
     staleTime: 30_000,
-    placeholderData: (prev) => prev,
   });
 }
 

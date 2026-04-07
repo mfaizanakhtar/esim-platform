@@ -127,7 +127,7 @@ function CatalogTab({ provider }: { provider: string }) {
       </div>
 
       <div className="border rounded-lg overflow-x-auto relative">
-        {isFetching && !isLoading && (
+        {isFetching && (
           <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden z-10 bg-gray-200">
             <div className="h-full w-1/3 bg-gray-900" style={{ animation: 'slideProgress 1.2s ease-in-out infinite' }} />
           </div>
@@ -144,7 +144,7 @@ function CatalogTab({ provider }: { provider: string }) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {isLoading &&
+            {isFetching &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
                   {Array.from({ length: 6 }).map((__, j) => (
@@ -155,7 +155,7 @@ function CatalogTab({ provider }: { provider: string }) {
                 </tr>
               ))}
 
-            {data?.items.map((item) => (
+            {!isFetching && data?.items.map((item) => (
               <tr key={item.id} className="hover:bg-muted/30 transition-colors">
                 <td className="px-4 py-3 font-mono text-xs">{item.productCode}</td>
                 <td className="px-4 py-3">{item.productName}</td>
@@ -168,7 +168,7 @@ function CatalogTab({ provider }: { provider: string }) {
               </tr>
             ))}
 
-            {data?.items.length === 0 && (
+            {!isFetching && data?.items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                   No catalog items. Click Sync to fetch from the provider.
