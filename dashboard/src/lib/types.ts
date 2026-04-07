@@ -101,6 +101,12 @@ export interface AiMappingDraft {
   reason: string;
 }
 
+export interface ParsedCatalogAttributes {
+  regionCodes: string[];
+  dataMb: number;
+  validityDays: number;
+}
+
 export interface CatalogItem {
   id: string;
   provider: string;
@@ -117,6 +123,7 @@ export interface CatalogItem {
   currency: string | null;
   cardType: string | null;
   activeType: string | null;
+  parsedJson: ParsedCatalogAttributes | null;
   isActive: boolean;
   lastSyncedAt: string;
   createdAt: string;

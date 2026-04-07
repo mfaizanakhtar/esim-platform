@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import type { SkuMapping, SkuMappingsPage, SkuMappingProvider } from '@/lib/types';
+import type { SkuMapping, SkuMappingsPage, SkuMappingProvider, ShopifySku } from '@/lib/types';
 
 interface UseSkuMappingsParams {
   provider?: SkuMappingProvider;
@@ -27,6 +27,19 @@ export function useSkuMappings(params: UseSkuMappingsParams = {}) {
   return useQuery({
     queryKey: ['sku-mappings', { provider, isActive, search, limit, offset }],
     queryFn: () => apiClient.get<SkuMappingsPage<SkuMapping>>(buildUrl(params)),
+  });
+}
+
+export function useShopifySkus(params: { unmappedOnly?: boolean; provider?: string } = {}) {
+  const { unmappedOnly, provider } = params;
+  const sp = new URLSearchParams();
+  if (unmappedOnly) sp.set('unmappedOnly', 'true');
+  if (provider) sp.set('provider', provider);
+  const url = `/shopify-skus?${sp.toString()}`;
+  return useQuery({
+    queryKey: ['shopify-skus', params],
+    queryFn: () => apiClient.get<{ skus: ShopifySku[] }>(url),
+    staleTime: 30_000,
   });
 }
 

@@ -58,6 +58,8 @@ export function AiMap() {
   const providerFilter = searchParams.get('provider') ?? '';
   const unmappedOnly = searchParams.get('unmapped') !== 'false';
   const [forceReplace, setForceReplace] = useState(false);
+  const [requireData, setRequireData] = useState(true);
+  const [requireValidity, setRequireValidity] = useState(true);
 
   function setProviderFilter(value: string) {
     setSearchParams((prev) => {
@@ -140,6 +142,7 @@ export function AiMap() {
     await job.start({
       provider: providerFilter || undefined,
       unmappedOnly: forceReplace ? false : unmappedOnly,
+      relaxOptions: { requireData, requireValidity },
     });
   }
 
@@ -329,6 +332,35 @@ export function AiMap() {
                 suggestion. Priority and lock settings are preserved.
               </p>
             )}
+
+            <div className="space-y-2 border-t pt-4">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                Match Requirements
+              </p>
+              <p className="text-xs text-muted-foreground">Region match is always required.</p>
+              <div className="flex items-center gap-2">
+                <input
+                  id="requireData"
+                  type="checkbox"
+                  checked={requireData}
+                  onChange={(e) => setRequireData(e.target.checked)}
+                />
+                <label htmlFor="requireData" className="text-sm font-medium">
+                  Data amount must match
+                </label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  id="requireValidity"
+                  type="checkbox"
+                  checked={requireValidity}
+                  onChange={(e) => setRequireValidity(e.target.checked)}
+                />
+                <label htmlFor="requireValidity" className="text-sm font-medium">
+                  Validity must match
+                </label>
+              </div>
+            </div>
 
             <button
               onClick={() => void runAi()}

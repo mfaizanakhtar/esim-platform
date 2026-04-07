@@ -17,7 +17,10 @@ import {
   findTopCandidates,
   isVectorAvailable,
   backfillMissingEmbeddings,
+  parseCatalogEntry,
+  type ParsedCatalogAttributes,
 } from '~/services/embeddingService';
+import { parseShopifySku } from '~/utils/parseShopifySku';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
@@ -1023,11 +1026,17 @@ export default function adminRoutes(
     allInputSkus?: AiMapInputSku[];
   };
 
+  type AiRelaxOptions = {
+    requireData?: boolean;
+    requireValidity?: boolean;
+  };
+
   type AiMapGenParams = {
     shopifySkus?: string[];
     provider?: string;
     unmappedOnly?: boolean;
     openaiApiKey: string;
+    relaxOptions?: AiRelaxOptions;
   };
 
   /**
@@ -1043,7 +1052,13 @@ export default function adminRoutes(
    * with automatic fallback to full catalog when pgvector is unavailable.
    */
   async function* aiMapBatchGenerator(params: AiMapGenParams): AsyncGenerator<AiMapProgressEvent> {
-    const { shopifySkus: providedSkus, provider, unmappedOnly, openaiApiKey } = params;
+    const {
+      shopifySkus: providedSkus,
+      provider,
+      unmappedOnly,
+      openaiApiKey,
+      relaxOptions,
+    } = params;
     const fromShopify = !Array.isArray(providedSkus) || providedSkus.length === 0;
 
     // 1. Resolve Shopify SKUs
@@ -1235,8 +1250,16 @@ export default function adminRoutes(
                   candidates: groupCandidates[j],
                 }));
 
-                const systemPrompt =
-                  'You are an eSIM product matcher. For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Return only JSON.';
+                const relaxNote = [
+                  relaxOptions?.requireData !== false
+                    ? 'Data amount match IS required.'
+                    : 'Data amount match is NOT required.',
+                  relaxOptions?.requireValidity !== false
+                    ? 'Validity match IS required.'
+                    : 'Validity match is NOT required.',
+                  'Region match is always required.',
+                ].join(' ');
+                const systemPrompt = `You are an eSIM product matcher. ${relaxNote} For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Confidence reflects structural match quality. Return only JSON.`;
                 const userPrompt = `Match each Shopify SKU to its best catalog entry:
 ${JSON.stringify(skuInputs)}
 
@@ -1316,8 +1339,16 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
             displayName: [v.productTitle, v.variantTitle].filter(Boolean).join(' - ') || v.sku,
           }));
 
-          const systemPrompt =
-            'You are an eSIM product matcher. Match each Shopify SKU to the best provider catalog entry based on region, data amount, and validity. Return only JSON.';
+          const fallbackRelaxNote = [
+            relaxOptions?.requireData !== false
+              ? 'Data amount match IS required.'
+              : 'Data amount match is NOT required.',
+            relaxOptions?.requireValidity !== false
+              ? 'Validity match IS required.'
+              : 'Validity match is NOT required.',
+            'Region match is always required.',
+          ].join(' ');
+          const systemPrompt = `You are an eSIM product matcher. ${fallbackRelaxNote} Match each Shopify SKU to the best provider catalog entry. Confidence reflects structural match quality. Return only JSON.`;
           const userPrompt = `Match these Shopify SKUs to catalog entries:
 SKUs: ${JSON.stringify(skuList)}
 
@@ -1618,6 +1649,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       provider?: string;
       unmappedOnly?: boolean;
       shopifySkus?: string[];
+      relaxOptions?: AiRelaxOptions;
     };
 
     const job = await prisma.aiMapJob.create({
@@ -1634,6 +1666,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       provider: body.provider,
       unmappedOnly: body.unmappedOnly,
       openaiApiKey: OPENAI_API_KEY,
+      relaxOptions: body.relaxOptions,
     });
 
     return reply.code(201).send({ jobId: job.id });
@@ -1844,6 +1877,255 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
   );
 
   // ---------------------------------------------------------------------------
+  // Structured Matcher — deterministic JSONB-based SKU matching
+  // ---------------------------------------------------------------------------
+
+  type StructuredRelaxOptions = {
+    relaxValidity?: boolean;
+    relaxData?: boolean;
+  };
+
+  type ParsedCatalogRow = {
+    id: string;
+    provider: string;
+    productName: string;
+    region: string | null;
+    dataAmount: string | null;
+    validity: string | null;
+    netPrice: unknown;
+    parsedJson: ParsedCatalogAttributes | null;
+  };
+
+  async function findStructuredMatches(
+    sku: string,
+    provider: string | undefined,
+    relaxOptions: StructuredRelaxOptions,
+  ): Promise<AiMappingDraftInternal[]> {
+    const parsed = parseShopifySku(sku);
+    if (!parsed) return [];
+
+    const { regionCode, dataMb, validityDays } = parsed;
+
+    // JSONB containment query: regionCodes array must contain this regionCode
+    let rows: ParsedCatalogRow[];
+    if (provider) {
+      rows = await prisma.$queryRaw<ParsedCatalogRow[]>`
+        SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+               "parsedJson"
+        FROM "ProviderSkuCatalog"
+        WHERE "isActive" = true
+          AND "parsedJson" IS NOT NULL
+          AND provider = ${provider}
+          AND "parsedJson"->'regionCodes' ? ${regionCode}
+      `;
+    } else {
+      rows = await prisma.$queryRaw<ParsedCatalogRow[]>`
+        SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+               "parsedJson"
+        FROM "ProviderSkuCatalog"
+        WHERE "isActive" = true
+          AND "parsedJson" IS NOT NULL
+          AND "parsedJson"->'regionCodes' ? ${regionCode}
+      `;
+    }
+
+    const drafts: AiMappingDraftInternal[] = [];
+    for (const row of rows) {
+      const p = row.parsedJson;
+      if (!p) continue;
+
+      const dataMatch = p.dataMb === dataMb;
+      const validityMatch = p.validityDays === validityDays;
+
+      // Apply relaxation: if not relaxed, field must match
+      if (!relaxOptions.relaxData && !dataMatch) continue;
+      if (!relaxOptions.relaxValidity && !validityMatch) continue;
+
+      // Deterministic confidence: 3/3 = 1.0, 2/3 = 0.8, region only = 0.6
+      const matchCount = 1 + (dataMatch ? 1 : 0) + (validityMatch ? 1 : 0);
+      const confidence = matchCount === 3 ? 1.0 : matchCount === 2 ? 0.8 : 0.6;
+
+      const reasons: string[] = ['region'];
+      if (dataMatch) reasons.push('data');
+      if (validityMatch) reasons.push('validity');
+
+      drafts.push({
+        shopifySku: sku,
+        catalogId: row.id,
+        productName: row.productName,
+        region: row.region,
+        dataAmount: row.dataAmount,
+        validity: row.validity,
+        netPrice: row.netPrice,
+        provider: row.provider,
+        confidence,
+        reason: `Structured match on: ${reasons.join(', ')}`,
+      });
+    }
+
+    // Sort by confidence descending
+    drafts.sort((a, b) => b.confidence - a.confidence);
+    return drafts;
+  }
+
+  /**
+   * Background runner for structured map jobs — same DB persistence as runAiMapJobAsync.
+   */
+  async function runStructuredMapJobAsync(
+    jobId: string,
+    params: {
+      provider?: string;
+      unmappedOnly?: boolean;
+      relaxOptions?: StructuredRelaxOptions;
+    },
+  ): Promise<void> {
+    const allDrafts: AiMappingDraftInternal[] = [];
+    const capturedInputSkus: AiMapInputSku[] = [];
+
+    try {
+      // Fetch Shopify SKUs
+      let shopifySkuList: AiMapInputSku[];
+      try {
+        const shopify = getShopifyClient();
+        shopifySkuList = await shopify.getAllVariants();
+      } catch (error) {
+        logger.error({ err: error }, 'Failed to fetch Shopify variants for structured mapping');
+        throw new Error('shopify_unavailable');
+      }
+
+      // Filter unmapped if requested
+      let skus = shopifySkuList;
+      if (params.unmappedOnly !== false) {
+        const where = params.provider ? { provider: params.provider } : {};
+        const mappedSkus = await prisma.providerSkuMapping.findMany({
+          select: { shopifySku: true },
+          distinct: ['shopifySku'],
+          where,
+        });
+        const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
+        skus = shopifySkuList.filter((v) => !mappedSet.has(v.sku));
+      }
+
+      capturedInputSkus.push(...skus);
+
+      const totalBatches = skus.length; // one "batch" per SKU for progress granularity
+      await prisma.aiMapJob.update({
+        where: { id: jobId },
+        data: { totalBatches },
+      });
+
+      for (let i = 0; i < skus.length; i++) {
+        const variant = skus[i];
+        const drafts = await findStructuredMatches(
+          variant.sku,
+          params.provider,
+          params.relaxOptions ?? {},
+        );
+        allDrafts.push(...drafts);
+
+        await prisma.aiMapJob.update({
+          where: { id: jobId },
+          data: {
+            completedBatches: i + 1,
+            foundSoFar: allDrafts.length,
+            draftsJson: allDrafts as unknown as Prisma.JsonArray,
+          },
+        });
+      }
+
+      const matchedSet = new Set(allDrafts.map((d) => d.shopifySku));
+      const unmatched = capturedInputSkus.filter((v) => !matchedSet.has(v.sku));
+
+      await prisma.aiMapJob.update({
+        where: { id: jobId },
+        data: {
+          status: 'done',
+          completedAt: new Date(),
+          unmatchedSkusJson: unmatched as unknown as Prisma.JsonArray,
+        },
+      });
+    } catch (err) {
+      logger.error({ err, jobId }, 'Structured map job failed');
+      const msg = err instanceof Error ? err.message : String(err);
+      try {
+        await prisma.aiMapJob.update({
+          where: { id: jobId },
+          data: {
+            status: 'error',
+            error: msg,
+            completedAt: new Date(),
+            unmatchedSkusJson: [] as unknown as Prisma.JsonArray,
+          },
+        });
+      } catch (updateErr) {
+        logger.error({ err: updateErr, jobId }, 'Failed to persist structured map job failure');
+      }
+    }
+  }
+
+  /**
+   * POST /admin/sku-mappings/structured-map/jobs
+   * Creates a persistent job and runs structured matching in the background.
+   * Body: { provider?: string; unmappedOnly?: boolean; relaxOptions?: { relaxValidity?: boolean; relaxData?: boolean } }
+   */
+  app.post(
+    '/sku-mappings/structured-map/jobs',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const body = (request.body || {}) as {
+        provider?: string;
+        unmappedOnly?: boolean;
+        relaxOptions?: StructuredRelaxOptions;
+      };
+
+      const job = await prisma.aiMapJob.create({
+        data: {
+          status: 'running',
+          provider: body.provider ?? null,
+          unmappedOnly: body.unmappedOnly !== false,
+        },
+      });
+
+      void runStructuredMapJobAsync(job.id, {
+        provider: body.provider,
+        unmappedOnly: body.unmappedOnly,
+        relaxOptions: body.relaxOptions,
+      });
+
+      return reply.code(201).send({ jobId: job.id });
+    },
+  );
+
+  /**
+   * POST /admin/sku-mappings/structured-match
+   * Synchronous single-SKU structured match — no job overhead.
+   * Body: { sku: string; relaxOptions?: { relaxValidity?: boolean; relaxData?: boolean } }
+   * Response: { drafts: AiMappingDraft[], parsed: ParsedShopifySku | null }
+   */
+  app.post(
+    '/sku-mappings/structured-match',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const body = (request.body || {}) as {
+        sku?: string;
+        provider?: string;
+        relaxOptions?: StructuredRelaxOptions;
+      };
+
+      if (!body.sku || typeof body.sku !== 'string') {
+        return reply.code(400).send({ error: 'sku is required' });
+      }
+
+      const parsed = parseShopifySku(body.sku);
+      const drafts = await findStructuredMatches(body.sku, body.provider, body.relaxOptions ?? {});
+
+      return reply.send({ drafts, parsed });
+    },
+  );
+
+  // ---------------------------------------------------------------------------
   // Provider SKU Catalog
   // ---------------------------------------------------------------------------
 
@@ -2046,6 +2328,51 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         }
       }
 
+      let firoamParsed = 0;
+      if (OPENAI_API_KEY_SYNC && upsertedIds.length > 0) {
+        try {
+          const unparsedEntries = (await providerSkuCatalog.findMany({
+            where: { id: { in: upsertedIds } },
+            select: {
+              id: true,
+              productName: true,
+              region: true,
+              countryCodes: true,
+              dataAmount: true,
+              validity: true,
+            },
+          })) as Array<{
+            id: string;
+            productName: string;
+            region: string | null;
+            countryCodes: unknown;
+            dataAmount: string | null;
+            validity: string | null;
+          }>;
+          const openaiParse = new OpenAI({ apiKey: OPENAI_API_KEY_SYNC });
+          const PARSE_BATCH = 20;
+          for (let i = 0; i < unparsedEntries.length; i += PARSE_BATCH) {
+            const batch = unparsedEntries.slice(i, i + PARSE_BATCH);
+            await Promise.all(
+              batch.map(async (e) => {
+                const parsed = await parseCatalogEntry(e, openaiParse);
+                if (parsed) {
+                  await prisma.$executeRaw`
+                    UPDATE "ProviderSkuCatalog"
+                    SET "parsedJson" = ${JSON.stringify(parsed)}::jsonb
+                    WHERE id = ${e.id}
+                  `;
+                  firoamParsed += 1;
+                }
+              }),
+            );
+          }
+          logger.info({ count: firoamParsed }, 'Parsed catalog entries after firoam sync');
+        } catch (err) {
+          logger.warn({ err }, 'Parsing failed after firoam sync — run parse-all to retry');
+        }
+      }
+
       return reply.send({
         ok: true,
         provider: 'firoam',
@@ -2054,6 +2381,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         totalSkus: skuResult.skus.length,
         skipsNoApiCode,
         embedded,
+        parsed: firoamParsed,
       });
     }
 
@@ -2170,6 +2498,52 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       }
     }
 
+    let tgtParsed = 0;
+    const OPENAI_API_KEY_TGT_PARSE = process.env.OPENAI_API_KEY;
+    if (OPENAI_API_KEY_TGT_PARSE && tgtUpsertedIds.length > 0) {
+      try {
+        const unparsedTgt = (await providerSkuCatalog.findMany({
+          where: { id: { in: tgtUpsertedIds } },
+          select: {
+            id: true,
+            productName: true,
+            region: true,
+            countryCodes: true,
+            dataAmount: true,
+            validity: true,
+          },
+        })) as Array<{
+          id: string;
+          productName: string;
+          region: string | null;
+          countryCodes: unknown;
+          dataAmount: string | null;
+          validity: string | null;
+        }>;
+        const openaiTgtParse = new OpenAI({ apiKey: OPENAI_API_KEY_TGT_PARSE });
+        const PARSE_BATCH = 20;
+        for (let i = 0; i < unparsedTgt.length; i += PARSE_BATCH) {
+          const batch = unparsedTgt.slice(i, i + PARSE_BATCH);
+          await Promise.all(
+            batch.map(async (e) => {
+              const parsed = await parseCatalogEntry(e, openaiTgtParse);
+              if (parsed) {
+                await prisma.$executeRaw`
+                  UPDATE "ProviderSkuCatalog"
+                  SET "parsedJson" = ${JSON.stringify(parsed)}::jsonb
+                  WHERE id = ${e.id}
+                `;
+                tgtParsed += 1;
+              }
+            }),
+          );
+        }
+        logger.info({ count: tgtParsed }, 'Parsed catalog entries after tgt sync');
+      } catch (err) {
+        logger.warn({ err }, 'Parsing failed after tgt sync — run parse-all to retry');
+      }
+    }
+
     return reply.send({
       ok: true,
       provider: 'tgt',
@@ -2177,7 +2551,94 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       total,
       pages: pageNum,
       embedded: tgtEmbedded,
+      parsed: tgtParsed,
     });
+  });
+
+  /**
+   * POST /admin/provider-catalog/parse-all
+   * Backfill: AI-parse all catalog entries where parsedJson IS NULL.
+   * Uses advisory lock 0xCA7A so concurrent calls are no-ops.
+   * Body: { provider?: string }
+   */
+  app.post('/provider-catalog/parse-all', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) {
+      return reply.code(500).send({ error: 'OPENAI_API_KEY not configured' });
+    }
+
+    const body = (request.body || {}) as { provider?: string };
+
+    const LOCK_ID = 0xca7a;
+    const [lockResult] = await prisma.$queryRaw<[{ acquired: boolean }]>`
+        SELECT pg_try_advisory_lock(${LOCK_ID}::bigint) AS acquired
+      `;
+    if (!lockResult.acquired) {
+      return reply.send({ ok: true, parsed: 0, message: 'Another parse-all is in progress' });
+    }
+
+    type UnparsedRow = {
+      id: string;
+      productName: string;
+      region: string | null;
+      countryCodes: unknown;
+      dataAmount: string | null;
+      validity: string | null;
+    };
+
+    const BATCH_SIZE = 100;
+    let parsed = 0;
+    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+
+    try {
+      let hasMore = true;
+      while (hasMore) {
+        let rows: UnparsedRow[];
+        if (body.provider) {
+          rows = await prisma.$queryRaw<UnparsedRow[]>`
+              SELECT id, "productName", region, "countryCodes", "dataAmount", validity
+              FROM "ProviderSkuCatalog"
+              WHERE "parsedJson" IS NULL AND provider = ${body.provider}
+              LIMIT ${BATCH_SIZE}
+            `;
+        } else {
+          rows = await prisma.$queryRaw<UnparsedRow[]>`
+              SELECT id, "productName", region, "countryCodes", "dataAmount", validity
+              FROM "ProviderSkuCatalog"
+              WHERE "parsedJson" IS NULL
+              LIMIT ${BATCH_SIZE}
+            `;
+        }
+        if (rows.length === 0) {
+          hasMore = false;
+          break;
+        }
+        const PARSE_CONCURRENT = 20;
+        for (let i = 0; i < rows.length; i += PARSE_CONCURRENT) {
+          const chunk = rows.slice(i, i + PARSE_CONCURRENT);
+          await Promise.all(
+            chunk.map(async (e) => {
+              const result = await parseCatalogEntry(e, openai);
+              if (result) {
+                await prisma.$executeRaw`
+                    UPDATE "ProviderSkuCatalog"
+                    SET "parsedJson" = ${JSON.stringify(result)}::jsonb
+                    WHERE id = ${e.id}
+                  `;
+                parsed += 1;
+              }
+            }),
+          );
+        }
+        logger.info({ count: rows.length, parsed }, 'parse-all batch complete');
+      }
+    } finally {
+      await prisma.$executeRaw`SELECT pg_advisory_unlock(${LOCK_ID}::bigint)`;
+    }
+
+    return reply.send({ ok: true, parsed });
   });
 
   /**
