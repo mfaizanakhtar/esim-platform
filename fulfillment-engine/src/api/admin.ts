@@ -279,9 +279,8 @@ export default function adminRoutes(
       limit?: string;
       offset?: string;
     };
-    const limit = Math.min(parseInt(query.limit || '100', 10), 500);
     const offset = parseInt(query.offset || '0', 10);
-
+    const limitCapped = Math.min(parseInt(query.limit || '100', 10), 10000);
     const where: Record<string, unknown> = {};
     if (query.provider) where.provider = query.provider;
     if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
@@ -297,13 +296,13 @@ export default function adminRoutes(
       prisma.providerSkuMapping.findMany({
         where,
         orderBy: [{ shopifySku: 'asc' }, { priority: 'asc' }],
-        take: limit,
+        take: limitCapped,
         skip: offset,
       }),
       prisma.providerSkuMapping.count({ where }),
     ]);
 
-    return reply.send({ total, limit, offset, mappings });
+    return reply.send({ total, limit: limitCapped, offset, mappings });
   });
 
   /**

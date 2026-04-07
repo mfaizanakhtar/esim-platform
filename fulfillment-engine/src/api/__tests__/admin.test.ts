@@ -724,7 +724,7 @@ describe('Admin Routes', () => {
         headers: AUTH,
       });
 
-      expect(res.json().limit).toBe(500);
+      expect(res.json().limit).toBe(10000);
     });
   });
 
