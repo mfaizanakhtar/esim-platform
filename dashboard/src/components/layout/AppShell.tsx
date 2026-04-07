@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { LayoutDashboard, Map as MapIcon, Package, LogOut, Menu, X } from 'lucide-react';
 
@@ -49,6 +49,7 @@ function TopProgressBar() {
 export function AppShell() {
   const logout = useAuthStore((s) => s.logout);
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   function handleLogout() {
@@ -87,24 +88,25 @@ export function AppShell() {
           </button>
         </div>
         <nav className="flex-1 p-2 space-y-1">
-          {navItems.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={false}
-              onClick={() => setSidebarOpen(false)}
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+          {navItems.map(({ to, label, icon: Icon }) => {
+            const isActive = location.pathname.startsWith(to);
+            return (
+              <Link
+                key={to}
+                to={to}
+                onClick={() => setSidebarOpen(false)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
                   isActive
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-gray-900 text-white'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                }`
-              }
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </NavLink>
-          ))}
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+              </Link>
+            );
+          })}
         </nav>
         <div className="p-2 border-t">
           <button

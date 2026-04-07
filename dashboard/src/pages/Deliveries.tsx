@@ -21,7 +21,7 @@ export function Deliveries() {
   const page = Number(searchParams.get('page') ?? '1');
   const offset = (page - 1) * PAGE_SIZE;
 
-  const { data, isLoading, isError } = useDeliveries({
+  const { data, isLoading, isFetching, isError } = useDeliveries({
     status: status || undefined,
     limit: PAGE_SIZE,
     offset,
@@ -78,7 +78,7 @@ export function Deliveries() {
               <th className="text-left px-4 py-3 font-medium">SKU</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className={`divide-y transition-opacity duration-150 ${isFetching && !isLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
             {isLoading &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
