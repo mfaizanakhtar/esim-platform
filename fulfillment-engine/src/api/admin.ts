@@ -2650,7 +2650,11 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         SELECT pg_try_advisory_lock(${LOCK_ID}::bigint) AS acquired
       `;
     if (!lockResult.acquired) {
-      return reply.send({ ok: true, started: false, message: 'Another parse-all is already in progress' });
+      return reply.send({
+        ok: true,
+        started: false,
+        message: 'Another parse-all is already in progress',
+      });
     }
 
     // Fire and forget — reply immediately so the HTTP request doesn't time out
@@ -2718,7 +2722,11 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       }
     })();
 
-    return reply.send({ ok: true, started: true, message: 'Parsing started in background — check server logs for progress' });
+    return reply.send({
+      ok: true,
+      started: true,
+      message: 'Parsing started in background — check server logs for progress',
+    });
   });
 
   /**
