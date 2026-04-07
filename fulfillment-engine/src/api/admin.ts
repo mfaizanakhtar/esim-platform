@@ -928,7 +928,10 @@ export default function adminRoutes(
         mappedSkus = await prisma.providerSkuMapping.findMany({
           select: { shopifySku: true },
           distinct: ['shopifySku'],
-          ...(providerFilter ? { where: { provider: providerFilter } } : {}),
+          where: {
+            isActive: true,
+            ...(providerFilter ? { provider: providerFilter } : {}),
+          },
         });
       } catch (err) {
         logger.error(
