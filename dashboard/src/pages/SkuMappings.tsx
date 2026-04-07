@@ -19,6 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 type TabFilter = 'all' | 'mapped' | 'unmapped';
 
 const PAGE_SIZE = 25;
+const EMPTY_MAPPINGS: SkuMapping[] = [];
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -112,48 +113,45 @@ export function SkuMappings() {
     [setSearchParams],
   );
 
-  const { data: shopifySkusData, isLoading: skusLoading } = useShopifySkus();
+  const { data: shopifySkusData, isLoading: skusLoading } = useShopifySkus({
+    page,
+    pageSize: PAGE_SIZE,
+    search: debouncedSearch || undefined,
+    status: tab,
+    provider: provider || undefined,
+  });
   const { data: mappingsData, isLoading: mappingsLoading } = useAllSkuMappings({
     provider: provider || undefined,
   });
 
   const isLoading = skusLoading || mappingsLoading;
-
-  // Build unified SKU rows
-  const skuRows = useMemo<SkuRow[]>(() => {
-    const allMappings = mappingsData?.mappings ?? [];
-    const bySkuMap = new Map<string, SkuMapping[]>();
-    for (const m of allMappings) {
-      const arr = bySkuMap.get(m.shopifySku) ?? [];
-      arr.push(m);
-      bySkuMap.set(m.shopifySku, arr);
-    }
-    return (shopifySkusData?.skus ?? []).map((s) => ({
-      shopifySku: s,
-      parsed: parseShopifySku(s.sku),
-      mappings: (bySkuMap.get(s.sku) ?? []).sort((a, b) => a.priority - b.priority),
-    }));
-  }, [shopifySkusData, mappingsData]);
-
-  // Apply filters
-  const filteredRows = useMemo(() => {
-    let rows = skuRows;
-    if (tab === 'mapped') rows = rows.filter((r) => r.mappings.length > 0);
-    if (tab === 'unmapped') rows = rows.filter((r) => r.mappings.length === 0);
-    if (debouncedSearch) {
-      const q = debouncedSearch.toLowerCase();
-      rows = rows.filter(
-        (r) =>
-          r.shopifySku.sku.toLowerCase().includes(q) ||
-          r.shopifySku.productTitle.toLowerCase().includes(q),
-      );
-    }
-    return rows;
-  }, [skuRows, tab, debouncedSearch]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const total = shopifySkusData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const clampedPage = Math.min(page, totalPages);
-  const paginatedRows = filteredRows.slice((clampedPage - 1) * PAGE_SIZE, clampedPage * PAGE_SIZE);
+
+  // Build mapping lookup for chip display (all mappings from DB)
+  const mappingsBySku = useMemo(() => {
+    const map = new Map<string, SkuMapping[]>();
+    for (const m of mappingsData?.mappings ?? []) {
+      const arr = map.get(m.shopifySku) ?? [];
+      arr.push(m);
+      map.set(m.shopifySku, arr);
+    }
+    return map;
+  }, [mappingsData]);
+
+  // Current page rows (server already filtered + paginated)
+  const skuRows = useMemo<SkuRow[]>(
+    () =>
+      (shopifySkusData?.skus ?? []).map((s) => ({
+        shopifySku: s,
+        parsed: parseShopifySku(s.sku),
+        mappings: (mappingsBySku.get(s.sku) ?? EMPTY_MAPPINGS).sort(
+          (a, b) => a.priority - b.priority,
+        ),
+      })),
+    [shopifySkusData, mappingsBySku],
+  );
 
   const createMutation = useCreateSkuMapping();
   const updateMutation = useUpdateSkuMapping();
@@ -189,8 +187,6 @@ export function SkuMappings() {
     });
   }
 
-  const mappedCount = skuRows.filter((r) => r.mappings.length > 0).length;
-  const unmappedCount = skuRows.filter((r) => r.mappings.length === 0).length;
 
   return (
     <div className="space-y-4">
@@ -271,21 +267,17 @@ export function SkuMappings() {
 
       {/* Filter tabs */}
       <div className="flex gap-1 border-b">
-        {([
-          ['all', `All (${skuRows.length})`],
-          ['mapped', `Mapped (${mappedCount})`],
-          ['unmapped', `Unmapped (${unmappedCount})`],
-        ] as [TabFilter, string][]).map(([t, label]) => (
+        {(['all', 'mapped', 'unmapped'] as TabFilter[]).map((t) => (
           <button
             key={t}
             onClick={() => setFilter('tab', t === 'all' ? '' : t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors capitalize ${
               tab === t
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >
-            {label}
+            {t}
           </button>
         ))}
       </div>
@@ -313,7 +305,7 @@ export function SkuMappings() {
                 </tr>
               ))}
 
-            {paginatedRows.map((row) => (
+            {skuRows.map((row) => (
               <tr key={row.shopifySku.sku} className="hover:bg-muted/20 transition-colors">
                 {/* SKU */}
                 <td className="px-4 py-3">
@@ -423,10 +415,10 @@ export function SkuMappings() {
               </tr>
             ))}
 
-            {!isLoading && paginatedRows.length === 0 && (
+            {!isLoading && skuRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
-                  {skuRows.length === 0
+                  {total === 0
                     ? 'No Shopify SKUs found. Make sure Shopify is connected.'
                     : 'No SKUs match the current filter.'}
                 </td>
@@ -440,8 +432,8 @@ export function SkuMappings() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
-            Showing {(clampedPage - 1) * PAGE_SIZE + 1}–
-            {Math.min(clampedPage * PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
+            Showing {(clampedPage - 1) * PAGE_SIZE + 1}–{Math.min(clampedPage * PAGE_SIZE, total)}{' '}
+            of {total}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -492,9 +484,7 @@ export function SkuMappings() {
       {modalSku && (
         <SkuMappingModal
           sku={modalSku}
-          existingMappings={
-            skuRows.find((r) => r.shopifySku.sku === modalSku.sku)?.mappings ?? []
-          }
+          existingMappings={mappingsBySku.get(modalSku.sku) ?? EMPTY_MAPPINGS}
           onClose={() => setModalSku(null)}
           onSaved={() => {
             setModalSku(null);

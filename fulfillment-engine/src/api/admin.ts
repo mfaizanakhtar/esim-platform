@@ -884,9 +884,25 @@ export default function adminRoutes(
   app.get('/shopify-skus', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
-    const query = request.query as { unmappedOnly?: string; provider?: string };
-    const unmappedOnly = query.unmappedOnly === 'true';
+    const query = request.query as {
+      unmappedOnly?: string;
+      provider?: string;
+      status?: string;
+      search?: string;
+      limit?: string;
+      offset?: string;
+    };
+    // status overrides legacy unmappedOnly
+    const status: 'all' | 'mapped' | 'unmapped' =
+      query.status === 'mapped' || query.status === 'unmapped'
+        ? query.status
+        : query.unmappedOnly === 'true'
+          ? 'unmapped'
+          : 'all';
     const providerFilter = query.provider || undefined;
+    const search = (query.search ?? '').toLowerCase().trim();
+    const limit = Math.min(parseInt(query.limit ?? '25', 10) || 25, 200);
+    const offset = parseInt(query.offset ?? '0', 10) || 0;
 
     let allVariants: Array<{
       sku: string;
@@ -902,18 +918,33 @@ export default function adminRoutes(
       return reply.code(502).send({ error: 'shopify_unavailable' });
     }
 
-    if (unmappedOnly) {
+    // Apply status (mapped / unmapped) filter
+    let filtered = allVariants;
+    if (status !== 'all') {
       const mappedSkus = await prisma.providerSkuMapping.findMany({
         select: { shopifySku: true },
         distinct: ['shopifySku'],
         ...(providerFilter ? { where: { provider: providerFilter } } : {}),
       });
       const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
-      const filtered = allVariants.filter((v) => !mappedSet.has(v.sku));
-      return reply.send({ skus: filtered });
+      filtered =
+        status === 'unmapped'
+          ? allVariants.filter((v) => !mappedSet.has(v.sku))
+          : allVariants.filter((v) => mappedSet.has(v.sku));
     }
 
-    return reply.send({ skus: allVariants });
+    // Apply search filter
+    if (search) {
+      filtered = filtered.filter(
+        (v) =>
+          v.sku.toLowerCase().includes(search) || v.productTitle.toLowerCase().includes(search),
+      );
+    }
+
+    const total = filtered.length;
+    const skus = filtered.slice(offset, offset + limit);
+
+    return reply.send({ skus, total });
   });
 
   /**
