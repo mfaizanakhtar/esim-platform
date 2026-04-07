@@ -3740,9 +3740,9 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body) as { ok: boolean; parsed: number };
+      const body = JSON.parse(res.body) as { ok: boolean; started: boolean };
       expect(body.ok).toBe(true);
-      expect(typeof body.parsed).toBe('number');
+      expect(body.started).toBe(true);
     });
 
     it('returns 500 when OPENAI_API_KEY is not set', async () => {
@@ -3758,7 +3758,7 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(500);
     });
 
-    it('returns ok with 0 parsed when advisory lock not acquired', async () => {
+    it('returns ok with started=false when advisory lock not acquired', async () => {
       vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([{ acquired: false }]);
       const res = await app.inject({
         method: 'POST',
@@ -3767,9 +3767,9 @@ describe('Admin Routes', () => {
         payload: {},
       });
       expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body) as { ok: boolean; parsed: number };
+      const body = JSON.parse(res.body) as { ok: boolean; started: boolean };
       expect(body.ok).toBe(true);
-      expect(body.parsed).toBe(0);
+      expect(body.started).toBe(false);
     });
 
     it('uses provider filter when specified', async () => {
@@ -3786,9 +3786,9 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body) as { ok: boolean; parsed: number };
+      const body = JSON.parse(res.body) as { ok: boolean; started: boolean };
       expect(body.ok).toBe(true);
-      expect(body.parsed).toBe(0);
+      expect(body.started).toBe(true);
     });
 
     it('returns 401 without admin key', async () => {
