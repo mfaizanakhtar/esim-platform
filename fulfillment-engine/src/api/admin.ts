@@ -1826,10 +1826,13 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       }, 15_000);
 
       let closed = false;
-      request.raw.on('close', /* v8 ignore next 4 */ () => {
-        closed = true;
-        clearInterval(heartbeat);
-      });
+      request.raw.on(
+        'close',
+        /* v8 ignore next 4 */ () => {
+          closed = true;
+          clearInterval(heartbeat);
+        },
+      );
 
       const send = (event: string, data: unknown) => {
         if (!reply.raw.destroyed) {
