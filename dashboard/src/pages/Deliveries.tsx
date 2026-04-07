@@ -21,7 +21,7 @@ export function Deliveries() {
   const page = Number(searchParams.get('page') ?? '1');
   const offset = (page - 1) * PAGE_SIZE;
 
-  const { data, isLoading, isFetching, isError } = useDeliveries({
+  const { data, isFetching, isError } = useDeliveries({
     status: status || undefined,
     limit: PAGE_SIZE,
     offset,

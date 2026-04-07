@@ -103,7 +103,7 @@ function CatalogTab({ provider }: { provider: string }) {
     setPage(0);
   }, [debouncedSearch, setPage]);
 
-  const { data, isLoading, isFetching } = useCatalog({
+  const { data, isFetching } = useCatalog({
     provider,
     search: debouncedSearch || undefined,
     limit: PAGE_SIZE,

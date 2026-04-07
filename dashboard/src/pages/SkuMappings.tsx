@@ -113,18 +113,17 @@ export function SkuMappings() {
     [setSearchParams],
   );
 
-  const { data: shopifySkusData, isLoading: skusLoading, isFetching: skusFetching } = useShopifySkus({
+  const { data: shopifySkusData, isFetching: skusFetching } = useShopifySkus({
     page,
     pageSize: PAGE_SIZE,
     search: debouncedSearch || undefined,
     status: tab,
     provider: provider || undefined,
   });
-  const { data: mappingsData, isLoading: mappingsLoading } = useAllSkuMappings({
+  const { data: mappingsData } = useAllSkuMappings({
     provider: provider || undefined,
   });
 
-  const isLoading = skusLoading || mappingsLoading;
   const isFetching = skusFetching;
   const total = shopifySkusData?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
