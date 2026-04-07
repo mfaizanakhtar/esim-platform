@@ -80,7 +80,7 @@ function EmbedBackfillButton({ provider }: { provider: string }) {
 function ParseAllButton({ provider }: { provider: string }) {
   const mutation = useMutation({
     mutationFn: () =>
-      apiClient.post<{ ok: boolean; parsed: number }>('/provider-catalog/parse-all', { provider }),
+      apiClient.post<{ ok: boolean; started: boolean; message: string }>('/provider-catalog/parse-all', { provider }),
   });
   return (
     <div className="flex items-center gap-3">
@@ -90,10 +90,10 @@ function ParseAllButton({ provider }: { provider: string }) {
         className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
       >
         <Cpu className={`h-4 w-4 ${mutation.isPending ? 'animate-pulse' : ''}`} />
-        {mutation.isPending ? 'Parsing...' : 'Parse All'}
+        {mutation.isPending ? 'Starting...' : 'Parse All'}
       </button>
       {mutation.isSuccess && (
-        <span className="text-sm text-muted-foreground">{mutation.data.parsed} entries parsed</span>
+        <span className="text-sm text-muted-foreground">{mutation.data.message}</span>
       )}
       {mutation.isError && (
         <span className="text-sm text-red-600">{(mutation.error as Error).message}</span>

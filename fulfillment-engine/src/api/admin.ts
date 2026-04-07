@@ -2650,69 +2650,83 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         SELECT pg_try_advisory_lock(${LOCK_ID}::bigint) AS acquired
       `;
     if (!lockResult.acquired) {
-      return reply.send({ ok: true, parsed: 0, message: 'Another parse-all is in progress' });
+      return reply.send({
+        ok: true,
+        started: false,
+        message: 'Another parse-all is already in progress',
+      });
     }
 
-    type UnparsedRow = {
-      id: string;
-      productName: string;
-      region: string | null;
-      countryCodes: unknown;
-      dataAmount: string | null;
-      validity: string | null;
-    };
+    // Fire and forget — reply immediately so the HTTP request doesn't time out
+    void (async () => {
+      type UnparsedRow = {
+        id: string;
+        productName: string;
+        region: string | null;
+        countryCodes: unknown;
+        dataAmount: string | null;
+        validity: string | null;
+      };
 
-    const BATCH_SIZE = 100;
-    let parsed = 0;
-    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+      const BATCH_SIZE = 100;
+      let parsed = 0;
+      const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-    try {
-      let hasMore = true;
-      while (hasMore) {
-        let rows: UnparsedRow[];
-        if (body.provider) {
-          rows = await prisma.$queryRaw<UnparsedRow[]>`
-              SELECT id, "productName", region, "countryCodes", "dataAmount", validity
-              FROM "ProviderSkuCatalog"
-              WHERE "parsedJson" IS NULL AND provider = ${body.provider}
-              LIMIT ${BATCH_SIZE}
-            `;
-        } else {
-          rows = await prisma.$queryRaw<UnparsedRow[]>`
-              SELECT id, "productName", region, "countryCodes", "dataAmount", validity
-              FROM "ProviderSkuCatalog"
-              WHERE "parsedJson" IS NULL
-              LIMIT ${BATCH_SIZE}
-            `;
+      try {
+        let hasMore = true;
+        while (hasMore) {
+          let rows: UnparsedRow[];
+          if (body.provider) {
+            rows = await prisma.$queryRaw<UnparsedRow[]>`
+                SELECT id, "productName", region, "countryCodes", "dataAmount", validity
+                FROM "ProviderSkuCatalog"
+                WHERE "parsedJson" IS NULL AND provider = ${body.provider}
+                LIMIT ${BATCH_SIZE}
+              `;
+          } else {
+            rows = await prisma.$queryRaw<UnparsedRow[]>`
+                SELECT id, "productName", region, "countryCodes", "dataAmount", validity
+                FROM "ProviderSkuCatalog"
+                WHERE "parsedJson" IS NULL
+                LIMIT ${BATCH_SIZE}
+              `;
+          }
+          if (rows.length === 0) {
+            hasMore = false;
+            break;
+          }
+          const PARSE_CONCURRENT = 20;
+          for (let i = 0; i < rows.length; i += PARSE_CONCURRENT) {
+            const chunk = rows.slice(i, i + PARSE_CONCURRENT);
+            await Promise.all(
+              chunk.map(async (e) => {
+                const result = await parseCatalogEntry(e, openai);
+                if (result) {
+                  await prisma.$executeRaw`
+                      UPDATE "ProviderSkuCatalog"
+                      SET "parsedJson" = ${JSON.stringify(result)}::jsonb
+                      WHERE id = ${e.id}
+                    `;
+                  parsed += 1;
+                }
+              }),
+            );
+          }
+          logger.info({ count: rows.length, parsed }, 'parse-all batch complete');
         }
-        if (rows.length === 0) {
-          hasMore = false;
-          break;
-        }
-        const PARSE_CONCURRENT = 20;
-        for (let i = 0; i < rows.length; i += PARSE_CONCURRENT) {
-          const chunk = rows.slice(i, i + PARSE_CONCURRENT);
-          await Promise.all(
-            chunk.map(async (e) => {
-              const result = await parseCatalogEntry(e, openai);
-              if (result) {
-                await prisma.$executeRaw`
-                    UPDATE "ProviderSkuCatalog"
-                    SET "parsedJson" = ${JSON.stringify(result)}::jsonb
-                    WHERE id = ${e.id}
-                  `;
-                parsed += 1;
-              }
-            }),
-          );
-        }
-        logger.info({ count: rows.length, parsed }, 'parse-all batch complete');
+        logger.info({ parsed }, 'parse-all complete');
+      } catch (err) {
+        logger.error({ err }, 'parse-all failed');
+      } finally {
+        await prisma.$executeRaw`SELECT pg_advisory_unlock(${LOCK_ID}::bigint)`;
       }
-    } finally {
-      await prisma.$executeRaw`SELECT pg_advisory_unlock(${LOCK_ID}::bigint)`;
-    }
+    })();
 
-    return reply.send({ ok: true, parsed });
+    return reply.send({
+      ok: true,
+      started: true,
+      message: 'Parsing started in background — check server logs for progress',
+    });
   });
 
   /**
