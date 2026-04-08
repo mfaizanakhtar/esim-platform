@@ -1397,7 +1397,7 @@ export default function adminRoutes(
                   relaxOptions?.requireValidity !== false
                     ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. EXCEPTION: if skuType is DAYPASS, skip this check (DAYPASS have no fixed validity).'
                     : 'Validity is NOT required to match — allow validity mismatches.';
-                const systemPrompt = `You are an eSIM product matcher. ${requireDataNote} ${requireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Confidence reflects structural match quality. Return only JSON.`;
+                const systemPrompt = `You are an eSIM product matcher. ${requireDataNote} ${requireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Confidence reflects structural match quality. For daypass match for exact DATA and exact VALIDITY and exact REGION ( not general region like global or regional ) and return 100% accuracy in that case. Return only JSON.`;
                 const userPrompt = `Match each Shopify SKU to its best catalog entry:
 ${JSON.stringify(skuInputs)}
 
