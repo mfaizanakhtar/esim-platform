@@ -19,6 +19,7 @@ const adminMocks = vi.hoisted(() => {
     mockFiroamGetPackages: vi.fn(),
     mockGetAllVariants: vi.fn(),
     mockGetVariantGidsBySkus: vi.fn(),
+    mockGetVariantInfoByGids: vi.fn(),
     mockDeleteProduct: vi.fn(),
     mockDeleteVariants: vi.fn(),
     mockOpenAiCreate: vi.fn(),
@@ -68,6 +69,12 @@ vi.mock('~/db/prisma', () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    shopifyVariant: {
+      count: vi.fn(),
+      findMany: vi.fn(),
+      upsert: vi.fn(),
+      deleteMany: vi.fn(),
+    },
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
   },
@@ -109,6 +116,7 @@ vi.mock('~/shopify/client', () => ({
   getShopifyClient: vi.fn(() => ({
     getAllVariants: adminMocks.mockGetAllVariants,
     getVariantGidsBySkus: adminMocks.mockGetVariantGidsBySkus,
+    getVariantInfoByGids: adminMocks.mockGetVariantInfoByGids,
     deleteProduct: adminMocks.mockDeleteProduct,
     deleteVariants: adminMocks.mockDeleteVariants,
   })),
@@ -2035,36 +2043,57 @@ describe('Admin Routes', () => {
   // ── GET /shopify-skus ────────────────────────────────────────────────────
 
   describe('GET /shopify-skus', () => {
-    it('returns all Shopify variants', async () => {
-      adminMocks.mockGetAllVariants.mockResolvedValue([
+    beforeEach(() => {
+      vi.mocked(prisma.shopifyVariant.count).mockResolvedValue(0);
+      vi.mocked(prisma.shopifyVariant.findMany).mockResolvedValue([]);
+    });
+
+    it('returns variants from DB', async () => {
+      vi.mocked(prisma.shopifyVariant.count).mockResolvedValue(2);
+      vi.mocked(prisma.shopifyVariant.findMany).mockResolvedValue([
         {
-          sku: 'ESIM-US-1GB',
           variantId: 'gid://shopify/ProductVariant/1',
+          sku: 'ESIM-US-1GB',
           productTitle: 'US eSIM',
           variantTitle: '1GB',
+          price: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
         {
-          sku: 'ESIM-JP-5GB',
           variantId: 'gid://shopify/ProductVariant/2',
+          sku: 'ESIM-JP-5GB',
           productTitle: 'Japan eSIM',
           variantTitle: '5GB',
+          price: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         },
-      ]);
+      ] as never);
 
       const res = await app.inject({ method: 'GET', url: '/shopify-skus', headers: AUTH });
 
       expect(res.statusCode).toBe(200);
       expect(res.json().skus).toHaveLength(2);
+      expect(res.json().total).toBe(2);
     });
 
     it('filters out already-mapped SKUs when unmappedOnly=true', async () => {
-      adminMocks.mockGetAllVariants.mockResolvedValue([
-        { sku: 'ESIM-US-1GB', variantId: 'gid://1', productTitle: 'US', variantTitle: '1GB' },
-        { sku: 'ESIM-JP-5GB', variantId: 'gid://2', productTitle: 'JP', variantTitle: '5GB' },
-      ]);
       vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
         makeMapping({ shopifySku: 'ESIM-US-1GB' }),
       ]);
+      vi.mocked(prisma.shopifyVariant.count).mockResolvedValue(1);
+      vi.mocked(prisma.shopifyVariant.findMany).mockResolvedValue([
+        {
+          variantId: 'gid://shopify/ProductVariant/2',
+          sku: 'ESIM-JP-5GB',
+          productTitle: 'JP',
+          variantTitle: '5GB',
+          price: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ] as never);
 
       const res = await app.inject({
         method: 'GET',
@@ -2077,12 +2106,12 @@ describe('Admin Routes', () => {
       expect(res.json().skus[0].sku).toBe('ESIM-JP-5GB');
     });
 
-    it('returns 502 when Shopify is unavailable', async () => {
-      adminMocks.mockGetAllVariants.mockRejectedValue(new Error('Shopify down'));
-
+    it('returns empty list when no variants have been synced yet', async () => {
       const res = await app.inject({ method: 'GET', url: '/shopify-skus', headers: AUTH });
 
-      expect(res.statusCode).toBe(502);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().skus).toHaveLength(0);
+      expect(res.json().total).toBe(0);
     });
   });
 
@@ -3655,6 +3684,10 @@ describe('Admin Routes', () => {
   // POST /shopify-skus/bulk-delete
   // ---------------------------------------------------------------------------
   describe('POST /shopify-skus/bulk-delete', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.shopifyVariant.deleteMany).mockResolvedValue({ count: 0 });
+    });
+
     it('returns 400 when skus array is missing', async () => {
       const res = await app.inject({
         method: 'POST',

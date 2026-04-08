@@ -115,6 +115,18 @@ model ProviderSkuCatalog {
   @@index([isActive])
 }
 
+model ShopifyVariant {
+  variantId    String   @unique           // Shopify GID: gid://shopify/ProductVariant/123
+  sku          String
+  productTitle String?
+  variantTitle String?
+  price        Decimal? @db.Decimal(28, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt        // updated on every sync
+
+  @@index([sku])
+}
+
 model AiMapJob {
   id               String    @id @default(cuid())
   status           String    @default("running") // running | done | error | interrupted
