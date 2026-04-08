@@ -8,12 +8,13 @@ export interface ParsedShopifySku {
   regionCode: string;
   dataMb: number;
   validityDays: number;
+  skuType: string; // e.g. 'FIXED', 'DAYPASS' — defaults to 'FIXED' for legacy SKUs without suffix
 }
 
 // Format: {REGION}-{DATA}-{VALIDITY}-{TYPE}
-const SKU_REGEX = /^([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D-[A-Z]+$/;
+const SKU_REGEX = /^([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D-([A-Z]+)$/;
 // Legacy format: ESIM-{REGION}-{DATA}-{VALIDITY}
-const SKU_REGEX_LEGACY = /^ESIM-([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D(?:-[A-Z]+)?$/;
+const SKU_REGEX_LEGACY = /^ESIM-([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D(?:-([A-Z]+))?$/;
 
 export function parseShopifySku(sku: string): ParsedShopifySku | null {
   const m = SKU_REGEX.exec(sku) ?? SKU_REGEX_LEGACY.exec(sku);
@@ -22,5 +23,6 @@ export function parseShopifySku(sku: string): ParsedShopifySku | null {
     regionCode: m[1],
     dataMb: m[3] === 'GB' ? parseInt(m[2], 10) * 1024 : parseInt(m[2], 10),
     validityDays: parseInt(m[4], 10),
+    skuType: m[5] ?? 'FIXED',
   };
 }

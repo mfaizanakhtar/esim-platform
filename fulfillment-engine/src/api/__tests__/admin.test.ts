@@ -3834,7 +3834,12 @@ describe('Admin Routes', () => {
         drafts: Array<{ shopifySku: string; confidence: number }>;
         parsed: { regionCode: string; dataMb: number; validityDays: number } | null;
       };
-      expect(body.parsed).toEqual({ regionCode: 'EU', dataMb: 1024, validityDays: 7 });
+      expect(body.parsed).toEqual({
+        regionCode: 'EU',
+        dataMb: 1024,
+        validityDays: 7,
+        skuType: 'FIXED',
+      });
       expect(body.drafts).toHaveLength(1);
       expect(body.drafts[0].shopifySku).toBe('ESIM-EU-1GB-7D');
       expect(body.drafts[0].confidence).toBe(1.0);
@@ -4100,6 +4105,124 @@ describe('Admin Routes', () => {
       const body = JSON.parse(res.body) as { drafts: Array<{ confidence: number }> };
       expect(body.drafts).toHaveLength(1);
       expect(body.drafts[0].confidence).toBe(0.6); // region only — data and validity both differ
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // POST /sku-mappings/structured-match — DAYPASS confidence
+  // ---------------------------------------------------------------------------
+
+  describe('POST /sku-mappings/structured-match — DAYPASS SKU', () => {
+    it('returns 1.0 confidence for DAYPASS when region+data match (validity ignored)', async () => {
+      // Catalog entry has validityDays=1 (daily), SKU has validityDays=7 — should NOT penalise
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-daypass-1',
+          provider: 'firoam',
+          productName: 'SA 2GB Daily',
+          region: 'SA',
+          dataAmount: '2GB',
+          validity: '1 day',
+          netPrice: '1.50',
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 1 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'SA-2GB-7D-DAYPASS' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as {
+        drafts: Array<{ confidence: number; reason: string }>;
+      };
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].confidence).toBe(1.0);
+      expect(body.drafts[0].reason).toContain('region');
+      expect(body.drafts[0].reason).toContain('data');
+    });
+
+    it('returns 0.6 confidence for DAYPASS when data does not match', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-daypass-2',
+          provider: 'firoam',
+          productName: 'SA 5GB Daily',
+          region: 'SA',
+          dataAmount: '5GB',
+          validity: '1 day',
+          netPrice: '2.50',
+          parsedJson: { regionCodes: ['SA'], dataMb: 5120, validityDays: 1 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'SA-2GB-7D-DAYPASS', relaxOptions: { relaxData: true } },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { drafts: Array<{ confidence: number }> };
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].confidence).toBe(0.6); // region only
+    });
+
+    it('returns empty drafts for DAYPASS when data mismatch and relaxData=false', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-daypass-3',
+          provider: 'firoam',
+          productName: 'SA 5GB Daily',
+          region: 'SA',
+          dataAmount: '5GB',
+          validity: '1 day',
+          netPrice: '2.50',
+          parsedJson: { regionCodes: ['SA'], dataMb: 5120, validityDays: 1 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'SA-2GB-7D-DAYPASS' }, // relaxData defaults to false
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { drafts: unknown[] };
+      expect(body.drafts).toHaveLength(0);
+    });
+
+    it('FIXED SKU with validity mismatch still returns 0.8 (unchanged behaviour)', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-fixed-1',
+          provider: 'firoam',
+          productName: 'EU 1GB 30D Plan',
+          region: 'EU',
+          dataAmount: '1GB',
+          validity: '30 days',
+          netPrice: '4.00',
+          parsedJson: { regionCodes: ['EU'], dataMb: 1024, validityDays: 30 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'EU-1GB-7D-FIXED', relaxOptions: { relaxValidity: true } },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { drafts: Array<{ confidence: number }> };
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].confidence).toBe(0.8); // region+data, validity differs
     });
   });
 });
