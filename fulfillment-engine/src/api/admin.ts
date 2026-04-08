@@ -2244,7 +2244,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       ];
     }
 
-    const [items, total] = await Promise.all([
+    const [items, total, parsedCount] = await Promise.all([
       providerSkuCatalog.findMany({
         where,
         orderBy: { productName: 'asc' },
@@ -2252,9 +2252,10 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         take: limit,
       }),
       providerSkuCatalog.count({ where }),
+      providerSkuCatalog.count({ where: { ...where, parsedJson: { not: Prisma.JsonNull } } }),
     ]);
 
-    return reply.send({ total, limit, offset, items });
+    return reply.send({ total, parsedCount, limit, offset, items });
   });
 
   /**

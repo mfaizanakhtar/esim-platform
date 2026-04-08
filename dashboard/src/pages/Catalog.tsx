@@ -148,7 +148,16 @@ function CatalogTab({ provider }: { provider: string }) {
         <EmbedBackfillButton provider={provider} />
         <ParseAllButton provider={provider} />
         {data && (
-          <span className="text-sm text-muted-foreground">{data.total} items</span>
+          <span className="text-sm text-muted-foreground">
+            {data.total} items
+            {data.parsedCount !== undefined && (
+              <> ·{' '}
+                <span className={data.parsedCount === data.total ? 'text-green-600' : 'text-yellow-600'}>
+                  {data.parsedCount}/{data.total} parsed
+                </span>
+              </>
+            )}
+          </span>
         )}
       </div>
 
@@ -167,13 +176,14 @@ function CatalogTab({ provider }: { provider: string }) {
               <th className="text-left px-4 py-3 font-medium">Validity</th>
               <th className="text-left px-4 py-3 font-medium">Price</th>
               <th className="text-left px-4 py-3 font-medium">Region</th>
+              <th className="text-left px-4 py-3 font-medium">Parsed</th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {isFetching &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 6 }).map((__, j) => (
+                  {Array.from({ length: 7 }).map((__, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 bg-muted animate-pulse rounded" />
                     </td>
@@ -191,12 +201,26 @@ function CatalogTab({ provider }: { provider: string }) {
                   {item.netPrice ? `$${item.netPrice}` : '—'}
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{item.region ?? '—'}</td>
+                <td className="px-4 py-3">
+                  {item.parsedJson ? (
+                    <span
+                      className="inline-block px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium"
+                      title={`Region: ${item.parsedJson.regionCodes.join(', ')} · ${item.parsedJson.dataMb >= 1024 ? `${item.parsedJson.dataMb / 1024}GB` : `${item.parsedJson.dataMb}MB`} · ${item.parsedJson.validityDays}D`}
+                    >
+                      ✓ parsed
+                    </span>
+                  ) : (
+                    <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-400 rounded-full text-xs">
+                      —
+                    </span>
+                  )}
+                </td>
               </tr>
             ))}
 
             {!isFetching && data?.items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                   No catalog items. Click Sync to fetch from the provider.
                 </td>
               </tr>
