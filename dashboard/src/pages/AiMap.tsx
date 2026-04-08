@@ -657,7 +657,10 @@ export function AiMap() {
                 min={0}
                 max={100}
                 value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value))}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (!Number.isNaN(val)) setThreshold(Math.max(0, Math.min(100, val)));
+                }}
                 className="w-14 border rounded px-2 py-1 text-xs"
               />
               <span className="text-xs text-muted-foreground">%</span>
