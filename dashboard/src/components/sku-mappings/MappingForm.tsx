@@ -92,7 +92,7 @@ export function MappingForm({ initial, lockedSku, existingMappings, onSubmit, on
   const comboBlurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Selected item stored in state so it persists across search query changes
-  const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
+  const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(initial?.catalogEntry ?? null);
 
   // Track previous provider so we can clear catalog state on provider change
   const previousProviderRef = useRef(provider);
@@ -107,17 +107,6 @@ export function MappingForm({ initial, lockedSku, existingMappings, onSubmit, on
 
   // Server already filters by comboQuery — no client-side filter needed
   const filteredCatalog = catalogItems;
-
-  // Targeted fetch for the linked catalog item when editing — the item may not be in the first 200
-  const editCatalogId = providerCatalogId && !selectedItem ? providerCatalogId : undefined;
-  const { data: editItemData } = useCatalog(
-    editCatalogId && provider ? { id: editCatalogId, provider, limit: 1 } : { limit: 0 },
-  );
-  useEffect(() => {
-    if (editItemData?.items[0] && !selectedItem) {
-      setSelectedItem(editItemData.items[0]);
-    }
-  }, [editItemData, selectedItem]);
 
   useEffect(() => {
     reset(
@@ -141,7 +130,7 @@ export function MappingForm({ initial, lockedSku, existingMappings, onSubmit, on
           }
         : { packageType: 'fixed', isActive: true, priorityLocked: false, mappingLocked: false },
     );
-    setSelectedItem(null);
+    setSelectedItem(initial?.catalogEntry ?? null);
   }, [initial, reset]);
 
   // Clear catalog selection and derived fields whenever the provider changes
