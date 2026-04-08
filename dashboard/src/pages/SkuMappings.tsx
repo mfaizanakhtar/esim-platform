@@ -16,6 +16,7 @@ import { parseShopifySku } from '@/utils/parseShopifySku';
 import { Plus, Pencil, Trash2, Sparkles, Brain, ChevronUp, ChevronDown } from 'lucide-react';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { useQueryClient } from '@tanstack/react-query';
+import { apiClient } from '@/lib/api';
 
 type TabFilter = 'all' | 'mapped' | 'unmapped';
 
@@ -45,6 +46,9 @@ export function SkuMappings() {
   const [editing, setEditing] = useState<SkuMapping | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [modalSku, setModalSku] = useState<ShopifySku | null>(null);
+  const [shopifyDeleteConfirm, setShopifyDeleteConfirm] = useState<ShopifySku | null>(null);
+  const [shopifyDeleteLoading, setShopifyDeleteLoading] = useState(false);
+  const [shopifyDeleteError, setShopifyDeleteError] = useState<string | null>(null);
   const [smartPricingResult, setSmartPricingResult] = useState<{
     updated: number;
     skipped: number;
@@ -185,6 +189,21 @@ export function SkuMappings() {
 
   function handleDelete(id: string) {
     deleteMutation.mutate(id, { onSuccess: () => setDeleteConfirm(null) });
+  }
+
+  async function handleShopifyDelete() {
+    if (!shopifyDeleteConfirm) return;
+    setShopifyDeleteLoading(true);
+    setShopifyDeleteError(null);
+    try {
+      await apiClient.post('/shopify-skus/bulk-delete', { skus: [shopifyDeleteConfirm.sku] });
+      void queryClient.invalidateQueries({ queryKey: ['shopify-skus'] });
+      setShopifyDeleteConfirm(null);
+    } catch (err) {
+      setShopifyDeleteError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setShopifyDeleteLoading(false);
+    }
   }
 
   function handleSmartPricing() {
@@ -454,6 +473,16 @@ export function SkuMappings() {
                     >
                       Map
                     </button>
+                    <button
+                      onClick={() => {
+                        setShopifyDeleteError(null);
+                        setShopifyDeleteConfirm(row.shopifySku);
+                      }}
+                      className="p-1 rounded hover:bg-red-50 text-red-500 transition-colors"
+                      title="Delete from Shopify"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -595,6 +624,43 @@ export function SkuMappings() {
                 className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleteMutation.isPending ? 'Deactivating...' : 'Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete from Shopify confirm dialog */}
+      {shopifyDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !shopifyDeleteLoading && setShopifyDeleteConfirm(null)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl p-6 w-full max-w-sm space-y-4">
+            <h2 className="text-lg font-semibold">Delete from Shopify?</h2>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete{' '}
+              <span className="font-mono font-medium">{shopifyDeleteConfirm.sku}</span> from your
+              Shopify store. This cannot be undone.
+            </p>
+            {shopifyDeleteError && (
+              <p className="text-sm text-red-600">{shopifyDeleteError}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShopifyDeleteConfirm(null)}
+                disabled={shopifyDeleteLoading}
+                className="px-4 py-2 text-sm border rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleShopifyDelete()}
+                disabled={shopifyDeleteLoading}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {shopifyDeleteLoading ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>
