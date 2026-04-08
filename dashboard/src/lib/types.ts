@@ -79,6 +79,7 @@ export interface SkuMapping {
   mappingLocked: boolean;
   createdAt: string;
   updatedAt: string;
+  catalogEntry: CatalogItem | null;
 }
 
 export interface ShopifySku {

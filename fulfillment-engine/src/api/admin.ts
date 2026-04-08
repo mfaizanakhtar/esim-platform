@@ -295,6 +295,7 @@ export default function adminRoutes(
     const [mappings, total] = await Promise.all([
       prisma.providerSkuMapping.findMany({
         where,
+        include: { catalogEntry: true },
         orderBy: [{ shopifySku: 'asc' }, { priority: 'asc' }],
         take: limitCapped,
         skip: offset,
