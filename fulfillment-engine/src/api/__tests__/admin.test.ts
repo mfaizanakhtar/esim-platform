@@ -2665,6 +2665,48 @@ describe('Admin Routes', () => {
       // requireValidity=false → validity mismatch is allowed
       expect(res.json().drafts).toHaveLength(1);
     });
+
+    it('drops region-mismatched draft when regionCodes does not include SKU region', async () => {
+      // SA-2GB-7D-FIXED parses to regionCode=SA; catalog has regionCodes=['EU'] → mismatch
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({
+          id: 'cat-eu-2gb-7d',
+          productName: 'EU 2GB 7D',
+          region: 'EU',
+          dataAmount: '2GB',
+          parsedJson: { regionCodes: ['EU'], dataMb: 2048, validityDays: 7 },
+        }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'SA-2GB-7D-FIXED',
+                    catalogId: 'cat-eu-2gb-7d',
+                    confidence: 0.8,
+                    reason: 'GPT region mismatch',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { shopifySkus: ['SA-2GB-7D-FIXED'], unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // Region mismatch (SA SKU vs EU catalog) → filtered out
+      expect(res.json().drafts).toHaveLength(0);
+    });
   });
 
   // ── POST /sku-mappings/ai-map — multi-provider mode ───────────────────────
