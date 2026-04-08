@@ -2004,7 +2004,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       `;
     }
 
-    const drafts: AiMappingDraftInternal[] = [];
+    const candidates: { draft: AiMappingDraftInternal; specificity: number }[] = [];
     for (const row of rows) {
       const p = row.parsedJson;
       if (!p) continue;
@@ -2032,22 +2032,44 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         if (validityMatch) reasons.push('validity');
       }
 
-      drafts.push({
-        shopifySku: sku,
-        catalogId: row.id,
-        productName: row.productName,
-        region: row.region,
-        dataAmount: row.dataAmount,
-        validity: row.validity,
-        netPrice: row.netPrice,
-        provider: row.provider,
-        confidence,
-        reason: `Structured match on: ${reasons.join(', ')}`,
+      candidates.push({
+        draft: {
+          shopifySku: sku,
+          catalogId: row.id,
+          productName: row.productName,
+          region: row.region,
+          dataAmount: row.dataAmount,
+          validity: row.validity,
+          netPrice: row.netPrice,
+          provider: row.provider,
+          confidence,
+          reason: `Structured match on: ${reasons.join(', ')}`,
+        },
+        // Fewer region codes = more targeted product (SA-only beats Middle East beats Global)
+        specificity: p.regionCodes.length,
       });
     }
 
-    // Sort by confidence descending
-    drafts.sort((a, b) => b.confidence - a.confidence);
+    // Best-match-per-provider: keep the most specific catalog entry (smallest regionCodes array).
+    // Use confidence as tiebreaker when specificity is equal.
+    const bestByProvider = new Map<
+      string,
+      { draft: AiMappingDraftInternal; specificity: number }
+    >();
+    for (const { draft, specificity } of candidates) {
+      const existing = bestByProvider.get(draft.provider);
+      if (
+        !existing ||
+        specificity < existing.specificity ||
+        (specificity === existing.specificity && draft.confidence > existing.draft.confidence)
+      ) {
+        bestByProvider.set(draft.provider, { draft, specificity });
+      }
+    }
+
+    const drafts = [...bestByProvider.values()]
+      .map(({ draft }) => draft)
+      .sort((a, b) => b.confidence - a.confidence);
     return drafts;
   }
 
