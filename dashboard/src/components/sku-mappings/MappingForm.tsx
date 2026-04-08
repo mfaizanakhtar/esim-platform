@@ -108,13 +108,16 @@ export function MappingForm({ initial, lockedSku, existingMappings, onSubmit, on
   // Server already filters by comboQuery — no client-side filter needed
   const filteredCatalog = catalogItems;
 
-  // Hydrate selectedItem when editing with an existing providerCatalogId
+  // Targeted fetch for the linked catalog item when editing — the item may not be in the first 200
+  const editCatalogId = providerCatalogId && !selectedItem ? providerCatalogId : undefined;
+  const { data: editItemData } = useCatalog(
+    editCatalogId && provider ? { id: editCatalogId, provider, limit: 1 } : { limit: 0 },
+  );
   useEffect(() => {
-    if (providerCatalogId && !selectedItem && catalogItems.length > 0) {
-      const found = catalogItems.find((c) => c.id === providerCatalogId);
-      if (found) setSelectedItem(found);
+    if (editItemData?.items[0] && !selectedItem) {
+      setSelectedItem(editItemData.items[0]);
     }
-  }, [providerCatalogId, catalogItems, selectedItem]);
+  }, [editItemData, selectedItem]);
 
   useEffect(() => {
     reset(

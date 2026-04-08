@@ -2373,6 +2373,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       provider?: string;
       isActive?: string;
       search?: string;
+      id?: string;
       limit?: string;
       offset?: string;
     };
@@ -2381,6 +2382,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     const offset = parseInt(query.offset || '0', 10);
 
     const where: Record<string, unknown> = {};
+    if (query.id) where.id = query.id;
     if (query.provider) where.provider = query.provider;
     if (query.isActive !== undefined) where.isActive = query.isActive === 'true';
     if (query.search) {

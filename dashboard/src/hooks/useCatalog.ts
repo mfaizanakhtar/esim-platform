@@ -6,6 +6,7 @@ interface UseCatalogParams {
   provider?: string;
   search?: string;
   isActive?: boolean;
+  id?: string;
   limit?: number;
   offset?: number;
 }
@@ -26,9 +27,10 @@ interface SyncResult {
 }
 
 export function useCatalog(params: UseCatalogParams = {}) {
-  const { provider, search, isActive, limit = 100, offset = 0 } = params;
+  const { provider, search, isActive, id, limit = 100, offset = 0 } = params;
 
   const searchParams = new URLSearchParams();
+  if (id) searchParams.set('id', id);
   if (provider) searchParams.set('provider', provider);
   if (search) searchParams.set('search', search);
   if (isActive !== undefined) searchParams.set('isActive', String(isActive));
@@ -36,7 +38,7 @@ export function useCatalog(params: UseCatalogParams = {}) {
   searchParams.set('offset', String(offset));
 
   return useQuery({
-    queryKey: ['catalog', { provider, search, isActive, limit, offset }],
+    queryKey: ['catalog', { provider, search, isActive, id, limit, offset }],
     queryFn: () => apiClient.get<CatalogPage<CatalogItem>>(`/provider-catalog?${searchParams.toString()}`),
   });
 }
