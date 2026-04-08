@@ -4225,4 +4225,133 @@ describe('Admin Routes', () => {
       expect(body.drafts[0].confidence).toBe(0.8); // region+data, validity differs
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // POST /sku-mappings/structured-match — best-match-per-provider dedup
+  // ---------------------------------------------------------------------------
+
+  describe('POST /sku-mappings/structured-match — best-match-per-provider dedup', () => {
+    it('returns only the most specific match when same provider has multiple regionCode hits', async () => {
+      // SA-only package (specific) + Middle East package (regional, also contains SA)
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-sa-specific',
+          provider: 'firoam',
+          productName: 'Saudi Arabia 2GB 7D',
+          region: 'SA',
+          dataAmount: '2GB',
+          validity: '7 days',
+          netPrice: '3.00',
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
+        },
+        {
+          id: 'cat-me-regional',
+          provider: 'firoam',
+          productName: 'Middle East 2GB 7D',
+          region: 'Middle East',
+          dataAmount: '2GB',
+          validity: '7 days',
+          netPrice: '4.00',
+          parsedJson: { regionCodes: ['SA', 'AE', 'QA', 'KW'], dataMb: 2048, validityDays: 7 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'SA-2GB-7D-FIXED' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as {
+        drafts: Array<{ catalogId: string; provider: string; confidence: number }>;
+      };
+      // Only the most specific (SA-only, regionCodes.length=1) should survive
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].catalogId).toBe('cat-sa-specific');
+      expect(body.drafts[0].confidence).toBe(1.0);
+    });
+
+    it('returns one result per provider when both providers have a match', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-firoam',
+          provider: 'firoam',
+          productName: 'SA 2GB 7D FiRoam',
+          region: 'SA',
+          dataAmount: '2GB',
+          validity: '7 days',
+          netPrice: '3.00',
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
+        },
+        {
+          id: 'cat-tgt',
+          provider: 'tgt',
+          productName: 'SA 2GB 7D TGT',
+          region: 'SA',
+          dataAmount: '2GB',
+          validity: '7 days',
+          netPrice: '3.50',
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'SA-2GB-7D-FIXED' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as { drafts: Array<{ provider: string }> };
+      expect(body.drafts).toHaveLength(2);
+      const providers = body.drafts.map((d) => d.provider).sort();
+      expect(providers).toEqual(['firoam', 'tgt']);
+    });
+
+    it('uses confidence as tiebreaker when two same-provider entries have equal specificity', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-high',
+          provider: 'firoam',
+          productName: 'SA 2GB 7D',
+          region: 'SA',
+          dataAmount: '2GB',
+          validity: '7 days',
+          netPrice: '3.00',
+          // Exact match → confidence 1.0, regionCodes.length=1
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
+        },
+        {
+          id: 'cat-low',
+          provider: 'firoam',
+          productName: 'SA 2GB 30D',
+          region: 'SA',
+          dataAmount: '2GB',
+          validity: '30 days',
+          netPrice: '5.00',
+          // Validity differs → confidence 0.8 with relaxValidity, regionCodes.length=1
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 30 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'SA-2GB-7D-FIXED', relaxOptions: { relaxValidity: true } },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body) as {
+        drafts: Array<{ catalogId: string; confidence: number }>;
+      };
+      // Same specificity (both regionCodes.length=1) → higher confidence wins
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].catalogId).toBe('cat-high');
+      expect(body.drafts[0].confidence).toBe(1.0);
+    });
+  });
 });
