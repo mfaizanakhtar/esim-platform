@@ -8,6 +8,7 @@ describe('parseShopifySku', () => {
       regionCode: 'SA',
       dataMb: 2048,
       validityDays: 7,
+      skuType: 'FIXED',
     });
   });
 
@@ -16,6 +17,7 @@ describe('parseShopifySku', () => {
       regionCode: 'EU',
       dataMb: 500,
       validityDays: 30,
+      skuType: 'DAYPASS',
     });
   });
 
@@ -24,23 +26,26 @@ describe('parseShopifySku', () => {
       regionCode: 'APAC',
       dataMb: 10240,
       validityDays: 30,
+      skuType: 'FIXED',
     });
   });
 
   // Legacy format: ESIM-{REGION}-{DATA}-{VALIDITY}
-  it('parses legacy ESIM-prefix GB SKU', () => {
+  it('parses legacy ESIM-prefix GB SKU — defaults skuType to FIXED', () => {
     expect(parseShopifySku('ESIM-EU-1GB-7D')).toEqual({
       regionCode: 'EU',
       dataMb: 1024,
       validityDays: 7,
+      skuType: 'FIXED',
     });
   });
 
-  it('parses legacy ESIM-prefix MB SKU', () => {
+  it('parses legacy ESIM-prefix MB SKU — defaults skuType to FIXED', () => {
     expect(parseShopifySku('ESIM-US-500MB-30D')).toEqual({
       regionCode: 'US',
       dataMb: 500,
       validityDays: 30,
+      skuType: 'FIXED',
     });
   });
 
@@ -49,6 +54,7 @@ describe('parseShopifySku', () => {
       regionCode: 'EU',
       dataMb: 1024,
       validityDays: 3,
+      skuType: 'FIXED',
     });
   });
 
@@ -57,6 +63,7 @@ describe('parseShopifySku', () => {
       regionCode: 'US',
       dataMb: 500,
       validityDays: 1,
+      skuType: 'DAYPASS',
     });
   });
 

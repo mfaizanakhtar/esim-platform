@@ -1978,7 +1978,8 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     const parsed = parseShopifySku(sku);
     if (!parsed) return [];
 
-    const { regionCode, dataMb, validityDays } = parsed;
+    const { regionCode, dataMb, validityDays, skuType } = parsed;
+    const isDaypass = skuType === 'DAYPASS';
 
     // JSONB containment query: regionCodes array must contain this regionCode
     let rows: ParsedCatalogRow[];
@@ -2009,19 +2010,27 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       if (!p) continue;
 
       const dataMatch = p.dataMb === dataMb;
-      const validityMatch = p.validityDays === validityDays;
 
-      // Apply relaxation: if not relaxed, field must match
-      if (!relaxOptions.relaxData && !dataMatch) continue;
-      if (!relaxOptions.relaxValidity && !validityMatch) continue;
-
-      // Deterministic confidence: 3/3 = 1.0, 2/3 = 0.8, region only = 0.6
-      const matchCount = 1 + (dataMatch ? 1 : 0) + (validityMatch ? 1 : 0);
-      const confidence = matchCount === 3 ? 1.0 : matchCount === 2 ? 0.8 : 0.6;
-
+      let confidence: number;
       const reasons: string[] = ['region'];
-      if (dataMatch) reasons.push('data');
-      if (validityMatch) reasons.push('validity');
+
+      if (isDaypass) {
+        // For daypass SKUs, validity is irrelevant — the provider handles daily renewal.
+        // Region + data match = full confidence.
+        if (!relaxOptions.relaxData && !dataMatch) continue;
+        confidence = dataMatch ? 1.0 : 0.6;
+        if (dataMatch) reasons.push('data');
+      } else {
+        const validityMatch = p.validityDays === validityDays;
+        // Apply relaxation: if not relaxed, field must match
+        if (!relaxOptions.relaxData && !dataMatch) continue;
+        if (!relaxOptions.relaxValidity && !validityMatch) continue;
+        // Deterministic confidence: 3/3 = 1.0, 2/3 = 0.8, region only = 0.6
+        const matchCount = 1 + (dataMatch ? 1 : 0) + (validityMatch ? 1 : 0);
+        confidence = matchCount === 3 ? 1.0 : matchCount === 2 ? 0.8 : 0.6;
+        if (dataMatch) reasons.push('data');
+        if (validityMatch) reasons.push('validity');
+      }
 
       drafts.push({
         shopifySku: sku,
