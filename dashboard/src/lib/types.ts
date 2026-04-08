@@ -145,6 +145,7 @@ export interface SkuMappingsPage<T> extends OffsetPage {
 }
 
 export interface CatalogPage<T> extends OffsetPage {
+  parsedCount: number;
   items: T[];
 }
 
