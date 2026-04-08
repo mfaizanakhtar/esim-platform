@@ -7,7 +7,7 @@ import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
 import { RefreshCw, Cpu } from 'lucide-react';
 
-const PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 25;
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -109,11 +109,26 @@ function CatalogTab({ provider }: { provider: string }) {
   const isInitialMount = useRef(true);
 
   const page = Number(searchParams.get('page') ?? 0);
+  const pageSizeParam = parseInt(searchParams.get('pageSize') ?? String(DEFAULT_PAGE_SIZE), 10);
+  const pageSize = [25, 50, 100, 500].includes(pageSizeParam) ? pageSizeParam : DEFAULT_PAGE_SIZE;
+
   const setPage = useCallback(
     (p: number) => {
       setSearchParams((prev) => {
         if (p === 0) prev.delete('page');
         else prev.set('page', String(p));
+        return prev;
+      });
+    },
+    [setSearchParams],
+  );
+
+  const setPageSize = useCallback(
+    (s: number) => {
+      setSearchParams((prev) => {
+        prev.delete('page');
+        if (s === DEFAULT_PAGE_SIZE) prev.delete('pageSize');
+        else prev.set('pageSize', String(s));
         return prev;
       });
     },
@@ -131,8 +146,8 @@ function CatalogTab({ provider }: { provider: string }) {
   const { data, isFetching } = useCatalog({
     provider,
     search: debouncedSearch || undefined,
-    limit: PAGE_SIZE,
-    offset: page * PAGE_SIZE,
+    limit: pageSize,
+    offset: page * pageSize,
   });
 
   return (
@@ -232,8 +247,9 @@ function CatalogTab({ provider }: { provider: string }) {
             <Pagination
               total={data.total}
               page={page}
-              pageSize={PAGE_SIZE}
+              pageSize={pageSize}
               onChange={setPage}
+              onPageSizeChange={setPageSize}
             />
           </div>
         )}

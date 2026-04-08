@@ -17,10 +17,11 @@ import { Plus, Pencil, Trash2, Sparkles, Brain, ChevronUp, ChevronDown, X } from
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
+import { Pagination } from '@/components/Pagination';
 
 type TabFilter = 'all' | 'mapped' | 'unmapped';
 
-const PAGE_SIZE = 25;
+const DEFAULT_PAGE_SIZE = 25;
 const EMPTY_MAPPINGS: SkuMapping[] = [];
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -78,6 +79,9 @@ export function SkuMappings() {
   const pageParam = parseInt(searchParams.get('page') ?? '1', 10);
   const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
 
+  const pageSizeParam = parseInt(searchParams.get('pageSize') ?? String(DEFAULT_PAGE_SIZE), 10);
+  const pageSize = [25, 50, 100, 500].includes(pageSizeParam) ? pageSizeParam : DEFAULT_PAGE_SIZE;
+
   useEffect(() => {
     setSearch(urlSearch);
   }, [urlSearch]);
@@ -122,9 +126,22 @@ export function SkuMappings() {
     [setSearchParams],
   );
 
+  const setPageSize = useCallback(
+    (s: number) => {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('page');
+        if (s === DEFAULT_PAGE_SIZE) next.delete('pageSize');
+        else next.set('pageSize', String(s));
+        return next;
+      });
+    },
+    [setSearchParams],
+  );
+
   const { data: shopifySkusData, isFetching: skusFetching } = useShopifySkus({
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     search: debouncedSearch || undefined,
     status: tab,
     provider: provider || undefined,
@@ -135,7 +152,7 @@ export function SkuMappings() {
 
   const isFetching = skusFetching || mappingsFetching;
   const total = shopifySkusData?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const clampedPage = Math.min(page, totalPages);
 
   // Build mapping lookup for chip display (all mappings from DB)
@@ -195,10 +212,10 @@ export function SkuMappings() {
     deleteMutation.mutate(id, { onSuccess: () => setDeleteConfirm(null) });
   }
 
-  // Clear selection when page or filters change; reconcile after refetch
+  // Clear selection when page, page size, or filters change; reconcile after refetch
   useEffect(() => {
     setSelectedVariantIds(new Set());
-  }, [page, tab, provider, debouncedSearch]);
+  }, [page, pageSize, tab, provider, debouncedSearch]);
 
   useEffect(() => {
     const currentIds = new Set(skuRows.map((r) => r.shopifySku.variantId));
@@ -632,56 +649,13 @@ export function SkuMappings() {
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Showing {(clampedPage - 1) * PAGE_SIZE + 1}–{Math.min(clampedPage * PAGE_SIZE, total)}{' '}
-            of {total}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(clampedPage - 1)}
-              disabled={clampedPage <= 1}
-              className="px-3 py-1.5 border rounded-md hover:bg-muted transition-colors disabled:opacity-40"
-            >
-              ← Prev
-            </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1)
-              .filter((p) => p === 1 || p === totalPages || Math.abs(p - clampedPage) <= 2)
-              .reduce<(number | '…')[]>((acc, p, idx, arr) => {
-                if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…');
-                acc.push(p);
-                return acc;
-              }, [])
-              .map((p, i) =>
-                p === '…' ? (
-                  <span key={`ellipsis-${i}`} className="px-2">
-                    …
-                  </span>
-                ) : (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p as number)}
-                    className={`px-3 py-1.5 border rounded-md transition-colors ${
-                      p === clampedPage
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'hover:bg-muted'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ),
-              )}
-            <button
-              onClick={() => setPage(clampedPage + 1)}
-              disabled={clampedPage >= totalPages}
-              className="px-3 py-1.5 border rounded-md hover:bg-muted transition-colors disabled:opacity-40"
-            >
-              Next →
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        total={total}
+        page={clampedPage - 1}
+        pageSize={pageSize}
+        onChange={(p) => setPage(p + 1)}
+        onPageSizeChange={setPageSize}
+      />
 
       {/* Per-SKU mapping modal */}
       {modalSku && (
