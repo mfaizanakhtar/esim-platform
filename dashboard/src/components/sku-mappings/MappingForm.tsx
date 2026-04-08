@@ -27,6 +27,7 @@ type FormValues = z.infer<typeof schema>;
 interface MappingFormProps {
   initial?: SkuMapping;
   lockedSku?: string;
+  existingMappings?: SkuMapping[];
   onSubmit: (values: FormValues & { providerConfig?: Record<string, unknown> }) => void;
   onCancel: () => void;
   isPending: boolean;
@@ -44,7 +45,7 @@ function catalogLabel(item: CatalogItem): string {
   return base;
 }
 
-export function MappingForm({ initial, lockedSku, onSubmit, onCancel, isPending }: MappingFormProps) {
+export function MappingForm({ initial, lockedSku, existingMappings, onSubmit, onCancel, isPending }: MappingFormProps) {
   const {
     register,
     handleSubmit,
@@ -219,8 +220,36 @@ export function MappingForm({ initial, lockedSku, onSubmit, onCancel, isPending 
       : '';
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
-      {/* Hidden derived fields — values set automatically on catalog selection */}
+    <>
+      {existingMappings && existingMappings.length > 0 && (
+        <div className="rounded-md border bg-muted/40 px-4 py-3 space-y-1 mb-4">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Currently mapped
+          </p>
+          {existingMappings.map((m) => (
+            <div key={m.id} className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm">
+              <span className="font-medium">{providerLabel(m.provider)}</span>
+              {m.name && (
+                <>
+                  <span className="text-muted-foreground">—</span>
+                  <span className="truncate max-w-[16rem]">{m.name}</span>
+                </>
+              )}
+              {m.region && (
+                <span className="text-muted-foreground text-xs">· {m.region}</span>
+              )}
+              {m.dataAmount && (
+                <span className="text-muted-foreground text-xs">· {m.dataAmount}</span>
+              )}
+              {m.validity && (
+                <span className="text-muted-foreground text-xs">· {m.validity}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4">
+        {/* Hidden derived fields — values set automatically on catalog selection */}
       <input type="hidden" {...register('name')} />
       <input type="hidden" {...register('region')} />
       <input type="hidden" {...register('dataAmount')} />
@@ -455,6 +484,7 @@ export function MappingForm({ initial, lockedSku, onSubmit, onCancel, isPending 
           {isPending ? 'Saving...' : initial ? 'Update' : 'Create'}
         </button>
       </div>
-    </form>
+      </form>
+    </>
   );
 }

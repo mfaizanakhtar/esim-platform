@@ -92,7 +92,7 @@ export function SkuMappingModal({ sku, existingMappings, onClose, onSaved }: Sku
         {/* Tab content */}
         <div className="flex-1 overflow-y-auto p-5">
           {tab === 'manual' && (
-            <ManualTab sku={sku} onSaved={onSaved} onClose={onClose} />
+            <ManualTab sku={sku} existingMappings={existingMappings} onSaved={onSaved} onClose={onClose} />
           )}
           {tab === 'structured' && (
             <StructuredTab sku={sku} onSaved={onSaved} />
@@ -108,10 +108,12 @@ export function SkuMappingModal({ sku, existingMappings, onClose, onSaved }: Sku
 
 function ManualTab({
   sku,
+  existingMappings,
   onSaved,
   onClose,
 }: {
   sku: ShopifySku;
+  existingMappings: SkuMapping[];
   onSaved: () => void;
   onClose: () => void;
 }) {
@@ -124,6 +126,7 @@ function ManualTab({
   return (
     <MappingForm
       lockedSku={sku.sku}
+      existingMappings={existingMappings}
       onSubmit={handleSubmit}
       onCancel={onClose}
       isPending={createMutation.isPending}
@@ -317,15 +320,6 @@ function AiTab({ sku, onSaved }: { sku: ShopifySku; onSaved: () => void }) {
   const job = useAiMapJob();
   const bulkCreate = useBulkCreateMappings();
   const [drafts, setDrafts] = useState<DraftRow[]>([]);
-  const [started, setStarted] = useState(false);
-
-  useEffect(() => {
-    if (!started) {
-      setStarted(true);
-      void job.start({ shopifySkus: [sku.sku], unmappedOnly: false });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (job.status === 'done') {
@@ -354,6 +348,20 @@ function AiTab({ sku, onSaved }: { sku: ShopifySku; onSaved: () => void }) {
   }
 
   const selectedCount = drafts.filter((d) => d.selected).length;
+
+  if (job.status === 'idle') {
+    return (
+      <div className="flex flex-col items-center gap-3 py-10 text-muted-foreground">
+        <p className="text-sm">AI will search for the best catalog match for this SKU.</p>
+        <button
+          onClick={() => void job.start({ shopifySkus: [sku.sku], unmappedOnly: false })}
+          className="flex items-center gap-2 px-4 py-2 text-sm border rounded-md hover:bg-muted transition-colors"
+        >
+          Run AI Match
+        </button>
+      </div>
+    );
+  }
 
   if (job.status === 'starting' || job.status === 'running') {
     return (

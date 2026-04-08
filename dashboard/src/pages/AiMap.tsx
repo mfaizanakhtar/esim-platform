@@ -92,6 +92,7 @@ export function AiMap() {
   const [clearLoading, setClearLoading] = useState(false);
   const [clearResult, setClearResult] = useState<{ deleted: number } | null>(null);
   const [clearError, setClearError] = useState<string | null>(null);
+  const [threshold, setThreshold] = useState(80);
 
   // Unmatched SKUs section
   const [unmatchedRows, setUnmatchedRows] = useState<UnmatchedRow[]>([]);
@@ -287,7 +288,7 @@ export function AiMap() {
   }
 
   const selectedCount = drafts.filter((d) => d.selected).length;
-  const highConfidenceCount = drafts.filter((d) => d.confidence >= 0.8).length;
+  const highConfidenceCount = drafts.filter((d) => d.confidence >= threshold / 100).length;
   const selectedUnmatchedCount = unmatchedRows.filter((r) => r.selected).length;
 
   return (
@@ -633,7 +634,7 @@ export function AiMap() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-sm text-muted-foreground mr-auto">
-              {drafts.length} suggestions — {highConfidenceCount} high confidence (≥80%),{' '}
+              {drafts.length} suggestions — {highConfidenceCount} at ≥{threshold}%,{' '}
               {selectedCount} selected
             </div>
             <button
@@ -650,14 +651,30 @@ export function AiMap() {
               <Square className="h-3 w-3" />
               Deselect all
             </button>
-            <button
-              onClick={() =>
-                setDrafts((prev) => prev.map((d) => ({ ...d, selected: d.confidence >= 0.8 })))
-              }
-              className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
-            >
-              High confidence only
-            </button>
+            <div className="flex items-center gap-1">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={threshold}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  if (!Number.isNaN(val)) setThreshold(Math.max(0, Math.min(100, val)));
+                }}
+                className="w-14 border rounded px-2 py-1 text-xs"
+              />
+              <span className="text-xs text-muted-foreground">%</span>
+              <button
+                onClick={() =>
+                  setDrafts((prev) =>
+                    prev.map((d) => ({ ...d, selected: d.confidence >= threshold / 100 })),
+                  )
+                }
+                className="px-3 py-1.5 text-xs border rounded-md hover:bg-muted"
+              >
+                Select ≥{threshold}%
+              </button>
+            </div>
           </div>
 
           <div className="border rounded-lg overflow-x-auto">

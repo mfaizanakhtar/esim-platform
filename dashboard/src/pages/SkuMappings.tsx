@@ -555,6 +555,13 @@ export function SkuMappings() {
             </h2>
             <MappingForm
               initial={editing ?? undefined}
+              existingMappings={
+                editing
+                  ? (mappingsData?.mappings ?? []).filter(
+                      (m) => m.shopifySku === editing.shopifySku && m.id !== editing.id,
+                    )
+                  : undefined
+              }
               onSubmit={handleSubmit}
               onCancel={() => setSheetOpen(false)}
               isPending={createMutation.isPending || updateMutation.isPending}
