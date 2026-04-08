@@ -5,6 +5,8 @@ interface ShopifyConfig {
   shopDomain: string;
   clientId: string;
   clientSecret: string;
+  /** Optional permanent Admin API access token (shpat_...). When provided, bypasses OAuth flow. */
+  staticAccessToken?: string;
 }
 
 export interface DeliveryMetafieldEntry {
@@ -45,9 +47,15 @@ export class ShopifyClient {
   }
 
   /**
-   * Get valid access token, refresh if needed
+   * Get valid access token. If a static token is configured, returns it directly.
+   * Otherwise performs OAuth client-credentials refresh.
    */
   private async getAccessToken(): Promise<string> {
+    // Static permanent token (shpat_...) — no OAuth needed
+    if (this.config.staticAccessToken) {
+      return this.config.staticAccessToken;
+    }
+
     const now = Date.now();
 
     // Token still valid (with 5min buffer)
@@ -771,7 +779,7 @@ export class ShopifyClient {
         .map((sku, idx) => {
           const escaped = sku.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
           return `sku_${idx}: productVariants(first: 1, query: "sku:\\"${escaped}\\"") {
-            edges { node { id product { id variants { totalCount } } } }
+            edges { node { id product { id variantsCount { count } } } }
           }`;
         })
         .join('\n');
@@ -791,7 +799,10 @@ export class ShopifyClient {
         const alias = data[`sku_${j}`] as
           | {
               edges: Array<{
-                node: { id: string; product: { id: string; variants: { totalCount: number } } };
+                node: {
+                  id: string;
+                  product: { id: string; variantsCount: { count: number } };
+                };
               }>;
             }
           | undefined;
@@ -800,7 +811,65 @@ export class ShopifyClient {
           result.set(chunk[j], {
             variantGid: edge.node.id,
             productGid: edge.node.product.id,
-            productVariantCount: edge.node.product.variants?.totalCount ?? 1,
+            productVariantCount: edge.node.product.variantsCount?.count ?? 1,
+          });
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Batch-lookup product GID and total variant count by variant GID.
+   * Uses the `nodes` query for direct GID lookup — more reliable than SKU search.
+   * Variant GIDs not found (already deleted) are absent from the returned Map.
+   */
+  async getVariantInfoByGids(
+    variantGids: string[],
+  ): Promise<Map<string, { variantGid: string; productGid: string; productVariantCount: number }>> {
+    if (variantGids.length === 0) return new Map();
+    const token = await this.getAccessToken();
+    const result = new Map<
+      string,
+      { variantGid: string; productGid: string; productVariantCount: number }
+    >();
+
+    const CHUNK = 50;
+    for (let i = 0; i < variantGids.length; i += CHUNK) {
+      const chunk = variantGids.slice(i, i + CHUNK);
+      const response = await axios.post(
+        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        {
+          query: `query getVariantsByIds($ids: [ID!]!) {
+            nodes(ids: $ids) {
+              ... on ProductVariant {
+                id
+                product { id variantsCount { count } }
+              }
+            }
+          }`,
+          variables: { ids: chunk },
+        },
+        { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
+      );
+
+      const topErrors = response.data?.errors as Array<{ message: string }> | undefined;
+      if (topErrors?.length) {
+        throw new Error(`Shopify GraphQL errors: ${topErrors.map((e) => e.message).join(', ')}`);
+      }
+
+      const nodes = (response.data?.data?.nodes ?? []) as Array<{
+        id?: string;
+        product?: { id: string; variantsCount: { count: number } };
+      }>;
+
+      for (const node of nodes) {
+        if (node?.id && node.product?.id) {
+          result.set(node.id, {
+            variantGid: node.id,
+            productGid: node.product.id,
+            productVariantCount: node.product.variantsCount?.count ?? 1,
           });
         }
       }
@@ -960,17 +1029,30 @@ let shopifyClient: ShopifyClient | null = null;
 
 export function getShopifyClient(): ShopifyClient {
   if (!shopifyClient) {
-    const config = {
-      shopDomain: process.env.SHOPIFY_SHOP_DOMAIN!,
-      clientId: process.env.SHOPIFY_CLIENT_ID!,
-      clientSecret: process.env.SHOPIFY_CLIENT_SECRET!,
-    };
+    const shopDomain = process.env.SHOPIFY_SHOP_DOMAIN;
+    const staticAccessToken = process.env.SHOPIFY_ACCESS_TOKEN;
+    const clientId = process.env.SHOPIFY_CLIENT_ID;
+    const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
 
-    if (!config.shopDomain || !config.clientId || !config.clientSecret) {
-      throw new Error('Missing Shopify credentials in environment variables');
+    if (!shopDomain) {
+      throw new Error('Missing SHOPIFY_SHOP_DOMAIN environment variable');
     }
 
-    shopifyClient = new ShopifyClient(config);
+    // Support two auth modes:
+    // 1. Permanent token (shpat_...): set SHOPIFY_ACCESS_TOKEN — no OAuth needed
+    // 2. OAuth client credentials: requires SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET
+    if (!staticAccessToken && (!clientId || !clientSecret)) {
+      throw new Error(
+        'Shopify auth not configured: set SHOPIFY_ACCESS_TOKEN or both SHOPIFY_CLIENT_ID and SHOPIFY_CLIENT_SECRET',
+      );
+    }
+
+    shopifyClient = new ShopifyClient({
+      shopDomain,
+      clientId: clientId ?? '',
+      clientSecret: clientSecret ?? '',
+      staticAccessToken,
+    });
   }
 
   return shopifyClient;

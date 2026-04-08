@@ -174,6 +174,7 @@ type ProviderCatalogItem = {
   cardType: string | null;
   activeType: string | null;
   rawPayload: unknown;
+  parsedJson?: unknown;
   isActive: boolean;
   lastSyncedAt: Date;
   createdAt: Date;
@@ -2480,6 +2481,189 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(502);
       expect(res.json().error).toMatch(/OpenAI error.*quota/);
+    });
+  });
+
+  // ── POST /sku-mappings/ai-map — relaxOptions post-filter ─────────────────
+
+  describe('POST /sku-mappings/ai-map — relaxOptions post-filter', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }]);
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      adminMocks.mockGetAllVariants.mockResolvedValue([]);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+    });
+
+    it('drops data-mismatched draft when requireData is true (default)', async () => {
+      // SA-2GB-7D-FIXED parses to dataMb=2048; catalog has dataMb=5120 → mismatch
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({
+          id: 'cat-sa-5gb',
+          productName: 'SA 5GB 7D',
+          region: 'SA',
+          dataAmount: '5GB',
+          parsedJson: { regionCodes: ['SA'], dataMb: 5120, validityDays: 7 },
+        }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'SA-2GB-7D-FIXED',
+                    catalogId: 'cat-sa-5gb',
+                    confidence: 0.9,
+                    reason: 'GPT match',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { shopifySkus: ['SA-2GB-7D-FIXED'], unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // Data mismatch → filtered out despite GPT returning it
+      expect(res.json().drafts).toHaveLength(0);
+    });
+
+    it('drops validity-mismatched draft when requireValidity is true (default)', async () => {
+      // SA-2GB-1D-FIXED parses to validityDays=1; catalog has validityDays=7 → mismatch
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({
+          id: 'cat-sa-2gb-7d',
+          productName: 'SA 2GB 7D',
+          region: 'SA',
+          dataAmount: '2GB',
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
+        }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'SA-2GB-1D-FIXED',
+                    catalogId: 'cat-sa-2gb-7d',
+                    confidence: 0.9,
+                    reason: 'GPT match',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { shopifySkus: ['SA-2GB-1D-FIXED'], unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // Validity mismatch (1D SKU vs 7D catalog) → filtered out
+      expect(res.json().drafts).toHaveLength(0);
+    });
+
+    it('keeps DAYPASS draft even when catalog validityDays differs', async () => {
+      // SA-2GB-1D-DAYPASS: skuType=DAYPASS → validity filter is skipped
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({
+          id: 'cat-sa-2gb-daypass',
+          productName: 'SA 2GB Daypass',
+          region: 'SA',
+          dataAmount: '2GB',
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
+        }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'SA-2GB-1D-DAYPASS',
+                    catalogId: 'cat-sa-2gb-daypass',
+                    confidence: 0.9,
+                    reason: 'DAYPASS match',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { shopifySkus: ['SA-2GB-1D-DAYPASS'], unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // DAYPASS bypasses validity check → draft kept
+      expect(res.json().drafts).toHaveLength(1);
+      expect(res.json().drafts[0].shopifySku).toBe('SA-2GB-1D-DAYPASS');
+    });
+
+    it('keeps validity-mismatched draft when requireValidity=false', async () => {
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({
+          id: 'cat-sa-2gb-7d',
+          productName: 'SA 2GB 7D',
+          region: 'SA',
+          dataAmount: '2GB',
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
+        }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'SA-2GB-1D-FIXED',
+                    catalogId: 'cat-sa-2gb-7d',
+                    confidence: 0.9,
+                    reason: 'GPT match',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: {
+          shopifySkus: ['SA-2GB-1D-FIXED'],
+          unmappedOnly: false,
+          relaxOptions: { requireValidity: false },
+        },
+      });
+
+      expect(res.statusCode).toBe(200);
+      // requireValidity=false → validity mismatch is allowed
+      expect(res.json().drafts).toHaveLength(1);
     });
   });
 

@@ -995,9 +995,11 @@ export default function adminRoutes(
   app.post('/shopify-skus/bulk-delete', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
-    const body = (request.body ?? {}) as { skus?: string[] };
-    if (!Array.isArray(body.skus) || body.skus.length === 0) {
-      return reply.code(400).send({ error: 'skus array is required' });
+    const body = (request.body ?? {}) as { skus?: string[]; variantIds?: string[] };
+    const hasSkus = Array.isArray(body.skus) && body.skus.length > 0;
+    const hasVariantIds = Array.isArray(body.variantIds) && body.variantIds.length > 0;
+    if (!hasSkus && !hasVariantIds) {
+      return reply.code(400).send({ error: 'skus or variantIds array is required' });
     }
 
     let shopify: ReturnType<typeof getShopifyClient>;
@@ -1007,16 +1009,21 @@ export default function adminRoutes(
       return reply.code(502).send({ error: 'shopify_unavailable' });
     }
 
-    // Batch-lookup variant + product GIDs (chunks of 50 to respect Shopify query limits)
+    // Prefer variantIds (direct GID lookup — reliable) over skus (search query — may miss variants)
     let lookupMap: Awaited<ReturnType<typeof shopify.getVariantGidsBySkus>>;
     try {
-      lookupMap = await shopify.getVariantGidsBySkus(body.skus);
+      if (hasVariantIds) {
+        lookupMap = await shopify.getVariantInfoByGids(body.variantIds!);
+      } else {
+        lookupMap = await shopify.getVariantGidsBySkus(body.skus!);
+      }
     } catch (err) {
-      logger.error({ err }, 'Shopify getVariantGidsBySkus failed');
+      logger.error({ err }, 'Shopify variant lookup failed');
       return reply.code(502).send({ error: 'shopify_unavailable' });
     }
 
-    const skipped = body.skus.filter((s) => !lookupMap.has(s)).length;
+    const inputCount = hasVariantIds ? body.variantIds!.length : body.skus!.length;
+    const skipped = inputCount - lookupMap.size;
 
     // Group variants by product so we can decide: delete whole product vs. just variants
     const productMap = new Map<string, { variantGids: string[]; totalVariantCount: number }>();
@@ -1255,6 +1262,7 @@ export default function adminRoutes(
         dataAmount: string | null;
         validity: string | null;
         netPrice: unknown;
+        parsedJson: ParsedCatalogAttributes | null;
       }>;
 
       if (catalogEntries.length === 0) continue;
@@ -1267,6 +1275,8 @@ export default function adminRoutes(
         dataAmount: e.dataAmount,
         validity: e.validity,
         netPrice: e.netPrice,
+        dataMb: e.parsedJson?.dataMb ?? null,
+        validityDays: e.parsedJson?.validityDays ?? null,
       }));
 
       for (let i = 0; i < provSkuList.length; i += BATCH_SIZE) {
@@ -1312,24 +1322,36 @@ export default function adminRoutes(
                   }),
                 );
 
-                const skuInputs = group.map((variant, j) => ({
-                  sku: variant.sku,
-                  displayName:
-                    [variant.productTitle, variant.variantTitle].filter(Boolean).join(' - ') ||
-                    variant.sku,
-                  candidates: groupCandidates[j],
-                }));
+                const skuInputs = group.map((variant, j) => {
+                  const parsedSku = parseShopifySku(variant.sku);
+                  return {
+                    sku: variant.sku,
+                    displayName:
+                      [variant.productTitle, variant.variantTitle].filter(Boolean).join(' - ') ||
+                      variant.sku,
+                    dataMb: parsedSku?.dataMb ?? null,
+                    validityDays: parsedSku?.validityDays ?? null,
+                    skuType: parsedSku?.skuType ?? 'FIXED',
+                    candidates: groupCandidates[j].map((c) => {
+                      const full = catalogEntries.find((e) => e.id === c.id);
+                      return {
+                        ...c,
+                        dataMb: full?.parsedJson?.dataMb ?? null,
+                        validityDays: full?.parsedJson?.validityDays ?? null,
+                      };
+                    }),
+                  };
+                });
 
-                const relaxNote = [
+                const requireDataNote =
                   relaxOptions?.requireData !== false
-                    ? 'Data amount match IS required.'
-                    : 'Data amount match is NOT required.',
+                    ? 'Data amount IS required to match: REJECT any catalog entry where dataMb ≠ SKU dataMb (e.g. do NOT match a 2048MB SKU to a 5120MB entry).'
+                    : 'Data amount is NOT required to match — allow data mismatches.';
+                const requireValidityNote =
                   relaxOptions?.requireValidity !== false
-                    ? 'Validity match IS required.'
-                    : 'Validity match is NOT required.',
-                  'Region match is always required.',
-                ].join(' ');
-                const systemPrompt = `You are an eSIM product matcher. ${relaxNote} For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Confidence reflects structural match quality. Return only JSON.`;
+                    ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. EXCEPTION: if skuType is DAYPASS, skip this check (DAYPASS have no fixed validity).'
+                    : 'Validity is NOT required to match — allow validity mismatches.';
+                const systemPrompt = `You are an eSIM product matcher. ${requireDataNote} ${requireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Confidence reflects structural match quality. Return only JSON.`;
                 const userPrompt = `Match each Shopify SKU to its best catalog entry:
 ${JSON.stringify(skuInputs)}
 
@@ -1373,7 +1395,26 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                       reason: match.reason,
                     });
                   }
-                  return { drafts };
+                  // Hard post-filter: enforce relaxOptions deterministically regardless of GPT output
+                  const filteredDrafts = drafts.filter((draft) => {
+                    const parsedSku = parseShopifySku(draft.shopifySku);
+                    if (!parsedSku) return true;
+                    const entry = catalogEntries.find((e) => e.id === draft.catalogId);
+                    if (!entry?.parsedJson) return true;
+                    if (
+                      relaxOptions?.requireData !== false &&
+                      entry.parsedJson.dataMb !== parsedSku.dataMb
+                    )
+                      return false;
+                    if (
+                      relaxOptions?.requireValidity !== false &&
+                      parsedSku.skuType !== 'DAYPASS' &&
+                      entry.parsedJson.validityDays !== parsedSku.validityDays
+                    )
+                      return false;
+                    return true;
+                  });
+                  return { drafts: filteredDrafts };
                 } catch (err) {
                   logger.error({ err, skus: group.map((v) => v.sku) }, 'OpenAI group match failed');
                   const msg = err instanceof Error ? err.message : String(err);
@@ -1404,21 +1445,26 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
           }
         } else {
           // Fallback path: one GPT call per batch of 50 SKUs with full catalog
-          const skuList = batch.map((v) => ({
-            sku: v.sku,
-            displayName: [v.productTitle, v.variantTitle].filter(Boolean).join(' - ') || v.sku,
-          }));
+          const skuList = batch.map((v) => {
+            const parsedSku = parseShopifySku(v.sku);
+            return {
+              sku: v.sku,
+              displayName: [v.productTitle, v.variantTitle].filter(Boolean).join(' - ') || v.sku,
+              dataMb: parsedSku?.dataMb ?? null,
+              validityDays: parsedSku?.validityDays ?? null,
+              skuType: parsedSku?.skuType ?? 'FIXED',
+            };
+          });
 
-          const fallbackRelaxNote = [
+          const fallbackRequireDataNote =
             relaxOptions?.requireData !== false
-              ? 'Data amount match IS required.'
-              : 'Data amount match is NOT required.',
+              ? 'Data amount IS required to match: REJECT any catalog entry where dataMb ≠ SKU dataMb (e.g. do NOT match a 2048MB SKU to a 5120MB entry).'
+              : 'Data amount is NOT required to match — allow data mismatches.';
+          const fallbackRequireValidityNote =
             relaxOptions?.requireValidity !== false
-              ? 'Validity match IS required.'
-              : 'Validity match is NOT required.',
-            'Region match is always required.',
-          ].join(' ');
-          const systemPrompt = `You are an eSIM product matcher. ${fallbackRelaxNote} Match each Shopify SKU to the best provider catalog entry. Confidence reflects structural match quality. Return only JSON.`;
+              ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. EXCEPTION: if skuType is DAYPASS, skip this check (DAYPASS have no fixed validity).'
+              : 'Validity is NOT required to match — allow validity mismatches.';
+          const systemPrompt = `You are an eSIM product matcher. ${fallbackRequireDataNote} ${fallbackRequireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. Match each Shopify SKU to the best provider catalog entry. Confidence reflects structural match quality. Return only JSON.`;
           const userPrompt = `Match these Shopify SKUs to catalog entries:
 SKUs: ${JSON.stringify(skuList)}
 
@@ -1450,6 +1496,23 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
               for (const match of parsed.mappings ?? []) {
                 const entry = catalogEntries.find((e) => e.id === match.catalogId);
                 if (!entry) continue;
+                // Hard post-filter: enforce relaxOptions deterministically regardless of GPT output
+                if (entry.parsedJson) {
+                  const parsedSku = parseShopifySku(match.shopifySku);
+                  if (parsedSku) {
+                    if (
+                      relaxOptions?.requireData !== false &&
+                      entry.parsedJson.dataMb !== parsedSku.dataMb
+                    )
+                      continue;
+                    if (
+                      relaxOptions?.requireValidity !== false &&
+                      parsedSku.skuType !== 'DAYPASS' &&
+                      entry.parsedJson.validityDays !== parsedSku.validityDays
+                    )
+                      continue;
+                  }
+                }
                 partialDrafts.push({
                   shopifySku: match.shopifySku,
                   catalogId: match.catalogId,
@@ -1519,6 +1582,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       shopifySkus?: string[];
       provider?: string;
       unmappedOnly?: boolean;
+      relaxOptions?: AiRelaxOptions;
     };
 
     const allDrafts: AiMappingDraftInternal[] = [];
@@ -1530,6 +1594,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         provider: body.provider,
         unmappedOnly: body.unmappedOnly,
         openaiApiKey: OPENAI_API_KEY,
+        relaxOptions: body.relaxOptions,
       })) {
         allDrafts.push(...evt.partialDrafts);
         if (evt.warning) openAiError = evt.warning;
