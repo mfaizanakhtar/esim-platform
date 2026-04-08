@@ -588,9 +588,21 @@ export function SkuMappings() {
                                 </span>
                               )}
                             </div>
-                            {m.catalogEntry?.productName && (
-                              <p className="text-xs text-muted-foreground truncate max-w-[18rem] mt-0.5" title={m.catalogEntry.productName}>
+                            {m.catalogEntry && (
+                              <p
+                                className="text-xs text-muted-foreground truncate max-w-[18rem] mt-0.5"
+                                title={[
+                                  m.catalogEntry.productName,
+                                  m.catalogEntry.dataAmount,
+                                  m.catalogEntry.validity,
+                                ].filter(Boolean).join(' · ')}
+                              >
                                 {m.catalogEntry.productName}
+                                {(m.catalogEntry.dataAmount || m.catalogEntry.validity) && (
+                                  <span className="ml-1 text-muted-foreground/70">
+                                    ({[m.catalogEntry.dataAmount, m.catalogEntry.validity].filter(Boolean).join(', ')})
+                                  </span>
+                                )}
                               </p>
                             )}
                           </div>
