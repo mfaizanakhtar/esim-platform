@@ -579,6 +579,11 @@ export function SkuMappings() {
                           <span className="inline-block px-2 py-0.5 bg-muted border rounded-full text-xs capitalize">
                             {m.provider}
                           </span>
+                          {m.catalogEntry?.netPrice && (
+                            <span className="text-xs text-muted-foreground font-mono">
+                              {m.catalogEntry.netPrice}{m.catalogEntry.currency ? ` ${m.catalogEntry.currency}` : ''}
+                            </span>
+                          )}
                           <button
                             onClick={() => openEdit(m)}
                             disabled={m.mappingLocked}
