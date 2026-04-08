@@ -49,7 +49,7 @@ export function SkuMappings() {
   const [shopifyDeleteConfirm, setShopifyDeleteConfirm] = useState<ShopifySku | null>(null);
   const [shopifyDeleteLoading, setShopifyDeleteLoading] = useState(false);
   const [shopifyDeleteError, setShopifyDeleteError] = useState<string | null>(null);
-  const [selectedSkus, setSelectedSkus] = useState<Set<string>>(new Set());
+  const [selectedVariantIds, setSelectedVariantIds] = useState<Set<string>>(new Set());
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
   const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
@@ -195,33 +195,38 @@ export function SkuMappings() {
     deleteMutation.mutate(id, { onSuccess: () => setDeleteConfirm(null) });
   }
 
-  // Clear selection when page or filters change
+  // Clear selection when page or filters change; reconcile after refetch
   useEffect(() => {
-    setSelectedSkus(new Set());
+    setSelectedVariantIds(new Set());
   }, [page, tab, provider, debouncedSearch]);
 
-  const visibleSkus = skuRows.map((r) => r.shopifySku.sku);
+  useEffect(() => {
+    const currentIds = new Set(skuRows.map((r) => r.shopifySku.variantId));
+    setSelectedVariantIds((prev) => new Set([...prev].filter((id) => currentIds.has(id))));
+  }, [skuRows]);
+
+  const visibleVariantIds = skuRows.map((r) => r.shopifySku.variantId);
   const allVisibleSelected =
-    visibleSkus.length > 0 && visibleSkus.every((s) => selectedSkus.has(s));
-  const someVisibleSelected = visibleSkus.some((s) => selectedSkus.has(s));
+    visibleVariantIds.length > 0 && visibleVariantIds.every((id) => selectedVariantIds.has(id));
+  const someVisibleSelected = visibleVariantIds.some((id) => selectedVariantIds.has(id));
 
   function toggleSelectAll() {
     if (allVisibleSelected) {
-      setSelectedSkus((prev) => {
+      setSelectedVariantIds((prev) => {
         const next = new Set(prev);
-        visibleSkus.forEach((s) => next.delete(s));
+        visibleVariantIds.forEach((id) => next.delete(id));
         return next;
       });
     } else {
-      setSelectedSkus((prev) => new Set([...prev, ...visibleSkus]));
+      setSelectedVariantIds((prev) => new Set([...prev, ...visibleVariantIds]));
     }
   }
 
-  function toggleSelectSku(sku: string) {
-    setSelectedSkus((prev) => {
+  function toggleSelectVariant(variantId: string) {
+    setSelectedVariantIds((prev) => {
       const next = new Set(prev);
-      if (next.has(sku)) next.delete(sku);
-      else next.add(sku);
+      if (next.has(variantId)) next.delete(variantId);
+      else next.add(variantId);
       return next;
     });
   }
@@ -256,21 +261,21 @@ export function SkuMappings() {
     setBulkDeleteLoading(true);
     setBulkDeleteError(null);
     try {
-      const variantIds = skuRows
-        .filter((r) => selectedSkus.has(r.shopifySku.sku))
-        .map((r) => r.shopifySku.variantId);
+      const variantIds = [...selectedVariantIds];
       const result = await apiClient.post<{ deleted: number; skipped: number; errors: string[] }>(
         '/shopify-skus/bulk-delete',
         { variantIds },
       );
       if (result.deleted === 0) {
         setBulkDeleteError(
-          `No variants were found in Shopify (${result.skipped} skipped). They may already be deleted.`,
+          result.errors.length
+            ? result.errors.join(', ')
+            : `No variants were found in Shopify (${result.skipped} skipped). They may already be deleted.`,
         );
         return;
       }
       void queryClient.invalidateQueries({ queryKey: ['shopify-skus'] });
-      setSelectedSkus(new Set());
+      setSelectedVariantIds(new Set());
       setBulkDeleteConfirm(false);
     } catch (err) {
       setBulkDeleteError(err instanceof Error ? err.message : 'Delete failed');
@@ -383,9 +388,9 @@ export function SkuMappings() {
       </div>
 
       {/* Bulk action bar */}
-      {selectedSkus.size > 0 && (
+      {selectedVariantIds.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border border-blue-200 rounded-md text-sm">
-          <span className="text-blue-800 font-medium">{selectedSkus.size} selected</span>
+          <span className="text-blue-800 font-medium">{selectedVariantIds.size} selected</span>
           <button
             onClick={() => { setBulkDeleteError(null); setBulkDeleteConfirm(true); }}
             className="flex items-center gap-1.5 px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-xs font-medium"
@@ -394,7 +399,7 @@ export function SkuMappings() {
             Delete from Shopify
           </button>
           <button
-            onClick={() => setSelectedSkus(new Set())}
+            onClick={() => setSelectedVariantIds(new Set())}
             className="ml-auto text-blue-600 hover:text-blue-800 transition-colors"
             title="Clear selection"
           >
@@ -443,15 +448,15 @@ export function SkuMappings() {
 
             {!isFetching && skuRows.map((row) => (
               <tr
-                key={row.shopifySku.sku}
-                className={`hover:bg-muted/20 transition-colors ${selectedSkus.has(row.shopifySku.sku) ? 'bg-blue-50/50' : ''}`}
+                key={row.shopifySku.variantId}
+                className={`hover:bg-muted/20 transition-colors ${selectedVariantIds.has(row.shopifySku.variantId) ? 'bg-blue-50/50' : ''}`}
               >
                 {/* Checkbox */}
                 <td className="px-4 py-3">
                   <input
                     type="checkbox"
-                    checked={selectedSkus.has(row.shopifySku.sku)}
-                    onChange={() => toggleSelectSku(row.shopifySku.sku)}
+                    checked={selectedVariantIds.has(row.shopifySku.variantId)}
+                    onChange={() => toggleSelectVariant(row.shopifySku.variantId)}
                     className="rounded"
                     aria-label={`Select ${row.shopifySku.sku}`}
                   />
@@ -755,10 +760,10 @@ export function SkuMappings() {
             onClick={() => !bulkDeleteLoading && setBulkDeleteConfirm(false)}
           />
           <div className="relative bg-white rounded-lg shadow-xl p-6 w-full max-w-sm space-y-4">
-            <h2 className="text-lg font-semibold">Delete {selectedSkus.size} SKUs from Shopify?</h2>
+            <h2 className="text-lg font-semibold">Delete {selectedVariantIds.size} SKUs from Shopify?</h2>
             <p className="text-sm text-muted-foreground">
-              This will permanently delete {selectedSkus.size} variant
-              {selectedSkus.size !== 1 ? 's' : ''} from your Shopify store. This cannot be undone.
+              This will permanently delete {selectedVariantIds.size} variant
+              {selectedVariantIds.size !== 1 ? 's' : ''} from your Shopify store. This cannot be undone.
             </p>
             {bulkDeleteError && (
               <p className="text-sm text-red-600">{bulkDeleteError}</p>
@@ -776,7 +781,7 @@ export function SkuMappings() {
                 disabled={bulkDeleteLoading}
                 className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
-                {bulkDeleteLoading ? 'Deleting...' : `Delete ${selectedSkus.size}`}
+                {bulkDeleteLoading ? 'Deleting...' : `Delete ${selectedVariantIds.size}`}
               </button>
             </div>
           </div>

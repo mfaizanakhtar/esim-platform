@@ -996,10 +996,16 @@ export default function adminRoutes(
     if (!requireAdminKey(request, reply)) return;
 
     const body = (request.body ?? {}) as { skus?: string[]; variantIds?: string[] };
-    const hasSkus = Array.isArray(body.skus) && body.skus.length > 0;
-    const hasVariantIds = Array.isArray(body.variantIds) && body.variantIds.length > 0;
+    const isNonEmptyStringArray = (arr: unknown): arr is string[] =>
+      Array.isArray(arr) &&
+      arr.length > 0 &&
+      arr.every((s) => typeof s === 'string' && s.trim().length > 0);
+    const hasSkus = isNonEmptyStringArray(body.skus);
+    const hasVariantIds = isNonEmptyStringArray(body.variantIds);
     if (!hasSkus && !hasVariantIds) {
-      return reply.code(400).send({ error: 'skus or variantIds array is required' });
+      return reply.code(400).send({
+        error: 'skus or variantIds array is required and must contain only non-empty strings',
+      });
     }
 
     let shopify: ReturnType<typeof getShopifyClient>;
@@ -1400,7 +1406,13 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                     const parsedSku = parseShopifySku(draft.shopifySku);
                     if (!parsedSku) return true;
                     const entry = catalogEntries.find((e) => e.id === draft.catalogId);
-                    if (!entry?.parsedJson) return true;
+                    if (!entry?.parsedJson) {
+                      // Unverifiable — only pass through if both constraints are relaxed
+                      return (
+                        relaxOptions?.requireData === false &&
+                        relaxOptions?.requireValidity === false
+                      );
+                    }
                     if (
                       relaxOptions?.requireData !== false &&
                       entry.parsedJson.dataMb !== parsedSku.dataMb
@@ -1497,9 +1509,18 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                 const entry = catalogEntries.find((e) => e.id === match.catalogId);
                 if (!entry) continue;
                 // Hard post-filter: enforce relaxOptions deterministically regardless of GPT output
-                if (entry.parsedJson) {
-                  const parsedSku = parseShopifySku(match.shopifySku);
-                  if (parsedSku) {
+                const parsedSku = parseShopifySku(match.shopifySku);
+                if (parsedSku) {
+                  if (!entry.parsedJson) {
+                    // Unverifiable — only pass through if both constraints are relaxed
+                    if (
+                      !(
+                        relaxOptions?.requireData === false &&
+                        relaxOptions?.requireValidity === false
+                      )
+                    )
+                      continue;
+                  } else {
                     if (
                       relaxOptions?.requireData !== false &&
                       entry.parsedJson.dataMb !== parsedSku.dataMb
