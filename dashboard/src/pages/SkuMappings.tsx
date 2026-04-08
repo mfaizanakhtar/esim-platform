@@ -556,9 +556,9 @@ export function SkuMappings() {
                           !next.priorityLocked && !next.mappingLocked &&
                           !reorderMutation.isPending;
                         return (
-                        <div key={m.id} className="flex items-center gap-1">
+                        <div key={m.id} className="flex items-start gap-1">
                           {/* Priority up/down */}
-                          <div className="flex flex-col">
+                          <div className="flex flex-col mt-0.5">
                             <button
                               onClick={() => moveMapping(row.shopifySku.sku, row.mappings, idx, idx - 1)}
                               disabled={!canMoveUp}
@@ -576,14 +576,24 @@ export function SkuMappings() {
                               <ChevronDown className="h-3 w-3" />
                             </button>
                           </div>
-                          <span className="inline-block px-2 py-0.5 bg-muted border rounded-full text-xs capitalize">
-                            {m.provider}
-                          </span>
-                          {m.catalogEntry?.netPrice && (
-                            <span className="text-xs text-muted-foreground font-mono">
-                              {m.catalogEntry.netPrice}{m.catalogEntry.currency ? ` ${m.catalogEntry.currency}` : ''}
-                            </span>
-                          )}
+                          {/* Info block */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1 flex-wrap">
+                              <span className="inline-block px-2 py-0.5 bg-muted border rounded-full text-xs capitalize">
+                                {m.provider}
+                              </span>
+                              {m.catalogEntry?.netPrice && (
+                                <span className="text-xs text-muted-foreground font-mono">
+                                  {m.catalogEntry.netPrice}{m.catalogEntry.currency ? ` ${m.catalogEntry.currency}` : ''}
+                                </span>
+                              )}
+                            </div>
+                            {m.catalogEntry?.productName && (
+                              <p className="text-xs text-muted-foreground truncate max-w-[18rem] mt-0.5" title={m.catalogEntry.productName}>
+                                {m.catalogEntry.productName}
+                              </p>
+                            )}
+                          </div>
                           <button
                             onClick={() => openEdit(m)}
                             disabled={m.mappingLocked}
