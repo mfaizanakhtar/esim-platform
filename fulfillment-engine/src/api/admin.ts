@@ -928,7 +928,7 @@ export default function adminRoutes(
     const search = (query.search ?? '').toLowerCase().trim();
     const parsedLimit = Number.parseInt(query.limit ?? '25', 10);
     const parsedOffset = Number.parseInt(query.offset ?? '0', 10);
-    const limit = Math.min(Math.max(1, Number.isFinite(parsedLimit) ? parsedLimit : 25), 200);
+    const limit = Math.min(Math.max(1, Number.isFinite(parsedLimit) ? parsedLimit : 25), 500);
     const offset = Math.max(0, Number.isFinite(parsedOffset) ? parsedOffset : 0);
 
     let allVariants: Array<{

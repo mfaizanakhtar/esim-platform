@@ -768,6 +768,60 @@ describe('getAllVariants', () => {
 });
 
 // ---------------------------------------------------------------------------
+// appendOrderNote
+// ---------------------------------------------------------------------------
+describe('appendOrderNote', () => {
+  it('appends note to existing note with separator', async () => {
+    mockTokenRefresh();
+    // First call: get current note
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: { note: 'Existing note' } } });
+    // Second call: update note
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: { orderUpdate: { order: { id: 'gid://shopify/Order/1' }, userErrors: [] } },
+      });
+
+    const client = makeClient();
+    await expect(client.appendOrderNote('1', 'New note')).resolves.toBeUndefined();
+  });
+
+  it('sets note directly when no existing note', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: { note: null } } });
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: { orderUpdate: { order: { id: 'gid://shopify/Order/2' }, userErrors: [] } },
+      });
+
+    const client = makeClient();
+    await expect(client.appendOrderNote('2', 'Only note')).resolves.toBeUndefined();
+  });
+
+  it('throws when orderUpdate returns userErrors', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, { data: { order: { note: '' } } });
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          orderUpdate: { order: null, userErrors: [{ field: 'note', message: 'Too long' }] },
+        },
+      });
+
+    const client = makeClient();
+    await expect(client.appendOrderNote('3', 'Bad note')).rejects.toThrow('Too long');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getVariantGidsBySkus
 // ---------------------------------------------------------------------------
 describe('getVariantGidsBySkus', () => {

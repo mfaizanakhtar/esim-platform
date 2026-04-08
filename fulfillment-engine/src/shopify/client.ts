@@ -952,12 +952,12 @@ export class ShopifyClient {
 
   /**
    * Fetch all product variants with non-empty SKUs from Shopify.
-   * Paginates through up to `maxVariants` results (default 1000).
+   * Fetches all variants that have a non-empty SKU.
+   * Uses Shopify's `query: "sku:*"` filter to skip blank-SKU option placeholders server-side,
+   * avoiding the need to cap at an arbitrary maxVariants limit.
    * Returns { sku, variantId, productTitle, variantTitle }[]
    */
-  async getAllVariants(
-    maxVariants = 1000,
-  ): Promise<
+  async getAllVariants(): Promise<
     Array<{ sku: string; variantId: string; productTitle: string; variantTitle: string }>
   > {
     const token = await this.getAccessToken();
@@ -971,7 +971,7 @@ export class ShopifyClient {
 
     const gqlQuery = `
       query getAllVariants($first: Int!, $after: String) {
-        productVariants(first: $first, after: $after) {
+        productVariants(first: $first, after: $after, query: "sku:*") {
           pageInfo { hasNextPage endCursor }
           edges {
             node {
@@ -985,11 +985,10 @@ export class ShopifyClient {
       }
     `;
 
-    while (results.length < maxVariants) {
-      const pageSize = Math.min(250, maxVariants - results.length);
+    for (;;) {
       const variantResp = (await axios.post(
         `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
-        { query: gqlQuery, variables: { first: pageSize, after: cursor } },
+        { query: gqlQuery, variables: { first: 250, after: cursor } },
         { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
       )) as {
         data: {
@@ -1007,7 +1006,7 @@ export class ShopifyClient {
       const pv = variantResp.data?.data?.productVariants;
       for (const edge of pv?.edges ?? []) {
         const node = edge.node;
-        if (!node.sku) continue; // skip variants with no SKU
+        if (!node.sku) continue; // belt-and-suspenders: skip blank SKUs
         results.push({
           sku: node.sku,
           variantId: node.id,
