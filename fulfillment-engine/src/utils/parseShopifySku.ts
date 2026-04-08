@@ -1,6 +1,8 @@
 /**
- * Parse a Shopify SKU in the format ESIM-{REGION}-{DATA}-{VALIDITY}
- * Examples: ESIM-EU-1GB-7D, ESIM-US-500MB-30D, ESIM-APAC-10GB-30D
+ * Parse a Shopify SKU.
+ * Supported formats:
+ *   {REGION}-{DATA}-{VALIDITY}-{TYPE}   e.g. SA-2GB-7D-FIXED, EU-500MB-30D-DAYPASS
+ *   ESIM-{REGION}-{DATA}-{VALIDITY}     e.g. ESIM-EU-1GB-7D  (legacy)
  */
 export interface ParsedShopifySku {
   regionCode: string;
@@ -8,11 +10,13 @@ export interface ParsedShopifySku {
   validityDays: number;
 }
 
-// Matches: ESIM-{2+ uppercase letters}-{digits}{GB|MB}-{digits}D
-const SKU_REGEX = /^ESIM-([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D$/;
+// Format: {REGION}-{DATA}-{VALIDITY}-{TYPE}
+const SKU_REGEX = /^([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D-[A-Z]+$/;
+// Legacy format: ESIM-{REGION}-{DATA}-{VALIDITY}
+const SKU_REGEX_LEGACY = /^ESIM-([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D(?:-[A-Z]+)?$/;
 
 export function parseShopifySku(sku: string): ParsedShopifySku | null {
-  const m = SKU_REGEX.exec(sku);
+  const m = SKU_REGEX.exec(sku) ?? SKU_REGEX_LEGACY.exec(sku);
   if (!m) return null;
   return {
     regionCode: m[1],
