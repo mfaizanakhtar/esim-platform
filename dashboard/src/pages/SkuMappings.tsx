@@ -13,7 +13,7 @@ import { MappingForm } from '@/components/sku-mappings/MappingForm';
 import { SkuMappingModal } from '@/components/sku-mappings/SkuMappingModal';
 import type { SkuMapping, ShopifySku } from '@/lib/types';
 import { parseShopifySku } from '@/utils/parseShopifySku';
-import { Plus, Pencil, Trash2, Sparkles, Brain, ChevronUp, ChevronDown, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, Sparkles, Brain, ChevronUp, ChevronDown, X, RefreshCw } from 'lucide-react';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
@@ -58,6 +58,8 @@ export function SkuMappings() {
     updated: number;
     skipped: number;
   } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
   const urlSearch = searchParams.get('search') ?? '';
   const [search, setSearch] = useState(urlSearch);
   const debouncedSearch = useDebounce(search, 300);
@@ -309,6 +311,20 @@ export function SkuMappings() {
     });
   }
 
+  async function handleSyncShopifySkus() {
+    setIsSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await apiClient.post<{ synced: number }>('/shopify-skus/sync', {});
+      setSyncResult(`Synced — ${result.synced} SKUs`);
+      void queryClient.invalidateQueries({ queryKey: ['shopify-skus'] });
+    } catch (err) {
+      setSyncResult(`Sync failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  }
+
 
   return (
     <div className="space-y-4">
@@ -334,6 +350,16 @@ export function SkuMappings() {
             placeholder="Search by SKU or product..."
             className="border rounded-md px-3 py-1.5 text-sm w-40 sm:w-56"
           />
+          <button
+            onClick={() => void handleSyncShopifySkus()}
+            disabled={isSyncing}
+            className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+            title="Refresh SKU list from Shopify"
+          >
+            <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync SKUs'}
+          </button>
+          {syncResult && <span className="text-sm text-muted-foreground">{syncResult}</span>}
           <button
             onClick={handleSmartPricing}
             disabled={smartPricingMutation.isPending}

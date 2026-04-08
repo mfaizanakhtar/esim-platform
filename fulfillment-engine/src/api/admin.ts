@@ -901,10 +901,8 @@ export default function adminRoutes(
 
   /**
    * GET /admin/shopify-skus
-   * Fetch all product variant SKUs from Shopify.
-   * Query: unmappedOnly=true — exclude SKUs already in ProviderSkuMapping
-   *        provider=firoam|tgt — when combined with unmappedOnly, only excludes SKUs
-   *          already mapped for that specific provider (not any provider)
+   * Returns paginated Shopify variants from the local ShopifyVariant cache (populated via POST /shopify-skus/sync).
+   * Query: status=all|mapped|unmapped, provider=firoam|tgt, search, limit, offset
    */
   app.get('/shopify-skus', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
@@ -925,11 +923,59 @@ export default function adminRoutes(
           ? 'unmapped'
           : 'all';
     const providerFilter = query.provider || undefined;
-    const search = (query.search ?? '').toLowerCase().trim();
+    const search = (query.search ?? '').trim();
     const parsedLimit = Number.parseInt(query.limit ?? '25', 10);
     const parsedOffset = Number.parseInt(query.offset ?? '0', 10);
     const limit = Math.min(Math.max(1, Number.isFinite(parsedLimit) ? parsedLimit : 25), 500);
     const offset = Math.max(0, Number.isFinite(parsedOffset) ? parsedOffset : 0);
+
+    // Resolve mapped SKU set for status filter
+    let mappedSkus: Set<string> | undefined;
+    if (status !== 'all') {
+      const rows = await prisma.providerSkuMapping.findMany({
+        select: { shopifySku: true },
+        distinct: ['shopifySku'],
+        where: {
+          isActive: true,
+          ...(providerFilter ? { provider: providerFilter } : {}),
+        },
+      });
+      mappedSkus = new Set(rows.map((r) => r.shopifySku));
+    }
+
+    const where: Prisma.ShopifyVariantWhereInput = {
+      ...(search
+        ? {
+            OR: [
+              { sku: { contains: search, mode: 'insensitive' } },
+              { productTitle: { contains: search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      ...(status === 'unmapped' && mappedSkus ? { NOT: { sku: { in: [...mappedSkus] } } } : {}),
+      ...(status === 'mapped' && mappedSkus ? { sku: { in: [...mappedSkus] } } : {}),
+    };
+
+    const [total, skus] = await Promise.all([
+      prisma.shopifyVariant.count({ where }),
+      prisma.shopifyVariant.findMany({
+        where,
+        orderBy: { sku: 'asc' },
+        skip: offset,
+        take: limit,
+      }),
+    ]);
+
+    return reply.send({ skus, total });
+  });
+
+  /**
+   * POST /admin/shopify-skus/sync
+   * Fetch all Shopify variants and upsert into ShopifyVariant table.
+   * Response: { synced: number }
+   */
+  app.post('/shopify-skus/sync', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
 
     let allVariants: Array<{
       sku: string;
@@ -941,49 +987,35 @@ export default function adminRoutes(
       const shopify = getShopifyClient();
       allVariants = await shopify.getAllVariants();
     } catch (error) {
-      logger.error({ err: error }, 'Failed to fetch Shopify variants');
+      logger.error({ err: error }, 'Failed to fetch Shopify variants for sync');
       return reply.code(502).send({ error: 'shopify_unavailable' });
     }
 
-    // Apply status (mapped / unmapped) filter
-    let filtered = allVariants;
-    if (status !== 'all') {
-      let mappedSkus: Array<{ shopifySku: string }>;
-      try {
-        mappedSkus = await prisma.providerSkuMapping.findMany({
-          select: { shopifySku: true },
-          distinct: ['shopifySku'],
-          where: {
-            isActive: true,
-            ...(providerFilter ? { provider: providerFilter } : {}),
-          },
-        });
-      } catch (err) {
-        logger.error(
-          { err, status, providerFilter },
-          'Failed to query mapped SKUs for status filter',
-        );
-        return reply.code(500).send({ error: 'db_unavailable' });
-      }
-      const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
-      filtered =
-        status === 'unmapped'
-          ? allVariants.filter((v) => !mappedSet.has(v.sku))
-          : allVariants.filter((v) => mappedSet.has(v.sku));
-    }
-
-    // Apply search filter
-    if (search) {
-      filtered = filtered.filter(
-        (v) =>
-          v.sku.toLowerCase().includes(search) || v.productTitle.toLowerCase().includes(search),
+    const CHUNK = 100;
+    for (let i = 0; i < allVariants.length; i += CHUNK) {
+      const chunk = allVariants.slice(i, i + CHUNK);
+      await Promise.all(
+        chunk.map((v) =>
+          prisma.shopifyVariant.upsert({
+            where: { variantId: v.variantId },
+            create: {
+              variantId: v.variantId,
+              sku: v.sku,
+              productTitle: v.productTitle,
+              variantTitle: v.variantTitle,
+            },
+            update: {
+              sku: v.sku,
+              productTitle: v.productTitle,
+              variantTitle: v.variantTitle,
+            },
+          }),
+        ),
       );
     }
 
-    const total = filtered.length;
-    const skus = filtered.slice(offset, offset + limit);
-
-    return reply.send({ skus, total });
+    logger.info({ count: allVariants.length }, 'Shopify variants synced to DB');
+    return reply.send({ synced: allVariants.length });
   });
 
   /**
@@ -1070,6 +1102,13 @@ export default function adminRoutes(
     const deletedVariantIds: string[] = [];
     for (const { variantGid, productGid } of lookupMap.values()) {
       if (successfulProductGids.has(productGid)) deletedVariantIds.push(variantGid);
+    }
+
+    // Clean up local cache — remove deleted variants from ShopifyVariant table
+    if (deletedVariantIds.length > 0) {
+      await prisma.shopifyVariant.deleteMany({
+        where: { variantId: { in: deletedVariantIds } },
+      });
     }
 
     return reply.send({ deleted, skipped, deletedVariantIds, errors });
