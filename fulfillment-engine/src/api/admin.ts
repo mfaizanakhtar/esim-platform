@@ -1413,6 +1413,7 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                         relaxOptions?.requireValidity === false
                       );
                     }
+                    if (!entry.parsedJson.regionCodes.includes(parsedSku.regionCode)) return false;
                     if (
                       relaxOptions?.requireData !== false &&
                       entry.parsedJson.dataMb !== parsedSku.dataMb
@@ -1521,6 +1522,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                     )
                       continue;
                   } else {
+                    if (!entry.parsedJson.regionCodes.includes(parsedSku.regionCode)) continue;
                     if (
                       relaxOptions?.requireData !== false &&
                       entry.parsedJson.dataMb !== parsedSku.dataMb
