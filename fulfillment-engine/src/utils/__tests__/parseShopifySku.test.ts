@@ -44,6 +44,22 @@ describe('parseShopifySku', () => {
     });
   });
 
+  it('parses legacy ESIM-prefix SKU with FIXED suffix', () => {
+    expect(parseShopifySku('ESIM-EU-1GB-3D-FIXED')).toEqual({
+      regionCode: 'EU',
+      dataMb: 1024,
+      validityDays: 3,
+    });
+  });
+
+  it('parses legacy ESIM-prefix SKU with DAYPASS suffix', () => {
+    expect(parseShopifySku('ESIM-US-500MB-1D-DAYPASS')).toEqual({
+      regionCode: 'US',
+      dataMb: 500,
+      validityDays: 1,
+    });
+  });
+
   // Null cases
   it('returns null for lowercase', () => {
     expect(parseShopifySku('sa-2gb-7d-fixed')).toBeNull();

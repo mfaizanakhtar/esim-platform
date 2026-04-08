@@ -11,7 +11,7 @@ export interface ParsedShopifySku {
 }
 
 const SKU_REGEX = /^([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D-[A-Z]+$/;
-const SKU_REGEX_LEGACY = /^ESIM-([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D$/;
+const SKU_REGEX_LEGACY = /^ESIM-([A-Z]{2,})-(\d+)(GB|MB)-(\d+)D(?:-[A-Z]+)?$/;
 
 export function parseShopifySku(sku: string): ParsedShopifySku | null {
   const m = SKU_REGEX.exec(sku) ?? SKU_REGEX_LEGACY.exec(sku);
