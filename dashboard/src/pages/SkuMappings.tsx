@@ -13,7 +13,7 @@ import { MappingForm } from '@/components/sku-mappings/MappingForm';
 import { SkuMappingModal } from '@/components/sku-mappings/SkuMappingModal';
 import type { SkuMapping, ShopifySku } from '@/lib/types';
 import { parseShopifySku } from '@/utils/parseShopifySku';
-import { Plus, Pencil, Trash2, Sparkles, Brain, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Sparkles, Brain, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
@@ -49,6 +49,10 @@ export function SkuMappings() {
   const [shopifyDeleteConfirm, setShopifyDeleteConfirm] = useState<ShopifySku | null>(null);
   const [shopifyDeleteLoading, setShopifyDeleteLoading] = useState(false);
   const [shopifyDeleteError, setShopifyDeleteError] = useState<string | null>(null);
+  const [selectedVariantIds, setSelectedVariantIds] = useState<Set<string>>(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState<string | null>(null);
   const [smartPricingResult, setSmartPricingResult] = useState<{
     updated: number;
     skipped: number;
@@ -191,18 +195,92 @@ export function SkuMappings() {
     deleteMutation.mutate(id, { onSuccess: () => setDeleteConfirm(null) });
   }
 
+  // Clear selection when page or filters change; reconcile after refetch
+  useEffect(() => {
+    setSelectedVariantIds(new Set());
+  }, [page, tab, provider, debouncedSearch]);
+
+  useEffect(() => {
+    const currentIds = new Set(skuRows.map((r) => r.shopifySku.variantId));
+    setSelectedVariantIds((prev) => new Set([...prev].filter((id) => currentIds.has(id))));
+  }, [skuRows]);
+
+  const visibleVariantIds = skuRows.map((r) => r.shopifySku.variantId);
+  const allVisibleSelected =
+    visibleVariantIds.length > 0 && visibleVariantIds.every((id) => selectedVariantIds.has(id));
+  const someVisibleSelected = visibleVariantIds.some((id) => selectedVariantIds.has(id));
+
+  function toggleSelectAll() {
+    if (allVisibleSelected) {
+      setSelectedVariantIds((prev) => {
+        const next = new Set(prev);
+        visibleVariantIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedVariantIds((prev) => new Set([...prev, ...visibleVariantIds]));
+    }
+  }
+
+  function toggleSelectVariant(variantId: string) {
+    setSelectedVariantIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(variantId)) next.delete(variantId);
+      else next.add(variantId);
+      return next;
+    });
+  }
+
   async function handleShopifyDelete() {
     if (!shopifyDeleteConfirm) return;
     setShopifyDeleteLoading(true);
     setShopifyDeleteError(null);
     try {
-      await apiClient.post('/shopify-skus/bulk-delete', { skus: [shopifyDeleteConfirm.sku] });
+      const result = await apiClient.post<{ deleted: number; skipped: number; errors: string[] }>(
+        '/shopify-skus/bulk-delete',
+        { variantIds: [shopifyDeleteConfirm.variantId] },
+      );
+      if (result.deleted === 0) {
+        setShopifyDeleteError(
+          result.errors.length
+            ? result.errors.join(', ')
+            : 'Variant not found in Shopify — it may have already been deleted.',
+        );
+        return;
+      }
       void queryClient.invalidateQueries({ queryKey: ['shopify-skus'] });
       setShopifyDeleteConfirm(null);
     } catch (err) {
       setShopifyDeleteError(err instanceof Error ? err.message : 'Delete failed');
     } finally {
       setShopifyDeleteLoading(false);
+    }
+  }
+
+  async function handleBulkShopifyDelete() {
+    setBulkDeleteLoading(true);
+    setBulkDeleteError(null);
+    try {
+      const variantIds = [...selectedVariantIds];
+      const result = await apiClient.post<{ deleted: number; skipped: number; errors: string[] }>(
+        '/shopify-skus/bulk-delete',
+        { variantIds },
+      );
+      if (result.deleted === 0) {
+        setBulkDeleteError(
+          result.errors.length
+            ? result.errors.join(', ')
+            : `No variants were found in Shopify (${result.skipped} skipped). They may already be deleted.`,
+        );
+        return;
+      }
+      void queryClient.invalidateQueries({ queryKey: ['shopify-skus'] });
+      setSelectedVariantIds(new Set());
+      setBulkDeleteConfirm(false);
+    } catch (err) {
+      setBulkDeleteError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setBulkDeleteLoading(false);
     }
   }
 
@@ -309,6 +387,27 @@ export function SkuMappings() {
         ))}
       </div>
 
+      {/* Bulk action bar */}
+      {selectedVariantIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2 bg-blue-50 border border-blue-200 rounded-md text-sm">
+          <span className="text-blue-800 font-medium">{selectedVariantIds.size} selected</span>
+          <button
+            onClick={() => { setBulkDeleteError(null); setBulkDeleteConfirm(true); }}
+            className="flex items-center gap-1.5 px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors text-xs font-medium"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Delete from Shopify
+          </button>
+          <button
+            onClick={() => setSelectedVariantIds(new Set())}
+            className="ml-auto text-blue-600 hover:text-blue-800 transition-colors"
+            title="Clear selection"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       <div className="border rounded-lg overflow-x-auto relative">
         {isFetching && (
           <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden z-10 bg-gray-200">
@@ -318,6 +417,16 @@ export function SkuMappings() {
         <table className="w-full text-sm min-w-[600px]">
           <thead className="bg-muted/50">
             <tr>
+              <th className="px-4 py-3 w-8">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  ref={(el) => { if (el) el.indeterminate = someVisibleSelected && !allVisibleSelected; }}
+                  onChange={toggleSelectAll}
+                  className="rounded"
+                  aria-label="Select all on this page"
+                />
+              </th>
               <th className="text-left px-4 py-3 font-medium">Shopify SKU</th>
               <th className="text-left px-4 py-3 font-medium">Parsed</th>
               <th className="text-left px-4 py-3 font-medium">Mappings</th>
@@ -329,7 +438,7 @@ export function SkuMappings() {
             {isFetching &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 5 }).map((__, j) => (
+                  {Array.from({ length: 6 }).map((__, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 bg-muted animate-pulse rounded" />
                     </td>
@@ -338,7 +447,20 @@ export function SkuMappings() {
               ))}
 
             {!isFetching && skuRows.map((row) => (
-              <tr key={row.shopifySku.sku} className="hover:bg-muted/20 transition-colors">
+              <tr
+                key={row.shopifySku.variantId}
+                className={`hover:bg-muted/20 transition-colors ${selectedVariantIds.has(row.shopifySku.variantId) ? 'bg-blue-50/50' : ''}`}
+              >
+                {/* Checkbox */}
+                <td className="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedVariantIds.has(row.shopifySku.variantId)}
+                    onChange={() => toggleSelectVariant(row.shopifySku.variantId)}
+                    className="rounded"
+                    aria-label={`Select ${row.shopifySku.sku}`}
+                  />
+                </td>
                 {/* SKU */}
                 <td className="px-4 py-3">
                   <p className="font-mono text-xs font-semibold">{row.shopifySku.sku}</p>
@@ -490,7 +612,7 @@ export function SkuMappings() {
 
             {!isFetching && skuRows.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                   {debouncedSearch || provider
                     ? tab === 'unmapped'
                       ? 'No unmapped SKUs match the current filter.'
@@ -624,6 +746,42 @@ export function SkuMappings() {
                 className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
               >
                 {deleteMutation.isPending ? 'Deactivating...' : 'Deactivate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk delete from Shopify confirm dialog */}
+      {bulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !bulkDeleteLoading && setBulkDeleteConfirm(false)}
+          />
+          <div className="relative bg-white rounded-lg shadow-xl p-6 w-full max-w-sm space-y-4">
+            <h2 className="text-lg font-semibold">Delete {selectedVariantIds.size} SKUs from Shopify?</h2>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete {selectedVariantIds.size} variant
+              {selectedVariantIds.size !== 1 ? 's' : ''} from your Shopify store. This cannot be undone.
+            </p>
+            {bulkDeleteError && (
+              <p className="text-sm text-red-600">{bulkDeleteError}</p>
+            )}
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setBulkDeleteConfirm(false)}
+                disabled={bulkDeleteLoading}
+                className="px-4 py-2 text-sm border rounded-md hover:bg-muted transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleBulkShopifyDelete()}
+                disabled={bulkDeleteLoading}
+                className="px-4 py-2 text-sm bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {bulkDeleteLoading ? 'Deleting...' : `Delete ${selectedVariantIds.size}`}
               </button>
             </div>
           </div>

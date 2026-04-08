@@ -790,7 +790,7 @@ describe('getVariantGidsBySkus', () => {
                   id: 'gid://shopify/ProductVariant/111',
                   product: {
                     id: 'gid://shopify/Product/999',
-                    variants: { totalCount: 3 },
+                    variantsCount: { count: 3 },
                   },
                 },
               },
@@ -822,6 +822,64 @@ describe('getVariantGidsBySkus', () => {
 
     const client = makeClient();
     await expect(client.getVariantGidsBySkus(['ESIM-US-1GB'])).rejects.toThrow('Throttled');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getVariantInfoByGids
+// ---------------------------------------------------------------------------
+describe('getVariantInfoByGids', () => {
+  it('returns empty map for empty input without calling Shopify', async () => {
+    const client = makeClient();
+    const result = await client.getVariantInfoByGids([]);
+    expect(result.size).toBe(0);
+  });
+
+  it('returns variant info for found GIDs and skips null nodes', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        data: {
+          nodes: [
+            {
+              id: 'gid://shopify/ProductVariant/111',
+              product: {
+                id: 'gid://shopify/Product/999',
+                variantsCount: { count: 3 },
+              },
+            },
+            null, // not found — nodes returns null for missing IDs
+          ],
+        },
+      });
+
+    const client = makeClient();
+    const result = await client.getVariantInfoByGids([
+      'gid://shopify/ProductVariant/111',
+      'gid://shopify/ProductVariant/000',
+    ]);
+
+    expect(result.size).toBe(1);
+    expect(result.get('gid://shopify/ProductVariant/111')).toEqual({
+      variantGid: 'gid://shopify/ProductVariant/111',
+      productGid: 'gid://shopify/Product/999',
+      productVariantCount: 3,
+    });
+  });
+
+  it('throws on GraphQL top-level errors', async () => {
+    mockTokenRefresh();
+    nock(BASE_URL)
+      .post('/admin/api/2026-01/graphql.json')
+      .reply(200, {
+        errors: [{ message: 'Throttled' }],
+      });
+
+    const client = makeClient();
+    await expect(client.getVariantInfoByGids(['gid://shopify/ProductVariant/111'])).rejects.toThrow(
+      'Throttled',
+    );
   });
 });
 
