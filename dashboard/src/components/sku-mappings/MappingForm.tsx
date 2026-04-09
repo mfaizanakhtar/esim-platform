@@ -5,6 +5,7 @@ import { z } from 'zod';
 import type { SkuMapping, CatalogItem } from '@/lib/types';
 import { useCatalog } from '@/hooks/useCatalog';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
+import { parseShopifySku } from '@/utils/parseShopifySku';
 
 const schema = z.object({
   shopifySku: z.string().min(1, 'Shopify SKU is required'),
@@ -172,9 +173,15 @@ export function MappingForm({ initial, lockedSku, existingMappings, onSubmit, on
     // Auto-derive packageType for FiRoam
     const derived = item.productCode?.includes('?') ? 'daypass' : 'fixed';
     setValue('packageType', derived);
-    // Auto-derive daysCount from validity string (e.g. "7 days" → 7)
-    const parsedDays = parseInt(item.validity ?? '', 10);
-    setValue('daysCount', isNaN(parsedDays) ? undefined : parsedDays);
+    // For daypass: daysCount comes from the Shopify SKU (e.g. BH-1GB-3D-DAYPASS → 3).
+    // For fixed: daysCount is not used.
+    if (derived === 'daypass') {
+      const currentSku = watch('shopifySku');
+      const parsedSku = parseShopifySku(currentSku ?? '');
+      setValue('daysCount', parsedSku ? parsedSku.validityDays : undefined);
+    } else {
+      setValue('daysCount', undefined);
+    }
     setComboQuery('');
     setComboOpen(false);
     setFocusedIndex(-1);

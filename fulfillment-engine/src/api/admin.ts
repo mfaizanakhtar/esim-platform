@@ -1130,6 +1130,8 @@ export default function adminRoutes(
     provider: string;
     confidence: number;
     reason: string;
+    packageType: 'fixed' | 'daypass';
+    daysCount: number | null;
   };
 
   type AiMapInputSku = {
@@ -1428,6 +1430,8 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                   for (const match of parsed.mappings ?? []) {
                     const entry = catalogEntries.find((e) => e.id === match.catalogId);
                     if (!entry) continue;
+                    const parsedSku = parseShopifySku(match.shopifySku);
+                    const pkgType = entry.productCode?.includes('?') ? 'daypass' : 'fixed';
                     drafts.push({
                       shopifySku: match.shopifySku,
                       catalogId: match.catalogId,
@@ -1439,6 +1443,8 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                       provider: entry.provider,
                       confidence: match.confidence,
                       reason: match.reason,
+                      packageType: pkgType,
+                      daysCount: pkgType === 'daypass' ? (parsedSku?.validityDays ?? null) : null,
                     });
                   }
                   // Hard post-filter: enforce relaxOptions deterministically regardless of GPT output
@@ -1576,6 +1582,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                       continue;
                   }
                 }
+                const pkgType2 = entry.productCode?.includes('?') ? 'daypass' : 'fixed';
                 partialDrafts.push({
                   shopifySku: match.shopifySku,
                   catalogId: match.catalogId,
@@ -1587,6 +1594,8 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                   provider: entry.provider,
                   confidence: match.confidence,
                   reason: match.reason,
+                  packageType: pkgType2,
+                  daysCount: pkgType2 === 'daypass' ? (parsedSku?.validityDays ?? null) : null,
                 });
               }
             }
@@ -2206,6 +2215,8 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           provider: row.provider,
           confidence,
           reason: `Structured match on: ${reasons.join(', ')}`,
+          packageType: isDaypass ? 'daypass' : 'fixed',
+          daysCount: isDaypass ? validityDays : null,
         },
         // Fewer region codes = more targeted product (SA-only beats Middle East beats Global)
         specificity: p.regionCodes.length,

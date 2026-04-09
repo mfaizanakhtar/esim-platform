@@ -229,6 +229,8 @@ export function AiMap() {
       region: d.region ?? undefined,
       dataAmount: d.dataAmount ?? undefined,
       validity: d.validity ?? undefined,
+      packageType: d.packageType ?? 'fixed',
+      daysCount: d.daysCount ?? undefined,
       isActive: true,
     }));
     bulkCreate.mutate(
