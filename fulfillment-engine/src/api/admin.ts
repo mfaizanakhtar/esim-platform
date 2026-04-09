@@ -2121,6 +2121,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
+              AND jsonb_typeof("parsedJson"->'regionCodes') = 'array'
               AND provider = ${provider}
               AND "parsedJson"->'regionCodes' ? ${regionCode}
               AND jsonb_array_length("parsedJson"->'regionCodes') = 1
@@ -2142,6 +2143,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
+              AND jsonb_typeof("parsedJson"->'regionCodes') = 'array'
               AND "parsedJson"->'regionCodes' ? ${regionCode}
               AND jsonb_array_length("parsedJson"->'regionCodes') = 1
           `
