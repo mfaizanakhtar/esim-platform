@@ -1395,7 +1395,7 @@ export default function adminRoutes(
                     : 'Data amount is NOT required to match — allow data mismatches.';
                 const requireValidityNote =
                   relaxOptions?.requireValidity !== false
-                    ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. EXCEPTION: if skuType is DAYPASS, skip this check (DAYPASS have no fixed validity).'
+                    ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. This applies to all SKU types including DAYPASS — the validity period must match exactly.'
                     : 'Validity is NOT required to match — allow validity mismatches.';
                 const systemPrompt = `You are an eSIM product matcher. ${requireDataNote} ${requireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Confidence reflects structural match quality. For daypass match for exact DATA and exact VALIDITY and exact REGION ( not general region like global or regional ) and return 100% accuracy in that case. Return only JSON.`;
                 const userPrompt = `Match each Shopify SKU to its best catalog entry:
@@ -1461,7 +1461,6 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                       return false;
                     if (
                       relaxOptions?.requireValidity !== false &&
-                      parsedSku.skuType !== 'DAYPASS' &&
                       entry.parsedJson.validityDays !== parsedSku.validityDays
                     )
                       return false;
@@ -1515,7 +1514,7 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
               : 'Data amount is NOT required to match — allow data mismatches.';
           const fallbackRequireValidityNote =
             relaxOptions?.requireValidity !== false
-              ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. EXCEPTION: if skuType is DAYPASS, skip this check (DAYPASS have no fixed validity).'
+              ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. This applies to all SKU types including DAYPASS — the validity period must match exactly.'
               : 'Validity is NOT required to match — allow validity mismatches.';
           const systemPrompt = `You are an eSIM product matcher. ${fallbackRequireDataNote} ${fallbackRequireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. Match each Shopify SKU to the best provider catalog entry. Confidence reflects structural match quality. Return only JSON.`;
           const userPrompt = `Match these Shopify SKUs to catalog entries:
@@ -1570,7 +1569,6 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                       continue;
                     if (
                       relaxOptions?.requireValidity !== false &&
-                      parsedSku.skuType !== 'DAYPASS' &&
                       entry.parsedJson.validityDays !== parsedSku.validityDays
                     )
                       continue;
@@ -2085,6 +2083,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
   type StructuredRelaxOptions = {
     relaxValidity?: boolean;
     relaxData?: boolean;
+    relaxRegion?: boolean; // if true, allow regional/global catalog entries (not just exact country match)
   };
 
   type ParsedCatalogRow = {
@@ -2109,27 +2108,51 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     const { regionCode, dataMb, validityDays, skuType } = parsed;
     const isDaypass = skuType === 'DAYPASS';
 
-    // JSONB containment query: regionCodes array must contain this regionCode
+    // JSONB containment query: regionCodes array must contain this regionCode.
+    // Strict mode (default): also requires regionCodes = [regionCode] exactly — rejects regional/global plans.
+    // relaxRegion=true: allows any catalog entry that covers this region (may include global/regional plans).
+    const strictRegion = !relaxOptions.relaxRegion;
     let rows: ParsedCatalogRow[];
     if (provider) {
-      rows = await prisma.$queryRaw<ParsedCatalogRow[]>`
-        SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-               "parsedJson"
-        FROM "ProviderSkuCatalog"
-        WHERE "isActive" = true
-          AND "parsedJson" IS NOT NULL
-          AND provider = ${provider}
-          AND "parsedJson"->'regionCodes' ? ${regionCode}
-      `;
+      rows = strictRegion
+        ? await prisma.$queryRaw<ParsedCatalogRow[]>`
+            SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+                   "parsedJson"
+            FROM "ProviderSkuCatalog"
+            WHERE "isActive" = true
+              AND "parsedJson" IS NOT NULL
+              AND provider = ${provider}
+              AND "parsedJson"->'regionCodes' ? ${regionCode}
+              AND jsonb_array_length("parsedJson"->'regionCodes') = 1
+          `
+        : await prisma.$queryRaw<ParsedCatalogRow[]>`
+            SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+                   "parsedJson"
+            FROM "ProviderSkuCatalog"
+            WHERE "isActive" = true
+              AND "parsedJson" IS NOT NULL
+              AND provider = ${provider}
+              AND "parsedJson"->'regionCodes' ? ${regionCode}
+          `;
     } else {
-      rows = await prisma.$queryRaw<ParsedCatalogRow[]>`
-        SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-               "parsedJson"
-        FROM "ProviderSkuCatalog"
-        WHERE "isActive" = true
-          AND "parsedJson" IS NOT NULL
-          AND "parsedJson"->'regionCodes' ? ${regionCode}
-      `;
+      rows = strictRegion
+        ? await prisma.$queryRaw<ParsedCatalogRow[]>`
+            SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+                   "parsedJson"
+            FROM "ProviderSkuCatalog"
+            WHERE "isActive" = true
+              AND "parsedJson" IS NOT NULL
+              AND "parsedJson"->'regionCodes' ? ${regionCode}
+              AND jsonb_array_length("parsedJson"->'regionCodes') = 1
+          `
+        : await prisma.$queryRaw<ParsedCatalogRow[]>`
+            SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+                   "parsedJson"
+            FROM "ProviderSkuCatalog"
+            WHERE "isActive" = true
+              AND "parsedJson" IS NOT NULL
+              AND "parsedJson"->'regionCodes' ? ${regionCode}
+          `;
     }
 
     const candidates: { draft: AiMappingDraftInternal; specificity: number }[] = [];
@@ -2143,11 +2166,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       const reasons: string[] = ['region'];
 
       if (isDaypass) {
-        // For daypass SKUs, validity is irrelevant — the provider handles daily renewal.
-        // Region + data match = full confidence.
+        // Daypass: match region + data + validity (subscription length). All three must match unless relaxed.
+        const validityMatch = p.validityDays === validityDays;
         if (!relaxOptions.relaxData && !dataMatch) continue;
-        confidence = dataMatch ? 1.0 : 0.6;
+        if (!relaxOptions.relaxValidity && !validityMatch) continue;
+        const matchCount = 1 + (dataMatch ? 1 : 0) + (validityMatch ? 1 : 0);
+        confidence = matchCount === 3 ? 1.0 : matchCount === 2 ? 0.8 : 0.6;
         if (dataMatch) reasons.push('data');
+        if (validityMatch) reasons.push('validity');
       } else {
         const validityMatch = p.validityDays === validityDays;
         // Apply relaxation: if not relaxed, field must match
