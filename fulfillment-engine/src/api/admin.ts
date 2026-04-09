@@ -1395,9 +1395,9 @@ export default function adminRoutes(
                     : 'Data amount is NOT required to match — allow data mismatches.';
                 const requireValidityNote =
                   relaxOptions?.requireValidity !== false
-                    ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. This applies to all SKU types including DAYPASS — the validity period must match exactly.'
+                    ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. EXCEPTION: if skuType is DAYPASS, skip this check — daypass catalog entries are always daily plans and the SKU validity represents subscription length, not plan period.'
                     : 'Validity is NOT required to match — allow validity mismatches.';
-                const systemPrompt = `You are an eSIM product matcher. ${requireDataNote} ${requireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Confidence reflects structural match quality. For daypass match for exact DATA and exact VALIDITY and exact REGION ( not general region like global or regional ) and return 100% accuracy in that case. Return only JSON.`;
+                const systemPrompt = `You are an eSIM product matcher. ${requireDataNote} ${requireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. For each Shopify SKU you are given its top-10 most semantically similar catalog candidates. Pick the best match per SKU or omit if none are suitable. Confidence reflects structural match quality. For DAYPASS SKUs, require exact DATA and exact REGION only — ignore validityDays. Return only JSON.`;
                 const userPrompt = `Match each Shopify SKU to its best catalog entry:
 ${JSON.stringify(skuInputs)}
 
@@ -1460,6 +1460,7 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                     )
                       return false;
                     if (
+                      parsedSku.skuType !== 'DAYPASS' &&
                       relaxOptions?.requireValidity !== false &&
                       entry.parsedJson.validityDays !== parsedSku.validityDays
                     )
@@ -1514,7 +1515,7 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
               : 'Data amount is NOT required to match — allow data mismatches.';
           const fallbackRequireValidityNote =
             relaxOptions?.requireValidity !== false
-              ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. This applies to all SKU types including DAYPASS — the validity period must match exactly.'
+              ? 'Validity IS required to match: REJECT any catalog entry where validityDays ≠ SKU validityDays. EXCEPTION: if skuType is DAYPASS, skip this check — daypass catalog entries are always daily plans and the SKU validity represents subscription length, not plan period.'
               : 'Validity is NOT required to match — allow validity mismatches.';
           const systemPrompt = `You are an eSIM product matcher. ${fallbackRequireDataNote} ${fallbackRequireValidityNote} Region match is ALWAYS required. Parsed numeric fields (dataMb, validityDays) are provided directly — use them for exact comparison. Match each Shopify SKU to the best provider catalog entry. Confidence reflects structural match quality. Return only JSON.`;
           const userPrompt = `Match these Shopify SKUs to catalog entries:
@@ -1568,6 +1569,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                     )
                       continue;
                     if (
+                      parsedSku.skuType !== 'DAYPASS' &&
                       relaxOptions?.requireValidity !== false &&
                       entry.parsedJson.validityDays !== parsedSku.validityDays
                     )
@@ -2168,14 +2170,12 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       const reasons: string[] = ['region'];
 
       if (isDaypass) {
-        // Daypass: match region + data + validity (subscription length). All three must match unless relaxed.
-        const validityMatch = p.validityDays === validityDays;
+        // Daypass: validity is irrelevant — catalog entries are "daily" plans (validityDays=1).
+        // The "3D" in SA-1GB-3D-DAYPASS means "3 days of the pass", not the plan period.
+        // Only match region + data.
         if (!relaxOptions.relaxData && !dataMatch) continue;
-        if (!relaxOptions.relaxValidity && !validityMatch) continue;
-        const matchCount = 1 + (dataMatch ? 1 : 0) + (validityMatch ? 1 : 0);
-        confidence = matchCount === 3 ? 1.0 : matchCount === 2 ? 0.8 : 0.6;
+        confidence = dataMatch ? 1.0 : 0.6;
         if (dataMatch) reasons.push('data');
-        if (validityMatch) reasons.push('validity');
       } else {
         const validityMatch = p.validityDays === validityDays;
         // Apply relaxation: if not relaxed, field must match
