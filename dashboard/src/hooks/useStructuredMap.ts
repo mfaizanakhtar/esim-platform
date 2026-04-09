@@ -13,7 +13,7 @@ type JobProgress = {
 type StartParams = {
   provider?: string;
   unmappedOnly?: boolean;
-  relaxOptions?: { relaxValidity?: boolean; relaxData?: boolean };
+  relaxOptions?: { relaxValidity?: boolean; relaxData?: boolean; relaxRegion?: boolean };
 };
 
 function handle401(): never {
