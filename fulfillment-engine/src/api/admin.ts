@@ -2096,6 +2096,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     dataAmount: string | null;
     validity: string | null;
     netPrice: unknown;
+    productCode: string;
     parsedJson: ParsedCatalogAttributes | null;
   };
 
@@ -2119,7 +2120,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       rows = strictRegion
         ? await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "parsedJson"
+                   "productCode", "parsedJson"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
@@ -2130,7 +2131,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           `
         : await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "parsedJson"
+                   "productCode", "parsedJson"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
@@ -2141,7 +2142,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       rows = strictRegion
         ? await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "parsedJson"
+                   "productCode", "parsedJson"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
@@ -2151,7 +2152,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           `
         : await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "parsedJson"
+                   "productCode", "parsedJson"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
@@ -2163,6 +2164,11 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     for (const row of rows) {
       const p = row.parsedJson;
       if (!p) continue;
+
+      // Require package type to match: DAYPASS SKU → daypass catalog entry (productCode contains '?')
+      // FIXED SKU → non-daypass catalog entry. Prevents DAYPASS matching to fixed plans and vice versa.
+      const isCatalogDaypass = row.productCode.includes('?');
+      if (isDaypass !== isCatalogDaypass) continue;
 
       const dataMatch = p.dataMb === dataMb;
 
