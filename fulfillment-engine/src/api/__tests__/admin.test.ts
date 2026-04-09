@@ -4077,6 +4077,7 @@ describe('Admin Routes', () => {
           dataAmount: '1GB',
           validity: '7 days',
           netPrice: '1.50',
+          productCode: 'EU-1GB-7D',
           parsedJson: { regionCodes: ['EU'], dataMb: 1024, validityDays: 7 },
         },
       ]);
@@ -4149,6 +4150,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '7 days',
           netPrice: '2.00',
+          productCode: 'EU-2GB-7D',
           parsedJson: { regionCodes: ['EU'], dataMb: 2048, validityDays: 7 },
         },
       ]);
@@ -4178,6 +4180,7 @@ describe('Admin Routes', () => {
           dataAmount: '1GB',
           validity: '7 days',
           netPrice: '1.50',
+          productCode: 'EU-1GB-7D',
           parsedJson: { regionCodes: ['EU'], dataMb: 1024, validityDays: 7 },
         },
       ]);
@@ -4346,6 +4349,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '30 days',
           netPrice: '3.00',
+          productCode: 'EU-2GB-30D',
           parsedJson: { regionCodes: ['EU'], dataMb: 2048, validityDays: 30 },
         },
       ]);
@@ -4383,6 +4387,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '1 day',
           netPrice: '1.50',
+          productCode: 'SA-2GB-DAILY?1',
           parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 1 },
         },
       ]);
@@ -4414,6 +4419,7 @@ describe('Admin Routes', () => {
           dataAmount: '5GB',
           validity: '1 day',
           netPrice: '2.50',
+          productCode: 'SA-5GB-DAILY?1',
           parsedJson: { regionCodes: ['SA'], dataMb: 5120, validityDays: 1 },
         },
       ]);
@@ -4441,6 +4447,7 @@ describe('Admin Routes', () => {
           dataAmount: '5GB',
           validity: '1 day',
           netPrice: '2.50',
+          productCode: 'SA-5GB-DAILY?3',
           parsedJson: { regionCodes: ['SA'], dataMb: 5120, validityDays: 1 },
         },
       ]);
@@ -4467,6 +4474,7 @@ describe('Admin Routes', () => {
           dataAmount: '1GB',
           validity: '30 days',
           netPrice: '4.00',
+          productCode: 'EU-1GB-30D',
           parsedJson: { regionCodes: ['EU'], dataMb: 1024, validityDays: 30 },
         },
       ]);
@@ -4501,6 +4509,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '7 days',
           netPrice: '3.00',
+          productCode: 'SA-2GB-7D',
           parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
         },
         {
@@ -4511,6 +4520,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '7 days',
           netPrice: '4.00',
+          productCode: 'ME-2GB-7D',
           parsedJson: { regionCodes: ['SA', 'AE', 'QA', 'KW'], dataMb: 2048, validityDays: 7 },
         },
       ]);
@@ -4542,6 +4552,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '7 days',
           netPrice: '3.00',
+          productCode: 'SA-2GB-7D-FIROAM',
           parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
         },
         {
@@ -4552,6 +4563,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '7 days',
           netPrice: '3.50',
+          productCode: 'SA-2GB-7D-TGT',
           parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
         },
       ]);
@@ -4580,6 +4592,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '7 days',
           netPrice: '3.00',
+          productCode: 'SA-2GB-7D',
           // Exact match → confidence 1.0, regionCodes.length=1
           parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
         },
@@ -4591,6 +4604,7 @@ describe('Admin Routes', () => {
           dataAmount: '2GB',
           validity: '30 days',
           netPrice: '5.00',
+          productCode: 'SA-2GB-30D',
           // Validity differs → confidence 0.8 with relaxValidity, regionCodes.length=1
           parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 30 },
         },
