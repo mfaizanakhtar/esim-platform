@@ -62,6 +62,7 @@ export function AiMap() {
   const [forceReplace, setForceReplace] = useState(false);
   const [requireData, setRequireData] = useState(true);
   const [requireValidity, setRequireValidity] = useState(true);
+  const [requireExactRegion, setRequireExactRegion] = useState(true);
 
   function setProviderFilter(value: string) {
     setSearchParams((prev) => {
@@ -162,6 +163,7 @@ export function AiMap() {
         relaxOptions: {
           relaxData: !requireData,
           relaxValidity: !requireValidity,
+          relaxRegion: !requireExactRegion,
         },
       });
     }
@@ -390,6 +392,9 @@ export function AiMap() {
                 Match Requirements
               </p>
               <p className="text-xs text-muted-foreground">Region match is always required.</p>
+              {mode === 'structured' && (
+                <p className="text-xs text-muted-foreground">Structured mode defaults to exact country-only matches.</p>
+              )}
               <div className="flex items-center gap-2">
                 <input
                   id="requireData"
@@ -412,6 +417,19 @@ export function AiMap() {
                   Validity must match
                 </label>
               </div>
+              {mode === 'structured' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    id="requireExactRegion"
+                    type="checkbox"
+                    checked={requireExactRegion}
+                    onChange={(e) => setRequireExactRegion(e.target.checked)}
+                  />
+                  <label htmlFor="requireExactRegion" className="text-sm font-medium">
+                    Exact country match only (no regional/global)
+                  </label>
+                </div>
+              )}
             </div>
 
             <button

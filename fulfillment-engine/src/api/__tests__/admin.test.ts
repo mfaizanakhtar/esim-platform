@@ -2607,15 +2607,15 @@ describe('Admin Routes', () => {
       expect(res.json().drafts).toHaveLength(0);
     });
 
-    it('keeps DAYPASS draft even when catalog validityDays differs', async () => {
-      // SA-2GB-1D-DAYPASS: skuType=DAYPASS → validity filter is skipped
+    it('keeps DAYPASS draft when catalog validityDays matches', async () => {
+      // SA-2GB-1D-DAYPASS: validityDays=1 — catalog must also have validityDays=1
       vi.mocked(prismaCatalog.findMany).mockResolvedValue([
         makeCatalogItem({
           id: 'cat-sa-2gb-daypass',
           productName: 'SA 2GB Daypass',
           region: 'SA',
           dataAmount: '2GB',
-          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 1 },
         }),
       ]);
       adminMocks.mockOpenAiCreate.mockResolvedValue({
@@ -2645,7 +2645,7 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      // DAYPASS bypasses validity check → draft kept
+      // Validity now required for DAYPASS — matching validityDays=1 → draft kept
       expect(res.json().drafts).toHaveLength(1);
       expect(res.json().drafts[0].shopifySku).toBe('SA-2GB-1D-DAYPASS');
     });
@@ -4372,18 +4372,17 @@ describe('Admin Routes', () => {
   // ---------------------------------------------------------------------------
 
   describe('POST /sku-mappings/structured-match — DAYPASS SKU', () => {
-    it('returns 1.0 confidence for DAYPASS when region+data match (validity ignored)', async () => {
-      // Catalog entry has validityDays=1 (daily), SKU has validityDays=7 — should NOT penalise
+    it('returns 1.0 confidence for DAYPASS when region+data+validity match', async () => {
       vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
         {
           id: 'cat-daypass-1',
           provider: 'firoam',
-          productName: 'SA 2GB Daily',
+          productName: 'SA 2GB 7Day',
           region: 'SA',
           dataAmount: '2GB',
-          validity: '1 day',
+          validity: '7 days',
           netPrice: '1.50',
-          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 1 },
+          parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 7 },
         },
       ]);
 
@@ -4402,6 +4401,7 @@ describe('Admin Routes', () => {
       expect(body.drafts[0].confidence).toBe(1.0);
       expect(body.drafts[0].reason).toContain('region');
       expect(body.drafts[0].reason).toContain('data');
+      expect(body.drafts[0].reason).toContain('validity');
     });
 
     it('returns 0.6 confidence for DAYPASS when data does not match', async () => {
@@ -4422,7 +4422,10 @@ describe('Admin Routes', () => {
         method: 'POST',
         url: '/sku-mappings/structured-match',
         headers: JSON_HEADERS,
-        payload: { sku: 'SA-2GB-7D-DAYPASS', relaxOptions: { relaxData: true } },
+        payload: {
+          sku: 'SA-2GB-7D-DAYPASS',
+          relaxOptions: { relaxData: true, relaxValidity: true },
+        },
       });
 
       expect(res.statusCode).toBe(200);
