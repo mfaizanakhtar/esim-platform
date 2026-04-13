@@ -2677,6 +2677,7 @@ describe('Admin Routes', () => {
           productName: 'SA 2GB Daypass',
           region: 'SA',
           dataAmount: '2GB',
+          productCode: 'SA-2GB-DAILY?1',
           parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 1 },
         }),
       ]);

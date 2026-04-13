@@ -82,6 +82,17 @@ export function MappingForm({ initial, lockedSku, existingMappings, onSubmit, on
   const providerCatalogId = watch('providerCatalogId');
   const packageType = watch('packageType');
   const daysCount = watch('daysCount');
+  const shopifySku = watch('shopifySku');
+
+  // Re-derive daysCount whenever SKU or packageType changes, so edits stay in sync.
+  useEffect(() => {
+    if (packageType !== 'daypass') {
+      setValue('daysCount', undefined);
+      return;
+    }
+    const parsed = parseShopifySku(shopifySku ?? '');
+    setValue('daysCount', parsed?.validityDays ?? undefined);
+  }, [packageType, shopifySku, setValue]);
 
   const { data: providersData } = useProviders();
   const providers = providersData?.providers ?? [];
@@ -170,18 +181,9 @@ export function MappingForm({ initial, lockedSku, existingMappings, onSubmit, on
     setValue('region', item.region ?? '');
     setValue('dataAmount', item.dataAmount ?? '');
     setValue('validity', item.validity ?? '');
-    // Auto-derive packageType for FiRoam
+    // Auto-derive packageType for FiRoam — daysCount is handled reactively by useEffect above.
     const derived = item.productCode?.includes('?') ? 'daypass' : 'fixed';
     setValue('packageType', derived);
-    // For daypass: daysCount comes from the Shopify SKU (e.g. BH-1GB-3D-DAYPASS → 3).
-    // For fixed: daysCount is not used.
-    if (derived === 'daypass') {
-      const currentSku = watch('shopifySku');
-      const parsedSku = parseShopifySku(currentSku ?? '');
-      setValue('daysCount', parsedSku ? parsedSku.validityDays : undefined);
-    } else {
-      setValue('daysCount', undefined);
-    }
     setComboQuery('');
     setComboOpen(false);
     setFocusedIndex(-1);

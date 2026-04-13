@@ -221,18 +221,21 @@ export function AiMap() {
 
   function handleApprove() {
     const selected = drafts.filter((d) => d.selected);
-    const inputs = selected.map((d) => ({
-      shopifySku: d.shopifySku,
-      provider: d.provider,
-      providerCatalogId: d.catalogId,
-      name: d.productName,
-      region: d.region ?? undefined,
-      dataAmount: d.dataAmount ?? undefined,
-      validity: d.validity ?? undefined,
-      packageType: d.packageType ?? 'fixed',
-      daysCount: d.daysCount ?? undefined,
-      isActive: true,
-    }));
+    const inputs = selected.map((d) => {
+      const packageType = d.packageType ?? 'fixed';
+      return {
+        shopifySku: d.shopifySku,
+        provider: d.provider,
+        providerCatalogId: d.catalogId,
+        name: d.productName,
+        region: d.region ?? undefined,
+        dataAmount: d.dataAmount ?? undefined,
+        validity: d.validity ?? undefined,
+        packageType,
+        daysCount: packageType === 'daypass' ? (d.daysCount ?? undefined) : undefined,
+        isActive: true,
+      };
+    });
     bulkCreate.mutate(
       { inputs, forceReplace },
       {
