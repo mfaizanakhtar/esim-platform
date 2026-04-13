@@ -672,6 +672,18 @@ export default function adminRoutes(
           continue;
         }
 
+        // Derive packageType and daysCount — prefer what the caller sent, fall back to catalog
+        const requestedPackageType =
+          item.packageType === 'daypass' || item.packageType === 'fixed'
+            ? (item.packageType as 'daypass' | 'fixed')
+            : entry.productCode?.includes('?')
+              ? 'daypass'
+              : 'fixed';
+        const requestedDaysCount =
+          requestedPackageType === 'daypass' && typeof item.daysCount === 'number'
+            ? item.daysCount
+            : null;
+
         // Derive providerSku from catalog
         let providerSku: string;
         if (entry.provider === 'firoam') {
@@ -711,7 +723,8 @@ export default function adminRoutes(
               region: entry.region ?? null,
               dataAmount: entry.dataAmount ?? null,
               validity: entry.validity ?? null,
-              packageType: entry.productCode?.includes('?') ? 'daypass' : 'fixed',
+              packageType: requestedPackageType,
+              daysCount: requestedDaysCount,
               isActive: true,
             },
           });
@@ -735,7 +748,8 @@ export default function adminRoutes(
             region: entry.region ?? null,
             dataAmount: entry.dataAmount ?? null,
             validity: entry.validity ?? null,
-            packageType: entry.productCode?.includes('?') ? 'daypass' : 'fixed',
+            packageType: requestedPackageType,
+            daysCount: requestedDaysCount,
             isActive: true,
             priority: (maxRow?.priority ?? 0) + 1,
             priorityLocked: false,
@@ -1130,6 +1144,8 @@ export default function adminRoutes(
     provider: string;
     confidence: number;
     reason: string;
+    packageType: 'fixed' | 'daypass';
+    daysCount: number | null;
   };
 
   type AiMapInputSku = {
@@ -1428,6 +1444,8 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                   for (const match of parsed.mappings ?? []) {
                     const entry = catalogEntries.find((e) => e.id === match.catalogId);
                     if (!entry) continue;
+                    const parsedSku = parseShopifySku(match.shopifySku);
+                    const pkgType = entry.productCode?.includes('?') ? 'daypass' : 'fixed';
                     drafts.push({
                       shopifySku: match.shopifySku,
                       catalogId: match.catalogId,
@@ -1439,6 +1457,8 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                       provider: entry.provider,
                       confidence: match.confidence,
                       reason: match.reason,
+                      packageType: pkgType,
+                      daysCount: pkgType === 'daypass' ? (parsedSku?.validityDays ?? null) : null,
                     });
                   }
                   // Hard post-filter: enforce relaxOptions deterministically regardless of GPT output
@@ -1446,6 +1466,9 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                     const parsedSku = parseShopifySku(draft.shopifySku);
                     if (!parsedSku) return true;
                     const entry = catalogEntries.find((e) => e.id === draft.catalogId);
+                    // Reject type mismatches: DAYPASS SKU must map to daypass catalog and vice versa
+                    const isCatalogDaypass = Boolean(entry?.productCode?.includes('?'));
+                    if ((parsedSku.skuType === 'DAYPASS') !== isCatalogDaypass) return false;
                     if (!entry?.parsedJson) {
                       // Unverifiable — only pass through if both constraints are relaxed
                       return (
@@ -1576,6 +1599,11 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                       continue;
                   }
                 }
+                const pkgType2 = entry.productCode?.includes('?') ? 'daypass' : 'fixed';
+                // Reject type mismatches: DAYPASS SKU must map to daypass catalog and vice versa
+                if (parsedSku && (parsedSku.skuType === 'DAYPASS') !== (pkgType2 === 'daypass')) {
+                  continue;
+                }
                 partialDrafts.push({
                   shopifySku: match.shopifySku,
                   catalogId: match.catalogId,
@@ -1587,6 +1615,8 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                   provider: entry.provider,
                   confidence: match.confidence,
                   reason: match.reason,
+                  packageType: pkgType2,
+                  daysCount: pkgType2 === 'daypass' ? (parsedSku?.validityDays ?? null) : null,
                 });
               }
             }
@@ -2206,6 +2236,8 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           provider: row.provider,
           confidence,
           reason: `Structured match on: ${reasons.join(', ')}`,
+          packageType: isDaypass ? 'daypass' : 'fixed',
+          daysCount: isDaypass ? validityDays : null,
         },
         // Fewer region codes = more targeted product (SA-only beats Middle East beats Global)
         specificity: p.regionCodes.length,

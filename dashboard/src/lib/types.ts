@@ -100,6 +100,8 @@ export interface AiMappingDraft {
   netPrice: number | null;
   confidence: number;
   reason: string;
+  packageType?: 'fixed' | 'daypass';
+  daysCount?: number | null;
 }
 
 export interface ParsedCatalogAttributes {

@@ -2513,6 +2513,68 @@ describe('Admin Routes', () => {
     });
   });
 
+  // ── POST /sku-mappings/ai-map — packageType + daysCount derivation ─────────
+
+  describe('POST /sku-mappings/ai-map — packageType/daysCount derivation', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([{ provider: 'firoam' }]);
+      adminMocks.mockIsVectorAvailable.mockResolvedValue(false);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([]);
+    });
+
+    it('sets packageType=daypass and daysCount from SKU when catalog productCode contains ?', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        {
+          sku: 'SA-1GB-3D-DAYPASS',
+          variantId: 'gid://dp-1',
+          productTitle: 'SA',
+          variantTitle: 'Daypass',
+        },
+      ]);
+      vi.mocked(prismaCatalog.findMany).mockResolvedValue([
+        makeCatalogItem({
+          id: 'cat-sa-dp',
+          productName: 'SA 1GB Daily',
+          region: 'SA',
+          dataAmount: '1GB',
+          productCode: 'SA-1GB-DAY?1',
+          parsedJson: { regionCodes: ['SA'], dataMb: 1024, validityDays: 1 },
+        }),
+      ]);
+      adminMocks.mockOpenAiCreate.mockResolvedValue({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                mappings: [
+                  {
+                    shopifySku: 'SA-1GB-3D-DAYPASS',
+                    catalogId: 'cat-sa-dp',
+                    confidence: 0.95,
+                    reason: 'daypass match',
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/ai-map',
+        headers: JSON_HEADERS,
+        payload: { shopifySkus: ['SA-1GB-3D-DAYPASS'], unmappedOnly: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { drafts: Array<{ packageType: string; daysCount: number }> };
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].packageType).toBe('daypass');
+      expect(body.drafts[0].daysCount).toBe(3); // from SA-1GB-3D-DAYPASS
+    });
+  });
+
   // ── POST /sku-mappings/ai-map — relaxOptions post-filter ─────────────────
 
   describe('POST /sku-mappings/ai-map — relaxOptions post-filter', () => {
@@ -2615,6 +2677,7 @@ describe('Admin Routes', () => {
           productName: 'SA 2GB Daypass',
           region: 'SA',
           dataAmount: '2GB',
+          productCode: 'SA-2GB-DAILY?1',
           parsedJson: { regionCodes: ['SA'], dataMb: 2048, validityDays: 1 },
         }),
       ]);
