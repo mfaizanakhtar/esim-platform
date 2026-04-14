@@ -2,6 +2,7 @@ import {
   reactExtension,
   useApi,
   useSubscription,
+  useSettings,
   InlineStack,
   Text,
   Button,
@@ -12,7 +13,7 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
-import { PROVISIONING_QUIPS, BACKEND, type DeliveryMetafieldEntry } from './shared';
+import { PROVISIONING_QUIPS, type DeliveryMetafieldEntry } from './shared';
 
 export default reactExtension(
   'purchase.thank-you.announcement.render',
@@ -22,6 +23,9 @@ export default reactExtension(
 type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
 
 function ThankYouAnnouncementBlock() {
+  const { backend_url } = useSettings<{ backend_url?: string }>();
+  const backendUrl = (backend_url as string | undefined) ?? '';
+
   const api = useApi<'purchase.thank-you.announcement.render'>();
   const orderConfirmation = useSubscription(
     (api as unknown as { orderConfirmation: Parameters<typeof useSubscription>[0] }).orderConfirmation,
@@ -38,7 +42,7 @@ function ThankYouAnnouncementBlock() {
     let stopped = false;
 
     const fetchCredentials = (accessToken: string) => {
-      void fetch(`${BACKEND}/esim/delivery/${accessToken}`)
+      void fetch(`${backendUrl}/esim/delivery/${accessToken}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data: DeliveryMetafieldEntry | null) => {
           if (data) setCredentials(data);
@@ -48,7 +52,7 @@ function ThankYouAnnouncementBlock() {
 
     const poll = () => {
       if (stopped || ++attempts > 120) return;
-      void fetch(`${BACKEND}/esim/order-status/${numericOrderId}`)
+      void fetch(`${backendUrl}/esim/order-status/${numericOrderId}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data: { status: EsimStatus; accessToken?: string } | null) => {
           if (!data || stopped) return;
@@ -71,7 +75,7 @@ function ThankYouAnnouncementBlock() {
 
     poll();
     return () => { stopped = true; };
-  }, [numericOrderId]);
+  }, [numericOrderId, backendUrl]);
 
   const isProvisioning = status === 'provisioning' || status === 'pending';
   useEffect(() => {

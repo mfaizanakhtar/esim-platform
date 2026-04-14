@@ -2,7 +2,7 @@
 
 client_id = "fb0eb60941e0e7bb38a2ca344b3bd123"
 name = "esim_fulfillment"
-application_url = "https://esim-api-production-a56a.up.railway.app"
+application_url = "https://api.sailesim.com"
 embedded = false
 
 [webhooks]

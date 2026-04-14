@@ -4,26 +4,32 @@ import {
   Text,
   Button,
   Banner,
+  useSettings,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useCallback } from 'react';
-
-const BACKEND_URL = 'https://esim-api-production-a56a.up.railway.app';
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
 export function useCancelEsim(accessToken: string | undefined, onSuccess: () => void) {
+  const { backend_url } = useSettings<{ backend_url?: string }>();
+  const backendUrl = ((backend_url as string | undefined) ?? '').trim().replace(/\/+$/, '');
+
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
 
   const handleCancel = useCallback(async () => {
     if (!accessToken) return;
+    if (!backendUrl) {
+      setCancelError('Service configuration missing. Please contact support.');
+      return;
+    }
     setCancelling(true);
     setCancelError(null);
     try {
-      const res = await fetch(`${BACKEND_URL}/esim/delivery/${accessToken}/cancel`, {
+      const res = await fetch(`${backendUrl}/esim/delivery/${accessToken}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: '{}',
@@ -42,7 +48,7 @@ export function useCancelEsim(accessToken: string | undefined, onSuccess: () => 
     } finally {
       setCancelling(false);
     }
-  }, [accessToken, onSuccess]);
+  }, [accessToken, backendUrl, onSuccess]);
 
   const startCancel = useCallback(() => setConfirmingCancel(true), []);
   const abortCancel = useCallback(() => {
