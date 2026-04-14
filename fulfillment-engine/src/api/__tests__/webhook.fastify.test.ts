@@ -142,7 +142,7 @@ describe('POST /orders/paid — Fastify handler', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    process.env.SHOPIFY_WEBHOOK_SECRET = TEST_SECRET;
+    process.env.SHOPIFY_CLIENT_SECRET = TEST_SECRET;
     app = await buildTestApp();
   });
 
@@ -193,8 +193,8 @@ describe('POST /orders/paid — Fastify handler', () => {
 
   // ── Missing webhook secret env var → 500 ────────────────────────────
 
-  it('returns 500 when SHOPIFY_WEBHOOK_SECRET is not configured', async () => {
-    delete process.env.SHOPIFY_WEBHOOK_SECRET;
+  it('returns 500 when SHOPIFY_CLIENT_SECRET is not configured', async () => {
+    delete process.env.SHOPIFY_CLIENT_SECRET;
 
     const rawBody = JSON.stringify(ORDER_PAYLOAD);
 
@@ -725,7 +725,7 @@ describe('POST /orders/cancelled — Fastify handler', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    process.env.SHOPIFY_WEBHOOK_SECRET = TEST_SECRET;
+    process.env.SHOPIFY_CLIENT_SECRET = TEST_SECRET;
     app = await buildTestApp();
   });
 
@@ -884,7 +884,7 @@ describe('GET /test', () => {
   let app: FastifyInstance;
 
   beforeEach(async () => {
-    process.env.SHOPIFY_WEBHOOK_SECRET = TEST_SECRET;
+    process.env.SHOPIFY_CLIENT_SECRET = TEST_SECRET;
     app = await buildTestApp();
   });
 

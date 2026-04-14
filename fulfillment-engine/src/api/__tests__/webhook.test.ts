@@ -51,7 +51,7 @@ describe('Webhook Handler - POST /webhook/orders/paid', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.SHOPIFY_WEBHOOK_SECRET = 'test-webhook-secret';
+    process.env.SHOPIFY_CLIENT_SECRET = 'test-webhook-secret';
   });
 
   afterEach(() => {

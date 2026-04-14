@@ -78,10 +78,10 @@ export default function webhookRoutes(
         return reply.code(401).send({ error: 'Missing HMAC signature' });
       }
 
-      // Verify HMAC signature
-      const webhookSecret = process.env.SHOPIFY_WEBHOOK_SECRET!;
+      // Verify HMAC signature — Shopify signs webhooks with the app's client secret
+      const webhookSecret = process.env.SHOPIFY_CLIENT_SECRET!;
       if (!webhookSecret) {
-        app.log.error('SHOPIFY_WEBHOOK_SECRET not configured');
+        app.log.error('SHOPIFY_CLIENT_SECRET not configured');
         return reply.code(500).send({ error: 'Server misconfiguration' });
       }
 
@@ -268,7 +268,7 @@ export default function webhookRoutes(
         return reply.code(401).send({ error: 'Missing HMAC signature' });
       }
 
-      const webhookSecret = process.env.SHOPIFY_WEBHOOK_SECRET!;
+      const webhookSecret = process.env.SHOPIFY_CLIENT_SECRET!;
       if (!webhookSecret) {
         return reply.code(500).send({ error: 'Server misconfiguration' });
       }
