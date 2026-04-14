@@ -1,0 +1,195 @@
+{% comment %}
+  eSIM Usage Tracking Page
+  Template for displaying real-time data usage for customer eSIMs
+  Supports search by ICCID, order number (#1001), or email address.
+  Auto-submits when ?iccid= or ?q= URL param is present (email link).
+{% endcomment %}
+
+<div class="page-width">
+  <div class="esim-usage-wrapper">
+
+    {%- comment -%} Page Header {%- endcomment -%}
+    <div class="esim-usage-header">
+      <h1 class="esim-usage-title">{{ page.title | default: "My eSIM Usage" }}</h1>
+      <p class="esim-usage-subtitle">Check your data usage by ICCID, order number, or email</p>
+    </div>
+
+    {%- comment -%} Search Form — always visible {%- endcomment -%}
+    <div id="esim-search" class="esim-search">
+      <form id="esim-search-form" class="esim-search-form">
+        <input
+          id="esim-query"
+          name="q"
+          type="text"
+          class="esim-search-input"
+          aria-label="Search by ICCID, order number, or email address"
+          placeholder="Enter ICCID, order number, or email address"
+          autocomplete="off"
+          autocorrect="off"
+          spellcheck="false"
+        />
+        <button type="submit" id="esim-submit" class="esim-button esim-button--primary">
+          Search
+        </button>
+      </form>
+      <p id="esim-not-found" class="esim-not-found" style="display: none;">
+        We couldn't find any eSIM matching that search.
+      </p>
+    </div>
+
+    {%- comment -%} Loading State {%- endcomment -%}
+    <div id="esim-loading" class="esim-loading" style="display: none;">
+      <div class="esim-spinner"></div>
+      <p>Loading your usage data...</p>
+    </div>
+
+    {%- comment -%} Error State {%- endcomment -%}
+    <div id="esim-error" class="esim-error" style="display: none;">
+      <div class="esim-error-icon">⚠️</div>
+      <h2 class="esim-error-title">Unable to Load Usage Data</h2>
+      <p class="esim-error-message" id="esim-error-message"></p>
+    </div>
+
+    {%- comment -%} Single Result Dashboard {%- endcomment -%}
+    <div id="esim-dashboard" class="esim-dashboard" style="display: none;">
+
+      {%- comment -%} eSIM Info Card {%- endcomment -%}
+      <div class="esim-card esim-info-card">
+        <h2 class="esim-card-title">eSIM Information</h2>
+        <div class="esim-info-grid">
+          <div class="esim-info-item">
+            <span class="esim-info-label">ICCID</span>
+            <span class="esim-info-value" id="esim-iccid">-</span>
+          </div>
+          <div class="esim-info-item">
+            <span class="esim-info-label">Order Number</span>
+            <span class="esim-info-value" id="esim-order-num">-</span>
+          </div>
+          <div class="esim-info-item" id="esim-region-item">
+            <span class="esim-info-label">Region</span>
+            <span class="esim-info-value" id="esim-region">-</span>
+          </div>
+          <div class="esim-info-item" id="esim-package-item">
+            <span class="esim-info-label">Package</span>
+            <span class="esim-info-value" id="esim-package-name">-</span>
+          </div>
+          <div class="esim-info-item" id="esim-status-item">
+            <span class="esim-info-label">Status</span>
+            <span class="esim-status-badge" id="esim-status">-</span>
+          </div>
+          <div class="esim-info-item" id="esim-vendor-item" style="display: none;">
+            <span class="esim-info-label">Vendor Order</span>
+            <span class="esim-info-value" id="esim-vendor-order">-</span>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} Data Usage Card {%- endcomment -%}
+      <div class="esim-card esim-usage-card">
+        <h2 class="esim-card-title">Data Usage</h2>
+
+        {%- comment -%} FiRoam: Circular Progress {%- endcomment -%}
+        <div id="esim-firoam-visual" class="esim-usage-visual">
+          <div class="esim-circle-progress">
+            <svg width="200" height="200" viewBox="0 0 200 200">
+              <circle cx="100" cy="100" r="80" fill="none" stroke="#e5e7eb" stroke-width="12"/>
+              <circle
+                id="esim-progress-circle"
+                cx="100" cy="100" r="80"
+                fill="none" stroke="#3b82f6" stroke-width="12"
+                stroke-dasharray="502.65" stroke-dashoffset="502.65"
+                transform="rotate(-90 100 100)"
+                style="transition: stroke-dashoffset 1s ease;"
+              />
+            </svg>
+            <div class="esim-circle-text">
+              <div class="esim-circle-percent" id="esim-usage-percent">0%</div>
+              <div class="esim-circle-label">Used</div>
+            </div>
+          </div>
+        </div>
+
+        {%- comment -%} FiRoam: Stats {%- endcomment -%}
+        <div id="esim-firoam-stats" class="esim-usage-stats">
+          <div class="esim-stat">
+            <span class="esim-stat-label">Total Data</span>
+            <span class="esim-stat-value" id="esim-total-data">-</span>
+          </div>
+          <div class="esim-stat">
+            <span class="esim-stat-label">Used</span>
+            <span class="esim-stat-value esim-stat-value--used" id="esim-used-data">-</span>
+          </div>
+          <div class="esim-stat">
+            <span class="esim-stat-label">Remaining</span>
+            <span class="esim-stat-value esim-stat-value--remaining" id="esim-remaining-data">-</span>
+          </div>
+        </div>
+
+        {%- comment -%} TGT: Stats (no circular progress) {%- endcomment -%}
+        <div id="esim-tgt-stats" class="esim-usage-stats" style="display: none;">
+          <div class="esim-stat">
+            <span class="esim-stat-label">Total Data</span>
+            <span class="esim-stat-value" id="esim-tgt-total">-</span>
+          </div>
+          <div class="esim-stat">
+            <span class="esim-stat-label">Used</span>
+            <span class="esim-stat-value esim-stat-value--used" id="esim-tgt-used">-</span>
+          </div>
+          <div class="esim-stat">
+            <span class="esim-stat-label">Remaining</span>
+            <span class="esim-stat-value esim-stat-value--remaining" id="esim-tgt-residual">-</span>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} Validity Card (FiRoam only) {%- endcomment -%}
+      <div id="esim-validity-card" class="esim-card esim-validity-card">
+        <h2 class="esim-card-title">Validity Period</h2>
+        <div class="esim-validity-grid">
+          <div class="esim-validity-item">
+            <span class="esim-validity-icon">📅</span>
+            <div>
+              <div class="esim-validity-label">Duration</div>
+              <div class="esim-validity-value" id="esim-days">-</div>
+            </div>
+          </div>
+          <div class="esim-validity-item">
+            <span class="esim-validity-icon">▶️</span>
+            <div>
+              <div class="esim-validity-label">Start Date</div>
+              <div class="esim-validity-value" id="esim-start-date">Not activated</div>
+            </div>
+          </div>
+          <div class="esim-validity-item">
+            <span class="esim-validity-icon">⏹️</span>
+            <div>
+              <div class="esim-validity-label">End Date</div>
+              <div class="esim-validity-value" id="esim-end-date">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {%- comment -%} Refresh Button {%- endcomment -%}
+      <div class="esim-actions">
+        <button id="esim-refresh-btn" class="esim-button esim-button--refresh">
+          Refresh Usage Data
+        </button>
+        <p class="esim-refresh-note">Data updates automatically every 5 minutes</p>
+      </div>
+
+    </div>
+
+    {%- comment -%} Multi-Result (email search) {%- endcomment -%}
+    <div id="esim-multi-results" style="display: none;"></div>
+
+  </div>
+</div>
+
+{{ 'esim-usage.css' | asset_url | stylesheet_tag }}
+
+<script>
+  window.ESIM_API_BASE = 'https://api.sailesim.com';
+</script>
+
+{{ 'esim-usage.js' | asset_url | script_tag }}

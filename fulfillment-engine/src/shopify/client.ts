@@ -1,6 +1,8 @@
 import axios, { AxiosInstance } from 'axios';
 import { logger } from '~/utils/logger';
 
+const SHOPIFY_API_VERSION = '2026-04';
+
 interface ShopifyConfig {
   shopDomain: string;
   clientId: string;
@@ -39,7 +41,7 @@ export class ShopifyClient {
   constructor(config: ShopifyConfig) {
     this.config = config;
     this.axiosInstance = axios.create({
-      baseURL: `https://${config.shopDomain}/admin/api/2026-01`,
+      baseURL: `https://${config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}`,
       headers: {
         'Content-Type': 'application/json',
       },
@@ -145,7 +147,7 @@ export class ShopifyClient {
     `;
 
     const response = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query,
         variables: {
@@ -189,7 +191,7 @@ export class ShopifyClient {
     `;
 
     const queryResponse = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: queryFulfillmentOrders,
         variables: {
@@ -261,7 +263,7 @@ export class ShopifyClient {
     `;
 
     const mutationResponse = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: mutation,
         variables: {
@@ -306,7 +308,7 @@ export class ShopifyClient {
         `;
 
         const eventResponse = await axios.post(
-          `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+          `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
           {
             query: eventMutation,
             variables: {
@@ -383,7 +385,7 @@ export class ShopifyClient {
     `;
 
     const queryResponse = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: queryMetafield,
         variables: {
@@ -423,7 +425,7 @@ export class ShopifyClient {
     `;
 
     const mutationResponse = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: mutation,
         variables: {
@@ -465,7 +467,7 @@ export class ShopifyClient {
     const headers = { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token };
     const graphql = (query: string, variables: Record<string, unknown>) =>
       axios.post(
-        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
         { query, variables },
         { headers },
       );
@@ -614,7 +616,7 @@ export class ShopifyClient {
     const token = await this.getAccessToken();
 
     const queryResponse = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: `query getOrderNote($id: ID!) { order(id: $id) { note } }`,
         variables: { id: `gid://shopify/Order/${orderId}` },
@@ -626,7 +628,7 @@ export class ShopifyClient {
     const updatedNote = currentNote ? `${currentNote}\n---\n${note}` : note;
 
     const mutationResponse = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: `
           mutation orderUpdate($input: OrderInput!) {
@@ -656,7 +658,7 @@ export class ShopifyClient {
     const token = await this.getAccessToken();
 
     const response = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: `
           mutation tagsAdd($id: ID!, $tags: [String!]!) {
@@ -687,7 +689,7 @@ export class ShopifyClient {
     const token = await this.getAccessToken();
 
     const response = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: `
           query getVariantBySku($query: String!) {
@@ -729,7 +731,7 @@ export class ShopifyClient {
     `;
 
     const response = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       {
         query: mutation,
         variables: {
@@ -785,7 +787,7 @@ export class ShopifyClient {
         .join('\n');
 
       const response = await axios.post(
-        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
         { query: `query batchGetVariants { ${aliases} }` },
         { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
       );
@@ -839,7 +841,7 @@ export class ShopifyClient {
     for (let i = 0; i < variantGids.length; i += CHUNK) {
       const chunk = variantGids.slice(i, i + CHUNK);
       const response = await axios.post(
-        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
         {
           query: `query getVariantsByIds($ids: [ID!]!) {
             nodes(ids: $ids) {
@@ -892,7 +894,7 @@ export class ShopifyClient {
       }
     `;
     const response = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       { query: mutation, variables: { input: { id: productGid } } },
       { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
     );
@@ -925,7 +927,7 @@ export class ShopifyClient {
       }
     `;
     const response = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
       { query: mutation, variables: { productId: productGid, variantsIds: variantGids } },
       { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
     );
@@ -987,7 +989,7 @@ export class ShopifyClient {
 
     for (;;) {
       const variantResp = (await axios.post(
-        `https://${this.config.shopDomain}/admin/api/2026-01/graphql.json`,
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
         { query: gqlQuery, variables: { first: 250, after: cursor } },
         { headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': token } },
       )) as {

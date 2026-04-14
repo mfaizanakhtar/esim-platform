@@ -46,7 +46,7 @@ describe('token management', () => {
   it('fetches a token on the first authenticated request', async () => {
     const tokenScope = mockTokenRefresh();
     nock(BASE_URL)
-      .get('/admin/api/2026-01/orders/12345.json')
+      .get('/admin/api/2026-04/orders/12345.json')
       .reply(200, { order: { id: '12345' } });
 
     const client = makeClient();
@@ -59,10 +59,10 @@ describe('token management', () => {
     // Token with 1-hour expiry — second call should NOT refresh
     mockTokenRefresh(3600);
     nock(BASE_URL)
-      .get('/admin/api/2026-01/orders/1.json')
+      .get('/admin/api/2026-04/orders/1.json')
       .reply(200, { order: { id: '1' } });
     nock(BASE_URL)
-      .get('/admin/api/2026-01/orders/2.json')
+      .get('/admin/api/2026-04/orders/2.json')
       .reply(200, { order: { id: '2' } });
 
     const client = makeClient();
@@ -77,10 +77,10 @@ describe('token management', () => {
     // Only one token interceptor registered; a second hit would throw
     mockTokenRefresh();
     nock(BASE_URL)
-      .get('/admin/api/2026-01/orders/A.json')
+      .get('/admin/api/2026-04/orders/A.json')
       .reply(200, { order: { id: 'A' } });
     nock(BASE_URL)
-      .get('/admin/api/2026-01/orders/B.json')
+      .get('/admin/api/2026-04/orders/B.json')
       .reply(200, { order: { id: 'B' } });
 
     const client = makeClient();
@@ -113,7 +113,7 @@ describe('createFulfillment', () => {
       },
     }));
     return nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: { order: { fulfillmentOrders: { edges } } },
       });
@@ -124,7 +124,7 @@ describe('createFulfillment', () => {
     fulfillmentId = 'gid://shopify/Fulfillment/999',
   ): nock.Scope {
     return nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           fulfillmentCreate: {
@@ -137,7 +137,7 @@ describe('createFulfillment', () => {
 
   function mockFulfillmentEventMutation(): nock.Scope {
     return nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           fulfillmentEventCreate: {
@@ -166,7 +166,7 @@ describe('createFulfillment', () => {
     mockFulfillmentOrderQuery();
     mockFulfillmentMutation();
     // Simulate event call failing with a network error
-    nock(BASE_URL).post('/admin/api/2026-01/graphql.json').replyWithError('connection reset');
+    nock(BASE_URL).post('/admin/api/2026-04/graphql.json').replyWithError('connection reset');
 
     const client = makeClient();
     const result = (await client.createFulfillment('54321')) as { id: string; status: string };
@@ -177,7 +177,7 @@ describe('createFulfillment', () => {
   it('throws when the GraphQL query returns top-level errors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         errors: [{ message: 'Access denied for fulfillmentOrders field.' }],
       });
@@ -189,7 +189,7 @@ describe('createFulfillment', () => {
   it('throws when the order is not found', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: null } });
 
     const client = makeClient();
@@ -199,7 +199,7 @@ describe('createFulfillment', () => {
   it('throws when no fulfillment orders exist', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: { order: { fulfillmentOrders: { edges: [] } } },
       });
@@ -234,7 +234,7 @@ describe('createFulfillment', () => {
     // Mutation will use the OPEN one (gid .../112)
     nock(BASE_URL)
       .post(
-        '/admin/api/2026-01/graphql.json',
+        '/admin/api/2026-04/graphql.json',
         (body: {
           variables?: {
             fulfillment?: { lineItemsByFulfillmentOrder?: Array<{ fulfillmentOrderId: string }> };
@@ -306,7 +306,7 @@ describe('getVariantMetafields', () => {
   it('returns metafield nodes for a valid variant', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariant: {
@@ -348,7 +348,7 @@ describe('getVariantMetafields', () => {
   it('returns an empty array when variant has no metafields', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariant: {
@@ -368,7 +368,7 @@ describe('getVariantMetafields', () => {
   it('returns an empty array when productVariant is null', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: { productVariant: null },
       });
@@ -410,7 +410,7 @@ describe('getVariantGidBySku', () => {
   it('returns variant GID when found', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariants: {
@@ -428,7 +428,7 @@ describe('getVariantGidBySku', () => {
   it('returns null when no variant found', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariants: { edges: [] },
@@ -449,7 +449,7 @@ describe('createDraftOrder', () => {
   it('returns checkoutUrl on success', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           draftOrderCreate: {
@@ -472,7 +472,7 @@ describe('createDraftOrder', () => {
   it('throws when userErrors are returned', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           draftOrderCreate: {
@@ -495,7 +495,7 @@ describe('createDraftOrder', () => {
   it('throws when invoiceUrl is missing', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           draftOrderCreate: {
@@ -539,10 +539,10 @@ describe('cancelShopifyOrder', () => {
   it('issues a full refund successfully', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: ORDER_RESPONSE } });
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: { refundCreate: { refund: { id: 'gid://shopify/Refund/99' }, userErrors: [] } },
       });
@@ -554,7 +554,7 @@ describe('cancelShopifyOrder', () => {
   it('throws when order is not found', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: null } });
 
     const client = makeClient();
@@ -564,7 +564,7 @@ describe('cancelShopifyOrder', () => {
   it('throws when there are no refundable line items', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           order: {
@@ -592,7 +592,7 @@ describe('cancelShopifyOrder', () => {
   it('throws when there are no refundable transactions', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           order: {
@@ -620,10 +620,10 @@ describe('cancelShopifyOrder', () => {
   it('throws when refundCreate returns userErrors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: ORDER_RESPONSE } });
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           refundCreate: { refund: null, userErrors: [{ field: 'base', message: 'Refund failed' }] },
@@ -639,10 +639,10 @@ describe('cancelShopifyOrder', () => {
   it('throws when refundCreate returns no refund ID and no errors (silent failure)', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: ORDER_RESPONSE } });
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: { refundCreate: { refund: null, userErrors: [] } },
       });
@@ -656,10 +656,10 @@ describe('cancelShopifyOrder', () => {
   it('throws on top-level GraphQL errors from refundCreate', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: ORDER_RESPONSE } });
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         errors: [{ message: 'Access denied for refundCreate field.' }],
         data: null,
@@ -679,7 +679,7 @@ describe('getAllVariants', () => {
   it('returns all variants with non-empty SKUs', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariants: {
@@ -719,7 +719,7 @@ describe('getAllVariants', () => {
     mockTokenRefresh();
     // First page
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariants: {
@@ -739,7 +739,7 @@ describe('getAllVariants', () => {
       });
     // Second page
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariants: {
@@ -775,11 +775,11 @@ describe('appendOrderNote', () => {
     mockTokenRefresh();
     // First call: get current note
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: { note: 'Existing note' } } });
     // Second call: update note
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: { orderUpdate: { order: { id: 'gid://shopify/Order/1' }, userErrors: [] } },
       });
@@ -791,10 +791,10 @@ describe('appendOrderNote', () => {
   it('sets note directly when no existing note', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: { note: null } } });
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: { orderUpdate: { order: { id: 'gid://shopify/Order/2' }, userErrors: [] } },
       });
@@ -806,10 +806,10 @@ describe('appendOrderNote', () => {
   it('throws when orderUpdate returns userErrors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { data: { order: { note: '' } } });
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           orderUpdate: { order: null, userErrors: [{ field: 'note', message: 'Too long' }] },
@@ -834,7 +834,7 @@ describe('getVariantGidsBySkus', () => {
   it('returns variant and product GIDs for found SKUs', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           sku_0: {
@@ -869,7 +869,7 @@ describe('getVariantGidsBySkus', () => {
   it('throws when Shopify returns top-level GraphQL errors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         errors: [{ message: 'Throttled' }],
       });
@@ -892,7 +892,7 @@ describe('getVariantInfoByGids', () => {
   it('returns variant info for found GIDs and skips null nodes', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           nodes: [
@@ -925,7 +925,7 @@ describe('getVariantInfoByGids', () => {
   it('throws on GraphQL top-level errors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         errors: [{ message: 'Throttled' }],
       });
@@ -944,7 +944,7 @@ describe('deleteProduct', () => {
   it('calls productDelete mutation and resolves on success', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productDelete: {
@@ -961,7 +961,7 @@ describe('deleteProduct', () => {
   it('throws when Shopify returns userErrors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productDelete: {
@@ -980,7 +980,7 @@ describe('deleteProduct', () => {
   it('throws when Shopify returns top-level GraphQL errors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { errors: [{ message: 'Access denied' }] });
 
     const client = makeClient();
@@ -997,7 +997,7 @@ describe('deleteVariants', () => {
   it('calls productVariantsBulkDelete mutation and resolves on success', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariantsBulkDelete: {
@@ -1016,7 +1016,7 @@ describe('deleteVariants', () => {
   it('throws when Shopify returns userErrors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, {
         data: {
           productVariantsBulkDelete: {
@@ -1035,7 +1035,7 @@ describe('deleteVariants', () => {
   it('throws when Shopify returns top-level GraphQL errors', async () => {
     mockTokenRefresh();
     nock(BASE_URL)
-      .post('/admin/api/2026-01/graphql.json')
+      .post('/admin/api/2026-04/graphql.json')
       .reply(200, { errors: [{ message: 'Access denied' }] });
 
     const client = makeClient();

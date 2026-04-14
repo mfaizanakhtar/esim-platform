@@ -1,0 +1,1536 @@
+{% doc %}
+  @prompt
+    Generate a block  same like country search we have, adding an option of selection of duration, like opening a calender where customer can choose his travelling dates and according to the selection packages will be shown to him, like if customer select 8 days packages of  7and 8-10 days should appear of that selected country, same goes like if customer select for 6 days so package of 5-7 days should be shown to him/her if available, i have shared a reference picture for you i want the same like this layout
+    
+    
+    half space is shared for image, other half consist of travelling dates selector, country selector/search option, multiplet text options with customisation of size color placement and animation, country options should be linked with out product/country options only
+    
+    Image option should be available to 2 having a selector to choose enable option of image 1 or 2
+    
+    there should be 2 sub heading option 
+    
+    none of the heading/subheading have animation option
+    
+    Travel start date and travel end date should have a single selector to have minimal look just as i shared a reference pic with you before, heding, sub headings, buttons, animation is missing,adjusting of the image and country with date selector alignmentof right lift is missing, sdestination country list should appear or link with the collection we will setup so the option of linking collection is missing there, for sub heading 1 and 2 provide me animation options, also picture placement is restricted to left side it  should have option to select picture should come right, so the search and date selector with headings come on left side
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-split-hero-{{ ai_gen_id }} {
+    display: block;
+    width: 100%;
+  }
+
+  .ai-split-hero__container-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    min-height: {{ block.settings.section_height }}px;
+  }
+
+  .ai-split-hero__image-side-{{ ai_gen_id }} {
+    position: relative;
+    overflow: hidden;
+    {% if block.settings.image_side == 'right' %}
+      order: 2;
+    {% endif %}
+  }
+
+  .ai-split-hero__image-{{ ai_gen_id }} {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: {{ block.settings.image_position }};
+  }
+
+  .ai-split-hero__image-placeholder-{{ ai_gen_id }} {
+    width: 100%;
+    height: 100%;
+    background-color: #f4f4f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ai-split-hero__image-placeholder-{{ ai_gen_id }} svg {
+    width: 100%;
+    height: 100%;
+    max-width: 400px;
+    max-height: 400px;
+  }
+
+  .ai-split-hero__content-side-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    justify-content: {{ block.settings.content_vertical_alignment }};
+    align-items: {{ block.settings.content_horizontal_alignment }};
+    padding: {{ block.settings.content_padding }}px;
+    background-color: {{ block.settings.content_background_color }};
+    {% if block.settings.image_side == 'right' %}
+      order: 1;
+    {% endif %}
+  }
+
+  .ai-split-hero__text-wrapper-{{ ai_gen_id }} {
+    width: 100%;
+    max-width: {{ block.settings.content_max_width }}px;
+  }
+
+  .ai-split-hero__heading-{{ ai_gen_id }} {
+    margin: 0 0 {{ block.settings.heading_spacing }}px;
+    font-size: {{ block.settings.heading_size }}px;
+    color: {{ block.settings.heading_color }};
+    text-align: {{ block.settings.text_alignment }};
+    line-height: 1.2;
+    font-weight: {{ block.settings.heading_weight }};
+  }
+
+  .ai-split-hero__subheading-1-{{ ai_gen_id }} {
+    margin: 0 0 {{ block.settings.subheading_1_spacing }}px;
+    font-size: {{ block.settings.subheading_1_size }}px;
+    color: {{ block.settings.subheading_1_color }};
+    text-align: {{ block.settings.text_alignment }};
+    line-height: 1.4;
+    font-weight: {{ block.settings.subheading_1_weight }};
+  }
+
+  {% if block.settings.subheading_1_animation != 'none' %}
+    @keyframes ai-subheading-1-{{ block.settings.subheading_1_animation }}-{{ ai_gen_id }} {
+      {% if block.settings.subheading_1_animation == 'fade-in' %}
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      {% elsif block.settings.subheading_1_animation == 'slide-up' %}
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      {% elsif block.settings.subheading_1_animation == 'slide-down' %}
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      {% elsif block.settings.subheading_1_animation == 'slide-left' %}
+        from {
+          opacity: 0;
+          transform: translateX(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      {% elsif block.settings.subheading_1_animation == 'slide-right' %}
+        from {
+          opacity: 0;
+          transform: translateX(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      {% elsif block.settings.subheading_1_animation == 'zoom-in' %}
+        from {
+          opacity: 0;
+          transform: scale(0.9);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      {% elsif block.settings.subheading_1_animation == 'bounce' %}
+        0%, 20%, 50%, 80%, 100% {
+          transform: translateY(0);
+        }
+        40% {
+          transform: translateY(-10px);
+        }
+        60% {
+          transform: translateY(-5px);
+        }
+      {% endif %}
+    }
+
+    .ai-split-hero__subheading-1-{{ ai_gen_id }} {
+      animation: ai-subheading-1-{{ block.settings.subheading_1_animation }}-{{ ai_gen_id }} {{ block.settings.subheading_1_animation_duration }}s {{ block.settings.subheading_1_animation_delay }}s ease-out forwards;
+      {% if block.settings.subheading_1_animation != 'bounce' %}
+        opacity: 0;
+      {% endif %}
+    }
+  {% endif %}
+
+  .ai-split-hero__subheading-2-{{ ai_gen_id }} {
+    margin: 0 0 {{ block.settings.subheading_2_spacing }}px;
+    font-size: {{ block.settings.subheading_2_size }}px;
+    color: {{ block.settings.subheading_2_color }};
+    text-align: {{ block.settings.text_alignment }};
+    line-height: 1.4;
+    font-weight: {{ block.settings.subheading_2_weight }};
+  }
+
+  {% if block.settings.subheading_2_animation != 'none' %}
+    @keyframes ai-subheading-2-{{ block.settings.subheading_2_animation }}-{{ ai_gen_id }} {
+      {% if block.settings.subheading_2_animation == 'fade-in' %}
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      {% elsif block.settings.subheading_2_animation == 'slide-up' %}
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      {% elsif block.settings.subheading_2_animation == 'slide-down' %}
+        from {
+          opacity: 0;
+          transform: translateY(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      {% elsif block.settings.subheading_2_animation == 'slide-left' %}
+        from {
+          opacity: 0;
+          transform: translateX(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      {% elsif block.settings.subheading_2_animation == 'slide-right' %}
+        from {
+          opacity: 0;
+          transform: translateX(-20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      {% elsif block.settings.subheading_2_animation == 'zoom-in' %}
+        from {
+          opacity: 0;
+          transform: scale(0.9);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      {% elsif block.settings.subheading_2_animation == 'bounce' %}
+        0%, 20%, 50%, 80%, 100% {
+          transform: translateY(0);
+        }
+        40% {
+          transform: translateY(-10px);
+        }
+        60% {
+          transform: translateY(-5px);
+        }
+      {% endif %}
+    }
+
+    .ai-split-hero__subheading-2-{{ ai_gen_id }} {
+      animation: ai-subheading-2-{{ block.settings.subheading_2_animation }}-{{ ai_gen_id }} {{ block.settings.subheading_2_animation_duration }}s {{ block.settings.subheading_2_animation_delay }}s ease-out forwards;
+      {% if block.settings.subheading_2_animation != 'bounce' %}
+        opacity: 0;
+      {% endif %}
+    }
+  {% endif %}
+
+  .ai-split-hero__form-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: {{ block.settings.form_spacing }}px;
+  }
+
+  .ai-split-hero__field-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ai-split-hero__label-{{ ai_gen_id }} {
+    font-size: {{ block.settings.label_size }}px;
+    font-weight: {{ block.settings.label_weight }};
+    color: {{ block.settings.label_color }};
+  }
+
+  .ai-split-hero__input-{{ ai_gen_id }},
+  .ai-split-hero__select-{{ ai_gen_id }} {
+    padding: {{ block.settings.input_padding }}px;
+    border: {{ block.settings.input_border_width }}px solid {{ block.settings.input_border_color }};
+    border-radius: {{ block.settings.input_border_radius }}px;
+    font-size: {{ block.settings.input_font_size }}px;
+    background-color: {{ block.settings.input_background_color }};
+    color: {{ block.settings.input_text_color }};
+  }
+
+  .ai-split-hero__input-{{ ai_gen_id }}:focus,
+  .ai-split-hero__select-{{ ai_gen_id }}:focus {
+    outline: 2px solid {{ block.settings.button_color }};
+    outline-offset: 2px;
+  }
+
+  .ai-split-hero__select-{{ ai_gen_id }} {
+    cursor: pointer;
+  }
+
+  .ai-split-hero__date-range-{{ ai_gen_id }} {
+    padding: {{ block.settings.input_padding }}px;
+    border: {{ block.settings.input_border_width }}px solid {{ block.settings.input_border_color }};
+    border-radius: {{ block.settings.input_border_radius }}px;
+    font-size: {{ block.settings.input_font_size }}px;
+    background-color: {{ block.settings.input_background_color }};
+    color: {{ block.settings.input_text_color }};
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ai-split-hero__date-range-{{ ai_gen_id }}:focus {
+    outline: 2px solid {{ block.settings.button_color }};
+    outline-offset: 2px;
+  }
+
+  .ai-split-hero__button-{{ ai_gen_id }} {
+    padding: {{ block.settings.button_padding_vertical }}px {{ block.settings.button_padding_horizontal }}px;
+    background-color: {{ block.settings.button_color }};
+    color: {{ block.settings.button_text_color }};
+    border: {{ block.settings.button_border_width }}px solid {{ block.settings.button_border_color }};
+    border-radius: {{ block.settings.button_border_radius }}px;
+    font-size: {{ block.settings.button_font_size }}px;
+    font-weight: {{ block.settings.button_font_weight }};
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: {{ block.settings.button_top_spacing }}px;
+    text-transform: {{ block.settings.button_text_transform }};
+  }
+
+  .ai-split-hero__button-{{ ai_gen_id }}:hover {
+    background-color: {{ block.settings.button_hover_color }};
+    color: {{ block.settings.button_hover_text_color }};
+    border-color: {{ block.settings.button_hover_border_color }};
+    transform: translateY(-2px);
+  }
+
+  @media screen and (max-width: 989px) {
+    .ai-split-hero__container-{{ ai_gen_id }} {
+      grid-template-columns: 1fr;
+    }
+
+    .ai-split-hero__image-side-{{ ai_gen_id }} {
+      min-height: 300px;
+      {% if block.settings.mobile_image_position == 'bottom' %}
+        order: 2;
+      {% else %}
+        order: 1;
+      {% endif %}
+    }
+
+    .ai-split-hero__content-side-{{ ai_gen_id }} {
+      {% if block.settings.mobile_image_position == 'bottom' %}
+        order: 1;
+      {% else %}
+        order: 2;
+      {% endif %}
+    }
+
+    .ai-split-hero__heading-{{ ai_gen_id }} {
+      font-size: calc({{ block.settings.heading_size }}px * 0.7);
+    }
+
+    .ai-split-hero__subheading-1-{{ ai_gen_id }} {
+      font-size: calc({{ block.settings.subheading_1_size }}px * 0.85);
+    }
+
+    .ai-split-hero__subheading-2-{{ ai_gen_id }} {
+      font-size: calc({{ block.settings.subheading_2_size }}px * 0.85);
+    }
+  }
+{% endstyle %}
+
+<split-hero-{{ ai_gen_id }} class="ai-split-hero-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  <div class="ai-split-hero__container-{{ ai_gen_id }}">
+    <div class="ai-split-hero__image-side-{{ ai_gen_id }}">
+      {% liquid
+        assign selected_image = null
+        if block.settings.active_image == 'image_1'
+          assign selected_image = block.settings.image_1
+        elsif block.settings.active_image == 'image_2'
+          assign selected_image = block.settings.image_2
+        endif
+      %}
+
+      {% if selected_image %}
+        <img
+          src="{{ selected_image | image_url: width: 1200 }}"
+          alt="{{ selected_image.alt | escape }}"
+          loading="lazy"
+          width="{{ selected_image.width }}"
+          height="{{ selected_image.height }}"
+          class="ai-split-hero__image-{{ ai_gen_id }}"
+        >
+      {% else %}
+        <div class="ai-split-hero__image-placeholder-{{ ai_gen_id }}">
+          {{ 'hero-apparel-1' | placeholder_svg_tag }}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="ai-split-hero__content-side-{{ ai_gen_id }}">
+      <div class="ai-split-hero__text-wrapper-{{ ai_gen_id }}">
+        {% if block.settings.heading != blank %}
+          <h1 class="ai-split-hero__heading-{{ ai_gen_id }}">{{ block.settings.heading }}</h1>
+        {% endif %}
+
+        {% if block.settings.subheading_1 != blank %}
+          <h2 class="ai-split-hero__subheading-1-{{ ai_gen_id }}">{{ block.settings.subheading_1 }}</h2>
+        {% endif %}
+
+        {% if block.settings.subheading_2 != blank %}
+          <h3 class="ai-split-hero__subheading-2-{{ ai_gen_id }}">{{ block.settings.subheading_2 }}</h3>
+        {% endif %}
+
+        <div class="ai-split-hero__form-{{ ai_gen_id }}">
+          {% if block.settings.show_country_selector %}
+            <div class="ai-split-hero__field-{{ ai_gen_id }}">
+              <label for="country-{{ ai_gen_id }}" class="ai-split-hero__label-{{ ai_gen_id }}">
+                {{ block.settings.country_label }}
+              </label>
+              <input
+                type="text"
+                id="country-{{ ai_gen_id }}"
+                class="ai-split-hero__input-{{ ai_gen_id }}"
+                placeholder="{{ block.settings.country_placeholder }}"
+                list="countries-{{ ai_gen_id }}"
+              >
+              <datalist id="countries-{{ ai_gen_id }}">
+                {% if block.settings.country_collection != blank %}
+                  {% for product in block.settings.country_collection.products %}
+                    <option value="{{ product.title }}">
+                  {% endfor %}
+                {% endif %}
+              </datalist>
+            </div>
+          {% endif %}
+
+          {% if block.settings.show_date_selector %}
+            <div class="ai-split-hero__field-{{ ai_gen_id }}">
+              <label for="date-range-{{ ai_gen_id }}" class="ai-split-hero__label-{{ ai_gen_id }}">
+                {{ block.settings.date_label }}
+              </label>
+              <input
+                type="text"
+                id="date-range-{{ ai_gen_id }}"
+                class="ai-split-hero__date-range-{{ ai_gen_id }}"
+                placeholder="{{ block.settings.date_placeholder }}"
+                readonly
+              >
+            </div>
+          {% endif %}
+
+          {% if block.settings.show_custom_field_1 %}
+            <div class="ai-split-hero__field-{{ ai_gen_id }}">
+              <label for="custom-1-{{ ai_gen_id }}" class="ai-split-hero__label-{{ ai_gen_id }}">
+                {{ block.settings.custom_field_1_label }}
+              </label>
+              {% if block.settings.custom_field_1_type == 'text' %}
+                <input
+                  type="text"
+                  id="custom-1-{{ ai_gen_id }}"
+                  class="ai-split-hero__input-{{ ai_gen_id }}"
+                  placeholder="{{ block.settings.custom_field_1_placeholder }}"
+                >
+              {% elsif block.settings.custom_field_1_type == 'select' %}
+                <select id="custom-1-{{ ai_gen_id }}" class="ai-split-hero__select-{{ ai_gen_id }}">
+                  <option value="">{{ block.settings.custom_field_1_placeholder }}</option>
+                  {% assign options = block.settings.custom_field_1_options | split: ',' %}
+                  {% for option in options %}
+                    <option value="{{ option | strip }}">{{ option | strip }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          {% if block.settings.show_custom_field_2 %}
+            <div class="ai-split-hero__field-{{ ai_gen_id }}">
+              <label for="custom-2-{{ ai_gen_id }}" class="ai-split-hero__label-{{ ai_gen_id }}">
+                {{ block.settings.custom_field_2_label }}
+              </label>
+              {% if block.settings.custom_field_2_type == 'text' %}
+                <input
+                  type="text"
+                  id="custom-2-{{ ai_gen_id }}"
+                  class="ai-split-hero__input-{{ ai_gen_id }}"
+                  placeholder="{{ block.settings.custom_field_2_placeholder }}"
+                >
+              {% elsif block.settings.custom_field_2_type == 'select' %}
+                <select id="custom-2-{{ ai_gen_id }}" class="ai-split-hero__select-{{ ai_gen_id }}">
+                  <option value="">{{ block.settings.custom_field_2_placeholder }}</option>
+                  {% assign options = block.settings.custom_field_2_options | split: ',' %}
+                  {% for option in options %}
+                    <option value="{{ option | strip }}">{{ option | strip }}</option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            </div>
+          {% endif %}
+
+          <button
+            type="button"
+            class="ai-split-hero__button-{{ ai_gen_id }}"
+            id="search-button-{{ ai_gen_id }}"
+          >
+            {{ block.settings.button_text }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</split-hero-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class SplitHero{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+        this.searchButton = this.querySelector('#search-button-{{ ai_gen_id }}');
+        this.countryInput = this.querySelector('#country-{{ ai_gen_id }}');
+        this.dateRangeInput = this.querySelector('#date-range-{{ ai_gen_id }}');
+        this.customField1 = this.querySelector('#custom-1-{{ ai_gen_id }}');
+        this.customField2 = this.querySelector('#custom-2-{{ ai_gen_id }}');
+        this.searchUrl = '{{ block.settings.search_url }}';
+        this.startDate = null;
+        this.endDate = null;
+      }
+
+      connectedCallback() {
+        this.setupEventListeners();
+      }
+
+      setupEventListeners() {
+        if (this.dateRangeInput) {
+          this.dateRangeInput.addEventListener('click', () => {
+            this.openDatePicker();
+          });
+        }
+
+        if (this.searchButton) {
+          this.searchButton.addEventListener('click', () => {
+            this.handleSearch();
+          });
+        }
+      }
+
+      openDatePicker() {
+        const tempInput = document.createElement('input');
+        tempInput.type = 'date';
+        tempInput.style.position = 'absolute';
+        tempInput.style.opacity = '0';
+        tempInput.style.pointerEvents = 'none';
+        
+        const today = new Date().toISOString().split('T')[0];
+        tempInput.setAttribute('min', today);
+        
+        document.body.appendChild(tempInput);
+        
+        tempInput.addEventListener('change', () => {
+          if (!this.startDate) {
+            this.startDate = tempInput.value;
+            this.updateDateDisplay();
+            tempInput.value = '';
+            tempInput.setAttribute('min', this.startDate);
+            tempInput.showPicker();
+          } else if (!this.endDate) {
+            this.endDate = tempInput.value;
+            this.updateDateDisplay();
+            document.body.removeChild(tempInput);
+          }
+        });
+        
+        tempInput.showPicker();
+      }
+
+      updateDateDisplay() {
+        if (this.startDate && this.endDate) {
+          const start = new Date(this.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+          const end = new Date(this.endDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          this.dateRangeInput.value = `${start} - ${end}`;
+        } else if (this.startDate) {
+          const start = new Date(this.startDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          this.dateRangeInput.value = `${start} - Select end date`;
+        }
+      }
+
+      handleSearch() {
+        const params = new URLSearchParams();
+
+        if (this.countryInput && this.countryInput.value) {
+          params.append('country', this.countryInput.value);
+        }
+
+        if (this.startDate) {
+          params.append('start_date', this.startDate);
+        }
+
+        if (this.endDate) {
+          params.append('end_date', this.endDate);
+        }
+
+        if (this.customField1 && this.customField1.value) {
+          params.append('field_1', this.customField1.value);
+        }
+
+        if (this.customField2 && this.customField2.value) {
+          params.append('field_2', this.customField2.value);
+        }
+
+        if (this.searchUrl) {
+          const url = `${this.searchUrl}?${params.toString()}`;
+          window.location.href = url;
+        } else {
+          console.log('Search parameters:', Object.fromEntries(params));
+        }
+      }
+    }
+
+    customElements.define('split-hero-{{ ai_gen_id }}', SplitHero{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Split hero with search",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "select",
+      "id": "image_side",
+      "label": "Image position",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "section_height",
+      "label": "Section height",
+      "min": 400,
+      "max": 900,
+      "step": 50,
+      "unit": "px",
+      "default": 600
+    },
+    {
+      "type": "header",
+      "content": "Images"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_1",
+      "label": "Image 1"
+    },
+    {
+      "type": "image_picker",
+      "id": "image_2",
+      "label": "Image 2"
+    },
+    {
+      "type": "select",
+      "id": "active_image",
+      "label": "Active image",
+      "options": [
+        {
+          "value": "image_1",
+          "label": "Image 1"
+        },
+        {
+          "value": "image_2",
+          "label": "Image 2"
+        }
+      ],
+      "default": "image_1"
+    },
+    {
+      "type": "select",
+      "id": "image_position",
+      "label": "Image focal point",
+      "options": [
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "top",
+          "label": "Top"
+        },
+        {
+          "value": "bottom",
+          "label": "Bottom"
+        },
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "select",
+      "id": "mobile_image_position",
+      "label": "Mobile image position",
+      "options": [
+        {
+          "value": "top",
+          "label": "Top"
+        },
+        {
+          "value": "bottom",
+          "label": "Bottom"
+        }
+      ],
+      "default": "top"
+    },
+    {
+      "type": "header",
+      "content": "Heading"
+    },
+    {
+      "type": "inline_richtext",
+      "id": "heading",
+      "label": "Text",
+      "default": "Discover Your Next Adventure"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Size",
+      "min": 24,
+      "max": 80,
+      "step": 2,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "color",
+      "id": "heading_color",
+      "label": "Color",
+      "default": "#121212"
+    },
+    {
+      "type": "select",
+      "id": "heading_weight",
+      "label": "Font weight",
+      "options": [
+        {
+          "value": "300",
+          "label": "Light"
+        },
+        {
+          "value": "400",
+          "label": "Normal"
+        },
+        {
+          "value": "500",
+          "label": "Medium"
+        },
+        {
+          "value": "600",
+          "label": "Semi-bold"
+        },
+        {
+          "value": "700",
+          "label": "Bold"
+        }
+      ],
+      "default": "700"
+    },
+    {
+      "type": "range",
+      "id": "heading_spacing",
+      "label": "Bottom spacing",
+      "min": 0,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "header",
+      "content": "Subheading 1"
+    },
+    {
+      "type": "inline_richtext",
+      "id": "subheading_1",
+      "label": "Text",
+      "default": "Find the perfect travel package"
+    },
+    {
+      "type": "range",
+      "id": "subheading_1_size",
+      "label": "Size",
+      "min": 14,
+      "max": 32,
+      "step": 2,
+      "unit": "px",
+      "default": 20
+    },
+    {
+      "type": "color",
+      "id": "subheading_1_color",
+      "label": "Color",
+      "default": "#121212"
+    },
+    {
+      "type": "select",
+      "id": "subheading_1_weight",
+      "label": "Font weight",
+      "options": [
+        {
+          "value": "300",
+          "label": "Light"
+        },
+        {
+          "value": "400",
+          "label": "Normal"
+        },
+        {
+          "value": "500",
+          "label": "Medium"
+        },
+        {
+          "value": "600",
+          "label": "Semi-bold"
+        }
+      ],
+      "default": "400"
+    },
+    {
+      "type": "range",
+      "id": "subheading_1_spacing",
+      "label": "Bottom spacing",
+      "min": 0,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "select",
+      "id": "subheading_1_animation",
+      "label": "Animation",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade-in",
+          "label": "Fade in"
+        },
+        {
+          "value": "slide-up",
+          "label": "Slide up"
+        },
+        {
+          "value": "slide-down",
+          "label": "Slide down"
+        },
+        {
+          "value": "slide-left",
+          "label": "Slide left"
+        },
+        {
+          "value": "slide-right",
+          "label": "Slide right"
+        },
+        {
+          "value": "zoom-in",
+          "label": "Zoom in"
+        },
+        {
+          "value": "bounce",
+          "label": "Bounce"
+        }
+      ],
+      "default": "none"
+    },
+    {
+      "type": "range",
+      "id": "subheading_1_animation_duration",
+      "label": "Animation duration",
+      "min": 0.5,
+      "max": 3,
+      "step": 0.5,
+      "unit": "s",
+      "default": 1
+    },
+    {
+      "type": "range",
+      "id": "subheading_1_animation_delay",
+      "label": "Animation delay",
+      "min": 0,
+      "max": 2,
+      "step": 0.5,
+      "unit": "s",
+      "default": 0.5
+    },
+    {
+      "type": "header",
+      "content": "Subheading 2"
+    },
+    {
+      "type": "inline_richtext",
+      "id": "subheading_2",
+      "label": "Text",
+      "default": "For your dream destination"
+    },
+    {
+      "type": "range",
+      "id": "subheading_2_size",
+      "label": "Size",
+      "min": 14,
+      "max": 32,
+      "step": 2,
+      "unit": "px",
+      "default": 18
+    },
+    {
+      "type": "color",
+      "id": "subheading_2_color",
+      "label": "Color",
+      "default": "#121212"
+    },
+    {
+      "type": "select",
+      "id": "subheading_2_weight",
+      "label": "Font weight",
+      "options": [
+        {
+          "value": "300",
+          "label": "Light"
+        },
+        {
+          "value": "400",
+          "label": "Normal"
+        },
+        {
+          "value": "500",
+          "label": "Medium"
+        },
+        {
+          "value": "600",
+          "label": "Semi-bold"
+        }
+      ],
+      "default": "400"
+    },
+    {
+      "type": "range",
+      "id": "subheading_2_spacing",
+      "label": "Bottom spacing",
+      "min": 0,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "select",
+      "id": "subheading_2_animation",
+      "label": "Animation",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade-in",
+          "label": "Fade in"
+        },
+        {
+          "value": "slide-up",
+          "label": "Slide up"
+        },
+        {
+          "value": "slide-down",
+          "label": "Slide down"
+        },
+        {
+          "value": "slide-left",
+          "label": "Slide left"
+        },
+        {
+          "value": "slide-right",
+          "label": "Slide right"
+        },
+        {
+          "value": "zoom-in",
+          "label": "Zoom in"
+        },
+        {
+          "value": "bounce",
+          "label": "Bounce"
+        }
+      ],
+      "default": "none"
+    },
+    {
+      "type": "range",
+      "id": "subheading_2_animation_duration",
+      "label": "Animation duration",
+      "min": 0.5,
+      "max": 3,
+      "step": 0.5,
+      "unit": "s",
+      "default": 1
+    },
+    {
+      "type": "range",
+      "id": "subheading_2_animation_delay",
+      "label": "Animation delay",
+      "min": 0,
+      "max": 2,
+      "step": 0.5,
+      "unit": "s",
+      "default": 1
+    },
+    {
+      "type": "header",
+      "content": "Country selector"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_country_selector",
+      "label": "Show country selector",
+      "default": true
+    },
+    {
+      "type": "collection",
+      "id": "country_collection",
+      "label": "Country collection",
+      "info": "Product titles from this collection will appear as country options"
+    },
+    {
+      "type": "text",
+      "id": "country_label",
+      "label": "Label",
+      "default": "Destination country"
+    },
+    {
+      "type": "text",
+      "id": "country_placeholder",
+      "label": "Placeholder",
+      "default": "Search or select country"
+    },
+    {
+      "type": "header",
+      "content": "Date selector"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_date_selector",
+      "label": "Show date selector",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "date_label",
+      "label": "Label",
+      "default": "Travel dates"
+    },
+    {
+      "type": "text",
+      "id": "date_placeholder",
+      "label": "Placeholder",
+      "default": "Select start and end dates"
+    },
+    {
+      "type": "header",
+      "content": "Custom field 1"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_custom_field_1",
+      "label": "Show custom field 1",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "custom_field_1_label",
+      "label": "Label",
+      "default": "Number of travelers"
+    },
+    {
+      "type": "select",
+      "id": "custom_field_1_type",
+      "label": "Field type",
+      "options": [
+        {
+          "value": "text",
+          "label": "Text input"
+        },
+        {
+          "value": "select",
+          "label": "Dropdown"
+        }
+      ],
+      "default": "select"
+    },
+    {
+      "type": "text",
+      "id": "custom_field_1_placeholder",
+      "label": "Placeholder",
+      "default": "Select number"
+    },
+    {
+      "type": "textarea",
+      "id": "custom_field_1_options",
+      "label": "Options",
+      "default": "1, 2, 3, 4, 5+",
+      "info": "For dropdown only. Separate with commas"
+    },
+    {
+      "type": "header",
+      "content": "Custom field 2"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_custom_field_2",
+      "label": "Show custom field 2",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "custom_field_2_label",
+      "label": "Label",
+      "default": "Budget range"
+    },
+    {
+      "type": "select",
+      "id": "custom_field_2_type",
+      "label": "Field type",
+      "options": [
+        {
+          "value": "text",
+          "label": "Text input"
+        },
+        {
+          "value": "select",
+          "label": "Dropdown"
+        }
+      ],
+      "default": "select"
+    },
+    {
+      "type": "text",
+      "id": "custom_field_2_placeholder",
+      "label": "Placeholder",
+      "default": "Select budget"
+    },
+    {
+      "type": "textarea",
+      "id": "custom_field_2_options",
+      "label": "Options",
+      "default": "Under €500, €500-€1000, €1000-€2000, €2000+",
+      "info": "For dropdown only. Separate with commas"
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Text",
+      "default": "Search Packages"
+    },
+    {
+      "type": "range",
+      "id": "button_font_size",
+      "label": "Font size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "select",
+      "id": "button_font_weight",
+      "label": "Font weight",
+      "options": [
+        {
+          "value": "400",
+          "label": "Normal"
+        },
+        {
+          "value": "500",
+          "label": "Medium"
+        },
+        {
+          "value": "600",
+          "label": "Semi-bold"
+        },
+        {
+          "value": "700",
+          "label": "Bold"
+        }
+      ],
+      "default": "500"
+    },
+    {
+      "type": "select",
+      "id": "button_text_transform",
+      "label": "Text transform",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "uppercase",
+          "label": "Uppercase"
+        },
+        {
+          "value": "capitalize",
+          "label": "Capitalize"
+        }
+      ],
+      "default": "none"
+    },
+    {
+      "type": "range",
+      "id": "button_padding_vertical",
+      "label": "Vertical padding",
+      "min": 8,
+      "max": 24,
+      "step": 2,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "range",
+      "id": "button_padding_horizontal",
+      "label": "Horizontal padding",
+      "min": 16,
+      "max": 48,
+      "step": 4,
+      "unit": "px",
+      "default": 24
+    },
+    {
+      "type": "color",
+      "id": "button_color",
+      "label": "Background",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Text color",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "button_border_color",
+      "label": "Border color",
+      "default": "#121212"
+    },
+    {
+      "type": "range",
+      "id": "button_border_width",
+      "label": "Border width",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "range",
+      "id": "button_border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "color",
+      "id": "button_hover_color",
+      "label": "Hover background",
+      "default": "#334FB4"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_text_color",
+      "label": "Hover text color",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_border_color",
+      "label": "Hover border color",
+      "default": "#334FB4"
+    },
+    {
+      "type": "range",
+      "id": "button_top_spacing",
+      "label": "Top spacing",
+      "min": 0,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 8
+    },
+    {
+      "type": "url",
+      "id": "search_url",
+      "label": "Search results URL",
+      "info": "Leave empty to log search parameters to console"
+    },
+    {
+      "type": "header",
+      "content": "Content layout"
+    },
+    {
+      "type": "range",
+      "id": "content_padding",
+      "label": "Content padding",
+      "min": 20,
+      "max": 100,
+      "step": 10,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "content_max_width",
+      "label": "Content max width",
+      "min": 300,
+      "max": 700,
+      "step": 50,
+      "unit": "px",
+      "default": 500
+    },
+    {
+      "type": "select",
+      "id": "content_vertical_alignment",
+      "label": "Vertical alignment",
+      "options": [
+        {
+          "value": "flex-start",
+          "label": "Top"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "flex-end",
+          "label": "Bottom"
+        }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "select",
+      "id": "content_horizontal_alignment",
+      "label": "Horizontal alignment",
+      "options": [
+        {
+          "value": "flex-start",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "flex-end",
+          "label": "Right"
+        }
+      ],
+      "default": "flex-start"
+    },
+    {
+      "type": "select",
+      "id": "text_alignment",
+      "label": "Text alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "form_spacing",
+      "label": "Form top spacing",
+      "min": 0,
+      "max": 60,
+      "step": 4,
+      "unit": "px",
+      "default": 24
+    },
+    {
+      "type": "header",
+      "content": "Form fields style"
+    },
+    {
+      "type": "range",
+      "id": "label_size",
+      "label": "Label size",
+      "min": 12,
+      "max": 18,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "select",
+      "id": "label_weight",
+      "label": "Label weight",
+      "options": [
+        {
+          "value": "400",
+          "label": "Normal"
+        },
+        {
+          "value": "500",
+          "label": "Medium"
+        },
+        {
+          "value": "600",
+          "label": "Semi-bold"
+        }
+      ],
+      "default": "500"
+    },
+    {
+      "type": "range",
+      "id": "input_font_size",
+      "label": "Input font size",
+      "min": 12,
+      "max": 18,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "range",
+      "id": "input_padding",
+      "label": "Input padding",
+      "min": 8,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "input_border_width",
+      "label": "Input border width",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "unit": "px",
+      "default": 1
+    },
+    {
+      "type": "range",
+      "id": "input_border_radius",
+      "label": "Input border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "content_background_color",
+      "label": "Content background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "label_color",
+      "label": "Label",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "input_background_color",
+      "label": "Input background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "input_text_color",
+      "label": "Input text",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "input_border_color",
+      "label": "Input border",
+      "default": "#cccccc"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Split hero with search"
+    }
+  ]
+}
+{% endschema %}

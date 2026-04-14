@@ -1,0 +1,657 @@
+{% doc %}
+  @prompt
+    i want to buld these buttons selector or you can say tabs like this shown in image
+    
+    i want number of tabs control option like 2-5 also i want to link that specific tab with my product selection or you can collections, products per collection should not be limited , they can appear as many as there are products in specific collection, moreover give option how products should be appeared as in alphabetical order or should they appear  as they have been setup in the collection to get visibility tabs should appear like this shown in image separate from the below linked , tab headers , such as new arrivals, best sellers , they should have the space between the area where products of specific collection will be showed and that tab are should be visible buttons showing separate having gap between them does not show any connection
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-tabbed-collections-{{ ai_gen_id }} {
+    display: block;
+    width: {{ block.settings.desktop_width_percent }}%;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .ai-tabbed-collections__tabs-{{ ai_gen_id }} {
+    display: flex;
+    gap: {{ block.settings.tab_spacing }}px;
+    justify-content: {{ block.settings.tab_alignment }};
+    margin-bottom: {{ block.settings.tabs_bottom_spacing }}px;
+    flex-wrap: wrap;
+  }
+
+  .ai-tabbed-collections__tab-{{ ai_gen_id }} {
+    background-color: {{ block.settings.tab_background_color }};
+    border: {{ block.settings.tab_border_thickness }}px solid {{ block.settings.tab_border_color }};
+    padding: {{ block.settings.tab_padding_vertical }}px {{ block.settings.tab_padding_horizontal }}px;
+    cursor: pointer;
+    font-size: {{ block.settings.tab_font_size }}px;
+    color: {{ block.settings.tab_text_color }};
+    border-radius: {{ block.settings.tab_border_radius }}px;
+    transition: all 0.3s ease;
+  }
+
+  .ai-tabbed-collections__tab-{{ ai_gen_id }}:hover {
+    background-color: {{ block.settings.tab_hover_background_color }};
+    color: {{ block.settings.tab_hover_color }};
+    border-color: {{ block.settings.tab_hover_border_color }};
+  }
+
+  .ai-tabbed-collections__tab-{{ ai_gen_id }}.active {
+    background-color: {{ block.settings.tab_active_background_color }};
+    color: {{ block.settings.tab_active_color }};
+    border-color: {{ block.settings.tab_active_border_color }};
+  }
+
+  .ai-tabbed-collections__content-{{ ai_gen_id }} {
+    display: none;
+  }
+
+  .ai-tabbed-collections__content-{{ ai_gen_id }}.active {
+    display: block;
+  }
+
+  .ai-tabbed-collections__products-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: repeat({{ block.settings.products_per_row_desktop }}, 1fr);
+    gap: {{ block.settings.product_grid_gap }}px;
+  }
+
+  .ai-tabbed-collections__product-card-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .ai-tabbed-collections__product-image-wrapper-{{ ai_gen_id }} {
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%;
+    overflow: hidden;
+    background-color: #f4f4f4;
+    margin-bottom: 12px;
+  }
+
+  .ai-tabbed-collections__product-image-{{ ai_gen_id }} {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }} {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }} svg {
+    width: 60%;
+    height: 60%;
+  }
+
+  .ai-tabbed-collections__product-title-{{ ai_gen_id }} {
+    font-size: 14px;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .ai-tabbed-collections__product-price-{{ ai_gen_id }} {
+    font-size: 14px;
+    color: {{ block.settings.price_color }};
+  }
+
+  .ai-tabbed-collections__empty-state-{{ ai_gen_id }} {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+    font-size: 14px;
+  }
+
+  @media screen and (max-width: 749px) {
+    .ai-tabbed-collections__products-{{ ai_gen_id }} {
+      grid-template-columns: repeat({{ block.settings.products_per_row_mobile }}, 1fr);
+    }
+
+    .ai-tabbed-collections__tabs-{{ ai_gen_id }} {
+      gap: {{ block.settings.tab_spacing | times: 0.7 }}px;
+    }
+
+    .ai-tabbed-collections__tab-{{ ai_gen_id }} {
+      font-size: {{ block.settings.tab_font_size | times: 0.9 }}px;
+      padding: {{ block.settings.tab_padding_vertical | times: 0.8 }}px {{ block.settings.tab_padding_horizontal | times: 0.8 }}px;
+    }
+  }
+{% endstyle %}
+
+<tabbed-collections-{{ ai_gen_id }} class="ai-tabbed-collections-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  <div class="ai-tabbed-collections__tabs-{{ ai_gen_id }}">
+    {% for i in (1..5) %}
+      {% liquid
+        assign tab_enabled_key = 'tab_' | append: i | append: '_enabled'
+        assign tab_title_key = 'tab_' | append: i | append: '_title'
+        assign collection_key = 'tab_' | append: i | append: '_collection'
+        
+        assign tab_enabled = block.settings[tab_enabled_key]
+        assign tab_title = block.settings[tab_title_key]
+        assign collection = block.settings[collection_key]
+      %}
+      
+      {% if tab_enabled and i <= block.settings.number_of_tabs %}
+        <button 
+          class="ai-tabbed-collections__tab-{{ ai_gen_id }} {% if forloop.first %}active{% endif %}"
+          data-tab="{{ i }}"
+          aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
+          role="tab"
+        >
+          {{ tab_title }}
+        </button>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% for i in (1..5) %}
+    {% liquid
+      assign tab_enabled_key = 'tab_' | append: i | append: '_enabled'
+      assign collection_key = 'tab_' | append: i | append: '_collection'
+      
+      assign tab_enabled = block.settings[tab_enabled_key]
+      assign collection = block.settings[collection_key]
+    %}
+    
+    {% if tab_enabled and i <= block.settings.number_of_tabs %}
+      <div 
+        class="ai-tabbed-collections__content-{{ ai_gen_id }} {% if forloop.first %}active{% endif %}"
+        data-content="{{ i }}"
+        role="tabpanel"
+      >
+        {% if collection != blank %}
+          {% liquid
+            if block.settings.product_sort_order == 'manual'
+              assign products = collection.products
+            elsif block.settings.product_sort_order == 'alphabetical'
+              assign products = collection.products | sort: 'title'
+            elsif block.settings.product_sort_order == 'alphabetical_reverse'
+              assign products = collection.products | sort: 'title' | reverse
+            elsif block.settings.product_sort_order == 'price_ascending'
+              assign products = collection.products | sort: 'price'
+            elsif block.settings.product_sort_order == 'price_descending'
+              assign products = collection.products | sort: 'price' | reverse
+            elsif block.settings.product_sort_order == 'created_ascending'
+              assign products = collection.products | sort: 'created_at'
+            elsif block.settings.product_sort_order == 'created_descending'
+              assign products = collection.products | sort: 'created_at' | reverse
+            else
+              assign products = collection.products
+            endif
+          %}
+          
+          <div class="ai-tabbed-collections__products-{{ ai_gen_id }}">
+            {% for product in products %}
+              <a href="{{ product.url }}" class="ai-tabbed-collections__product-card-{{ ai_gen_id }}">
+                <div class="ai-tabbed-collections__product-image-wrapper-{{ ai_gen_id }}">
+                  {% if product.featured_image %}
+                    <img 
+                      src="{{ product.featured_image | image_url: width: 600 }}"
+                      alt="{{ product.featured_image.alt | escape }}"
+                      class="ai-tabbed-collections__product-image-{{ ai_gen_id }}"
+                      loading="lazy"
+                      width="600"
+                      height="600"
+                    >
+                  {% else %}
+                    <div class="ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }}">
+                      {{ 'product-1' | placeholder_svg_tag }}
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="ai-tabbed-collections__product-title-{{ ai_gen_id }}">
+                  {{ product.title }}
+                </div>
+                <div class="ai-tabbed-collections__product-price-{{ ai_gen_id }}">
+                  {{ product.price | money }}
+                </div>
+              </a>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="ai-tabbed-collections__empty-state-{{ ai_gen_id }}">
+            Next, select a collection for this tab
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endfor %}
+</tabbed-collections-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class TabbedCollections{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+      }
+
+      connectedCallback() {
+        this.tabs = this.querySelectorAll('.ai-tabbed-collections__tab-{{ ai_gen_id }}');
+        this.contents = this.querySelectorAll('.ai-tabbed-collections__content-{{ ai_gen_id }}');
+        
+        this.setupEventListeners();
+      }
+
+      setupEventListeners() {
+        this.tabs.forEach((tab) => {
+          tab.addEventListener('click', () => {
+            const tabId = tab.getAttribute('data-tab');
+            this.switchTab(tabId);
+          });
+        });
+      }
+
+      switchTab(tabId) {
+        this.tabs.forEach((tab) => {
+          if (tab.getAttribute('data-tab') === tabId) {
+            tab.classList.add('active');
+            tab.setAttribute('aria-selected', 'true');
+          } else {
+            tab.classList.remove('active');
+            tab.setAttribute('aria-selected', 'false');
+          }
+        });
+
+        this.contents.forEach((content) => {
+          if (content.getAttribute('data-content') === tabId) {
+            content.classList.add('active');
+          } else {
+            content.classList.remove('active');
+          }
+        });
+      }
+    }
+
+    customElements.define('tabbed-collections-{{ ai_gen_id }}', TabbedCollections{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Tabbed collections",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Tabs"
+    },
+    {
+      "type": "range",
+      "id": "number_of_tabs",
+      "label": "Number of tabs",
+      "min": 2,
+      "max": 5,
+      "step": 1,
+      "default": 3
+    },
+    {
+      "type": "select",
+      "id": "tab_alignment",
+      "label": "Tab alignment",
+      "options": [
+        {
+          "value": "flex-start",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "flex-end",
+          "label": "Right"
+        }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "range",
+      "id": "tab_spacing",
+      "label": "Tab spacing",
+      "min": 8,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "range",
+      "id": "tabs_bottom_spacing",
+      "label": "Space below tabs",
+      "min": 16,
+      "max": 80,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "tab_font_size",
+      "label": "Tab font size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "range",
+      "id": "tab_padding_horizontal",
+      "label": "Tab horizontal padding",
+      "min": 12,
+      "max": 48,
+      "step": 4,
+      "unit": "px",
+      "default": 24
+    },
+    {
+      "type": "range",
+      "id": "tab_padding_vertical",
+      "label": "Tab vertical padding",
+      "min": 8,
+      "max": 32,
+      "step": 4,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "tab_border_radius",
+      "label": "Tab border radius",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "tab_border_thickness",
+      "label": "Tab border thickness",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "unit": "px",
+      "default": 1
+    },
+    {
+      "type": "header",
+      "content": "Tab colors"
+    },
+    {
+      "type": "color",
+      "id": "tab_background_color",
+      "label": "Background",
+      "default": "#f4f4f4"
+    },
+    {
+      "type": "color",
+      "id": "tab_text_color",
+      "label": "Text",
+      "default": "#666666"
+    },
+    {
+      "type": "color",
+      "id": "tab_border_color",
+      "label": "Border",
+      "default": "#e0e0e0"
+    },
+    {
+      "type": "color",
+      "id": "tab_hover_background_color",
+      "label": "Hover background",
+      "default": "#e8e8e8"
+    },
+    {
+      "type": "color",
+      "id": "tab_hover_color",
+      "label": "Hover text",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "tab_hover_border_color",
+      "label": "Hover border",
+      "default": "#cccccc"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_background_color",
+      "label": "Active background",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_color",
+      "label": "Active text",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_border_color",
+      "label": "Active border",
+      "default": "#121212"
+    },
+    {
+      "type": "header",
+      "content": "Tab 1"
+    },
+    {
+      "type": "checkbox",
+      "id": "tab_1_enabled",
+      "label": "Enable tab 1",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "tab_1_title",
+      "label": "Tab title",
+      "default": "New arrivals"
+    },
+    {
+      "type": "collection",
+      "id": "tab_1_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 2"
+    },
+    {
+      "type": "checkbox",
+      "id": "tab_2_enabled",
+      "label": "Enable tab 2",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "tab_2_title",
+      "label": "Tab title",
+      "default": "Best sellers"
+    },
+    {
+      "type": "collection",
+      "id": "tab_2_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 3"
+    },
+    {
+      "type": "checkbox",
+      "id": "tab_3_enabled",
+      "label": "Enable tab 3",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "tab_3_title",
+      "label": "Tab title",
+      "default": "Featured"
+    },
+    {
+      "type": "collection",
+      "id": "tab_3_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 4"
+    },
+    {
+      "type": "checkbox",
+      "id": "tab_4_enabled",
+      "label": "Enable tab 4",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "tab_4_title",
+      "label": "Tab title",
+      "default": "On sale"
+    },
+    {
+      "type": "collection",
+      "id": "tab_4_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 5"
+    },
+    {
+      "type": "checkbox",
+      "id": "tab_5_enabled",
+      "label": "Enable tab 5",
+      "default": false
+    },
+    {
+      "type": "text",
+      "id": "tab_5_title",
+      "label": "Tab title",
+      "default": "Trending"
+    },
+    {
+      "type": "collection",
+      "id": "tab_5_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Products"
+    },
+    {
+      "type": "select",
+      "id": "product_sort_order",
+      "label": "Product sort order",
+      "options": [
+        {
+          "value": "manual",
+          "label": "Collection default"
+        },
+        {
+          "value": "alphabetical",
+          "label": "Alphabetically, A-Z"
+        },
+        {
+          "value": "alphabetical_reverse",
+          "label": "Alphabetically, Z-A"
+        },
+        {
+          "value": "price_ascending",
+          "label": "Price, low to high"
+        },
+        {
+          "value": "price_descending",
+          "label": "Price, high to low"
+        },
+        {
+          "value": "created_ascending",
+          "label": "Date, old to new"
+        },
+        {
+          "value": "created_descending",
+          "label": "Date, new to old"
+        }
+      ],
+      "default": "manual"
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_desktop",
+      "label": "Products per row (desktop)",
+      "min": 2,
+      "max": 6,
+      "step": 1,
+      "default": 4
+    },
+    {
+      "type": "select",
+      "id": "products_per_row_mobile",
+      "label": "Products per row (mobile)",
+      "options": [
+        {
+          "value": "1",
+          "label": "1"
+        },
+        {
+          "value": "2",
+          "label": "2"
+        }
+      ],
+      "default": "2"
+    },
+    {
+      "type": "range",
+      "id": "product_grid_gap",
+      "label": "Product grid gap",
+      "min": 8,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "color",
+      "id": "price_color",
+      "label": "Price color",
+      "default": "#121212"
+    },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "desktop_width_percent",
+      "label": "Desktop width",
+      "min": 50,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 100
+    }
+  ],
+  "presets": [
+    {
+      "name": "Tabbed collections"
+    }
+  ]
+}
+{% endschema %}

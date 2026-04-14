@@ -1,0 +1,765 @@
+{% doc %}
+  @prompt
+    i want a search bar to appear with predictive text customer can search his desired country , this is esim store, i need alignment option as well like left center right, outside of the search box i want customised text of which i want placement, text font, text size and other relevant control as well, also the countries in search should appear from our catalog, find your country text you have setup above only, if i want that to fit on leftside of the search bar in same line or right side of the same line there isn't any controls avaialble, find your country text and search country bar should have controls like spacing,sharing percentage of the same line without overlapping, a decent good layout, spacing doesnt work, reverse the last adjustment, find your country text should share the same lane of the search bar where we have setup search for a country, also this find your country and search for a country text should have animation option as well, place holder text doesn't have option of animation, only border is getting animated
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-country-search-{{ ai_gen_id }} {
+    display: block;
+    width: {{ block.settings.desktop_width_percent }}%;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .ai-country-search-wrapper-{{ ai_gen_id }} {
+    display: flex;
+    align-items: center;
+    gap: {{ block.settings.spacing_between }}px;
+    {% if block.settings.layout_direction == 'row' %}
+      flex-direction: row;
+    {% else %}
+      flex-direction: row-reverse;
+    {% endif %}
+  }
+
+  .ai-country-search-label-{{ ai_gen_id }} {
+    margin: 0;
+    font-size: {{ block.settings.label_size }}px;
+    font-weight: {{ block.settings.label_weight }};
+    color: {{ block.settings.label_color }};
+    white-space: nowrap;
+    flex-shrink: 0;
+    {% if block.settings.label_animation != 'none' %}
+      animation: ai-label-animate-{{ ai_gen_id }} {{ block.settings.animation_duration }}s {{ block.settings.animation_timing }} infinite;
+    {% endif %}
+  }
+
+  .ai-country-search-container-{{ ai_gen_id }} {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ai-country-search-field-{{ ai_gen_id }} {
+    position: relative;
+    width: 100%;
+  }
+
+  .ai-country-search-input-{{ ai_gen_id }} {
+    width: 100%;
+    padding: {{ block.settings.input_padding }}px;
+    padding-left: {{ block.settings.input_padding | plus: 40 }}px;
+    font-size: {{ block.settings.input_font_size }}px;
+    border: {{ block.settings.border_thickness }}px solid {{ block.settings.border_color }};
+    border-radius: {{ block.settings.border_radius }}px;
+    background-color: {{ block.settings.background_color }};
+    color: {{ block.settings.text_color }};
+    outline: none;
+    transition: border-color 0.3s ease;
+  }
+
+  .ai-country-search-input-{{ ai_gen_id }}:focus {
+    border-color: {{ block.settings.focus_border_color }};
+  }
+
+  .ai-country-search-input-{{ ai_gen_id }}::placeholder {
+    color: {{ block.settings.placeholder_color }};
+    {% if block.settings.placeholder_animation != 'none' %}
+      animation: ai-placeholder-animate-{{ ai_gen_id }} {{ block.settings.animation_duration }}s {{ block.settings.animation_timing }} infinite;
+    {% endif %}
+  }
+
+  .ai-country-search-icon-{{ ai_gen_id }} {
+    position: absolute;
+    left: {{ block.settings.input_padding }}px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: {{ block.settings.icon_color }};
+    pointer-events: none;
+  }
+
+  .ai-country-search-clear-{{ ai_gen_id }} {
+    position: absolute;
+    right: {{ block.settings.input_padding }}px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: none;
+    color: {{ block.settings.icon_color }};
+    opacity: 0.6;
+  }
+
+  .ai-country-search-clear-{{ ai_gen_id }}:hover {
+    opacity: 1;
+  }
+
+  .ai-country-search-clear-{{ ai_gen_id }}.active {
+    display: block;
+  }
+
+  .ai-country-search-results-{{ ai_gen_id }} {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    right: 0;
+    background-color: {{ block.settings.dropdown_bg_color }};
+    border: 1px solid {{ block.settings.border_color }};
+    border-radius: {{ block.settings.border_radius }}px;
+    max-height: {{ block.settings.dropdown_max_height }}px;
+    overflow-y: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+    display: none;
+  }
+
+  .ai-country-search-results-{{ ai_gen_id }}.active {
+    display: block;
+  }
+
+  .ai-country-search-result-{{ ai_gen_id }} {
+    padding: 12px {{ block.settings.input_padding }}px;
+    cursor: pointer;
+    color: {{ block.settings.dropdown_text_color }};
+    font-size: {{ block.settings.input_font_size }}px;
+    border-bottom: 1px solid {{ block.settings.border_color }};
+    transition: background-color 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .ai-country-search-result-{{ ai_gen_id }}:last-child {
+    border-bottom: none;
+  }
+
+  .ai-country-search-result-{{ ai_gen_id }}:hover,
+  .ai-country-search-result-{{ ai_gen_id }}.highlighted {
+    background-color: {{ block.settings.dropdown_hover_color }};
+  }
+
+  .ai-country-search-flag-{{ ai_gen_id }} {
+    font-size: 24px;
+    line-height: 1;
+  }
+
+  .ai-country-search-name-{{ ai_gen_id }} {
+    flex-grow: 1;
+  }
+
+  .ai-country-search-no-results-{{ ai_gen_id }} {
+    padding: 20px {{ block.settings.input_padding }}px;
+    text-align: center;
+    color: {{ block.settings.placeholder_color }};
+    font-size: {{ block.settings.input_font_size }}px;
+  }
+
+  {% if block.settings.label_animation == 'fade' %}
+    @keyframes ai-label-animate-{{ ai_gen_id }} {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  {% elsif block.settings.label_animation == 'pulse' %}
+    @keyframes ai-label-animate-{{ ai_gen_id }} {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+  {% elsif block.settings.label_animation == 'slide' %}
+    @keyframes ai-label-animate-{{ ai_gen_id }} {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(5px); }
+    }
+  {% endif %}
+
+  {% if block.settings.placeholder_animation == 'fade' %}
+    @keyframes ai-placeholder-animate-{{ ai_gen_id }} {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  {% elsif block.settings.placeholder_animation == 'pulse' %}
+    @keyframes ai-placeholder-animate-{{ ai_gen_id }} {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.02); }
+    }
+  {% elsif block.settings.placeholder_animation == 'slide' %}
+    @keyframes ai-placeholder-animate-{{ ai_gen_id }} {
+      0%, 100% { transform: translateX(0); }
+      50% { transform: translateX(3px); }
+    }
+  {% elsif block.settings.placeholder_animation == 'glow' %}
+    @keyframes ai-placeholder-animate-{{ ai_gen_id }} {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+  {% endif %}
+
+  @media screen and (max-width: 749px) {
+    .ai-country-search-{{ ai_gen_id }} {
+      width: 100%;
+    }
+
+    .ai-country-search-wrapper-{{ ai_gen_id }} {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 12px;
+    }
+
+    .ai-country-search-label-{{ ai_gen_id }} {
+      text-align: center;
+    }
+  }
+{% endstyle %}
+
+<country-search-{{ ai_gen_id }} class="ai-country-search-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  <div class="ai-country-search-wrapper-{{ ai_gen_id }}">
+    {% if block.settings.label_text != blank %}
+      <div class="ai-country-search-label-{{ ai_gen_id }}">{{ block.settings.label_text }}</div>
+    {% endif %}
+
+    <div class="ai-country-search-container-{{ ai_gen_id }}">
+      <div class="ai-country-search-field-{{ ai_gen_id }}">
+        <svg class="ai-country-search-icon-{{ ai_gen_id }}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        
+        <input
+          type="text"
+          class="ai-country-search-input-{{ ai_gen_id }}"
+          placeholder="{{ block.settings.placeholder_text }}"
+          autocomplete="off"
+          aria-label="Search countries"
+          aria-autocomplete="list"
+          aria-controls="ai-country-search-results-{{ ai_gen_id }}"
+          aria-expanded="false"
+        >
+        
+        <button
+          type="button"
+          class="ai-country-search-clear-{{ ai_gen_id }}"
+          aria-label="Clear search"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div
+        id="ai-country-search-results-{{ ai_gen_id }}"
+        class="ai-country-search-results-{{ ai_gen_id }}"
+        role="listbox"
+      ></div>
+    </div>
+  </div>
+</country-search-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class CountrySearch{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+        this.allProducts = [];
+        this.highlightedIndex = -1;
+      }
+
+      connectedCallback() {
+        this.input = this.querySelector('.ai-country-search-input-{{ ai_gen_id }}');
+        this.clearBtn = this.querySelector('.ai-country-search-clear-{{ ai_gen_id }}');
+        this.resultsContainer = this.querySelector('.ai-country-search-results-{{ ai_gen_id }}');
+        
+        this.fetchProducts();
+        this.setupEventListeners();
+      }
+
+      async fetchProducts() {
+        try {
+          const response = await fetch('/products.json?limit=250');
+          const data = await response.json();
+          this.allProducts = data.products.map(product => ({
+            title: product.title,
+            handle: product.handle,
+            url: `/products/${product.handle}`,
+            image: product.images[0] || null
+          }));
+        } catch (error) {
+          console.error('Error fetching products:', error);
+        }
+      }
+
+      setupEventListeners() {
+        this.input.addEventListener('input', () => this.handleInput());
+        this.input.addEventListener('focus', () => this.handleInput());
+        this.input.addEventListener('keydown', (e) => this.handleKeydown(e));
+        this.clearBtn.addEventListener('click', () => this.clearSearch());
+        
+        document.addEventListener('click', (e) => {
+          if (!this.contains(e.target)) {
+            this.hideResults();
+          }
+        });
+      }
+
+      handleInput() {
+        const query = this.input.value.trim();
+        
+        if (query.length > 0) {
+          this.clearBtn.classList.add('active');
+        } else {
+          this.clearBtn.classList.remove('active');
+        }
+
+        if (query.length === 0) {
+          this.hideResults();
+          return;
+        }
+
+        const filtered = this.allProducts.filter(product => 
+          product.title.toLowerCase().includes(query.toLowerCase())
+        );
+
+        this.displayResults(filtered, query);
+      }
+
+      displayResults(results, query) {
+        this.highlightedIndex = -1;
+        
+        if (results.length === 0) {
+          this.resultsContainer.innerHTML = `
+            <div class="ai-country-search-no-results-{{ ai_gen_id }}">
+              No countries found for "${this.escapeHtml(query)}"
+            </div>
+          `;
+          this.showResults();
+          return;
+        }
+
+        this.resultsContainer.innerHTML = results.map((product, index) => {
+          const flag = this.extractFlag(product.title);
+          return `
+            <div 
+              class="ai-country-search-result-{{ ai_gen_id }}" 
+              role="option"
+              data-index="${index}"
+              data-title="${this.escapeHtml(product.title)}"
+              data-url="${product.url}"
+            >
+              ${flag ? `<span class="ai-country-search-flag-{{ ai_gen_id }}">${flag}</span>` : ''}
+              <span class="ai-country-search-name-{{ ai_gen_id }}">${this.escapeHtml(product.title)}</span>
+            </div>
+          `;
+        }).join('');
+
+        this.resultsContainer.querySelectorAll('.ai-country-search-result-{{ ai_gen_id }}').forEach(result => {
+          result.addEventListener('click', () => this.selectCountry(result));
+        });
+
+        this.showResults();
+      }
+
+      extractFlag(title) {
+        const flagRegex = /[\u{1F1E6}-\u{1F1FF}]{2}/u;
+        const match = title.match(flagRegex);
+        return match ? match[0] : null;
+      }
+
+      escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      handleKeydown(e) {
+        const results = this.resultsContainer.querySelectorAll('.ai-country-search-result-{{ ai_gen_id }}');
+        
+        if (!this.resultsContainer.classList.contains('active') || results.length === 0) {
+          return;
+        }
+
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          this.highlightedIndex = Math.min(this.highlightedIndex + 1, results.length - 1);
+          this.updateHighlight(results);
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          this.highlightedIndex = Math.max(this.highlightedIndex - 1, -1);
+          this.updateHighlight(results);
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (this.highlightedIndex >= 0) {
+            this.selectCountry(results[this.highlightedIndex]);
+          }
+        } else if (e.key === 'Escape') {
+          this.hideResults();
+        }
+      }
+
+      updateHighlight(results) {
+        results.forEach((result, index) => {
+          if (index === this.highlightedIndex) {
+            result.classList.add('highlighted');
+            result.scrollIntoView({ block: 'nearest' });
+          } else {
+            result.classList.remove('highlighted');
+          }
+        });
+      }
+
+      selectCountry(resultElement) {
+        const countryTitle = resultElement.dataset.title;
+        const countryUrl = resultElement.dataset.url;
+        
+        window.location.href = countryUrl;
+      }
+
+      clearSearch() {
+        this.input.value = '';
+        this.clearBtn.classList.remove('active');
+        this.hideResults();
+        this.input.focus();
+      }
+
+      showResults() {
+        this.resultsContainer.classList.add('active');
+        this.input.setAttribute('aria-expanded', 'true');
+      }
+
+      hideResults() {
+        this.resultsContainer.classList.remove('active');
+        this.input.setAttribute('aria-expanded', 'false');
+        this.highlightedIndex = -1;
+      }
+    }
+
+    customElements.define('country-search-{{ ai_gen_id }}', CountrySearch{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Country search",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "desktop_width_percent",
+      "label": "Desktop width",
+      "min": 50,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 100
+    },
+    {
+      "type": "select",
+      "id": "layout_direction",
+      "label": "Label position",
+      "options": [
+        {
+          "value": "row",
+          "label": "Left of search bar"
+        },
+        {
+          "value": "row-reverse",
+          "label": "Right of search bar"
+        }
+      ],
+      "default": "row"
+    },
+    {
+      "type": "range",
+      "id": "spacing_between",
+      "label": "Spacing between label and search",
+      "min": 8,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "header",
+      "content": "Label"
+    },
+    {
+      "type": "text",
+      "id": "label_text",
+      "label": "Label text",
+      "default": "Find your country"
+    },
+    {
+      "type": "range",
+      "id": "label_size",
+      "label": "Label size",
+      "min": 12,
+      "max": 40,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "select",
+      "id": "label_weight",
+      "label": "Label weight",
+      "options": [
+        {
+          "value": "300",
+          "label": "Light"
+        },
+        {
+          "value": "400",
+          "label": "Normal"
+        },
+        {
+          "value": "500",
+          "label": "Medium"
+        },
+        {
+          "value": "600",
+          "label": "Semibold"
+        },
+        {
+          "value": "700",
+          "label": "Bold"
+        }
+      ],
+      "default": "600"
+    },
+    {
+      "type": "color",
+      "id": "label_color",
+      "label": "Label color",
+      "default": "#121212"
+    },
+    {
+      "type": "select",
+      "id": "label_animation",
+      "label": "Label animation",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade",
+          "label": "Fade"
+        },
+        {
+          "value": "pulse",
+          "label": "Pulse"
+        },
+        {
+          "value": "slide",
+          "label": "Slide"
+        }
+      ],
+      "default": "none"
+    },
+    {
+      "type": "header",
+      "content": "Search input"
+    },
+    {
+      "type": "text",
+      "id": "placeholder_text",
+      "label": "Placeholder text",
+      "default": "Search for a country..."
+    },
+    {
+      "type": "select",
+      "id": "placeholder_animation",
+      "label": "Placeholder animation",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade",
+          "label": "Fade"
+        },
+        {
+          "value": "pulse",
+          "label": "Pulse"
+        },
+        {
+          "value": "slide",
+          "label": "Slide"
+        },
+        {
+          "value": "glow",
+          "label": "Glow"
+        }
+      ],
+      "default": "none"
+    },
+    {
+      "type": "range",
+      "id": "input_font_size",
+      "label": "Font size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "range",
+      "id": "input_padding",
+      "label": "Padding",
+      "min": 8,
+      "max": 24,
+      "step": 2,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "border_thickness",
+      "label": "Border thickness",
+      "min": 0,
+      "max": 4,
+      "step": 1,
+      "unit": "px",
+      "default": 1
+    },
+    {
+      "type": "range",
+      "id": "border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 8
+    },
+    {
+      "type": "header",
+      "content": "Animation"
+    },
+    {
+      "type": "range",
+      "id": "animation_duration",
+      "label": "Animation duration",
+      "min": 1,
+      "max": 5,
+      "step": 1,
+      "unit": "s",
+      "default": 2
+    },
+    {
+      "type": "select",
+      "id": "animation_timing",
+      "label": "Animation timing",
+      "options": [
+        {
+          "value": "ease",
+          "label": "Ease"
+        },
+        {
+          "value": "ease-in",
+          "label": "Ease in"
+        },
+        {
+          "value": "ease-out",
+          "label": "Ease out"
+        },
+        {
+          "value": "ease-in-out",
+          "label": "Ease in out"
+        },
+        {
+          "value": "linear",
+          "label": "Linear"
+        }
+      ],
+      "default": "ease-in-out"
+    },
+    {
+      "type": "header",
+      "content": "Colors"
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "placeholder_color",
+      "label": "Placeholder",
+      "default": "#999999"
+    },
+    {
+      "type": "color",
+      "id": "border_color",
+      "label": "Border",
+      "default": "#CCCCCC"
+    },
+    {
+      "type": "color",
+      "id": "focus_border_color",
+      "label": "Focus border",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "icon_color",
+      "label": "Icon",
+      "default": "#666666"
+    },
+    {
+      "type": "header",
+      "content": "Dropdown"
+    },
+    {
+      "type": "range",
+      "id": "dropdown_max_height",
+      "label": "Max height",
+      "min": 200,
+      "max": 500,
+      "step": 50,
+      "unit": "px",
+      "default": 300
+    },
+    {
+      "type": "color",
+      "id": "dropdown_bg_color",
+      "label": "Background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "dropdown_text_color",
+      "label": "Text",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "dropdown_hover_color",
+      "label": "Hover background",
+      "default": "#F3F3F3"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Country search"
+    }
+  ]
+}
+{% endschema %}

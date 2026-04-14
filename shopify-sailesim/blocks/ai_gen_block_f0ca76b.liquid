@@ -1,0 +1,1039 @@
+{% doc %}
+  @prompt
+    Generate a block  same like country search we have, adding an option of selection of duration, like opening a calender where customer can choose his travelling dates and according to the selection packages will be shown to him, like if customer select 8 days packages of  7and 8-10 days should appear of that selected country, same goes like if customer select for 6 days so package of 5-7 days should be shown to him/her if available, i have shared a reference picture for you i want the same like this layout
+    
+    
+    half space is shared for image, other half consist of travelling dates selector, country selector/search option, multiplet text options with customisation of size color placement and animation, country options should be linked with out product/country options only
+    
+    Image option should be available to 2 having a selector to choose enable option of image 1 or 2
+    
+    there should be 2 sub heading option 
+    
+    none of the heading/subheading have animation option
+    
+    Travel start date and travel end date should have a single selector to have minimal look just as i shared a reference pic with you before, heding, sub headings, buttons, animation is missing,adjusting of the image and country with date selector alignmentof right lift is missing, sdestination country list should appear or link with the collection we will setup so the option of linking collection is missing there, for sub heading 1 and 2 provide me animation options, also picture placement is restricted to left side it  should have option to select picture should come right, so the search and date selector with headings come on left side
+    
+    Date selector should work properly, starting date should be from the current date
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-travel-search-{{ ai_gen_id }} {
+    display: block;
+    width: {{ block.settings.desktop_width_percent }}%;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+
+  .ai-travel-search-container-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: {% if block.settings.image_position == 'left' %}row{% else %}row-reverse{% endif %};
+    gap: 0;
+    min-height: 500px;
+  }
+
+  .ai-travel-search-image-section-{{ ai_gen_id }} {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .ai-travel-search-image-{{ ai_gen_id }} {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .ai-travel-search-image-placeholder-{{ ai_gen_id }} {
+    width: 100%;
+    height: 100%;
+    background-color: #f4f4f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .ai-travel-search-image-placeholder-{{ ai_gen_id }} svg {
+    width: 100%;
+    height: 100%;
+    max-width: 400px;
+    max-height: 400px;
+  }
+
+  .ai-travel-search-empty-state-{{ ai_gen_id }} {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    font-size: 14px;
+    color: #666;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .ai-travel-search-content-section-{{ ai_gen_id }} {
+    flex: 1;
+    padding: {{ block.settings.content_padding }}px;
+    background-color: {{ block.settings.content_bg_color }};
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: {{ block.settings.content_spacing }}px;
+  }
+
+  .ai-travel-search-heading-{{ ai_gen_id }} {
+    font-size: {{ block.settings.heading_size }}px;
+    color: {{ block.settings.heading_color }};
+    margin: 0;
+    text-align: {{ block.settings.heading_alignment }};
+  }
+
+  .ai-travel-search-subheading-{{ ai_gen_id }} {
+    font-size: {{ block.settings.subheading_size }}px;
+    color: {{ block.settings.subheading_color }};
+    margin: 0;
+    text-align: {{ block.settings.subheading_alignment }};
+  }
+
+  .ai-travel-search-subheading-{{ ai_gen_id }}.animate-fade-in {
+    animation: ai-fade-in-{{ ai_gen_id }} 0.8s ease-out;
+  }
+
+  .ai-travel-search-subheading-{{ ai_gen_id }}.animate-slide-up {
+    animation: ai-slide-up-{{ ai_gen_id }} 0.8s ease-out;
+  }
+
+  .ai-travel-search-subheading-{{ ai_gen_id }}.animate-slide-left {
+    animation: ai-slide-left-{{ ai_gen_id }} 0.8s ease-out;
+  }
+
+  @keyframes ai-fade-in-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes ai-slide-up-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes ai-slide-left-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: translateX(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  .ai-travel-search-form-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .ai-travel-search-field-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ai-travel-search-label-{{ ai_gen_id }} {
+    font-size: {{ block.settings.label_size }}px;
+    color: {{ block.settings.label_color }};
+    font-weight: 500;
+  }
+
+  .ai-travel-search-input-{{ ai_gen_id }},
+  .ai-travel-search-select-{{ ai_gen_id }} {
+    padding: 12px 16px;
+    border: {{ block.settings.input_border_width }}px solid {{ block.settings.input_border_color }};
+    border-radius: {{ block.settings.input_border_radius }}px;
+    font-size: 16px;
+    background-color: {{ block.settings.input_bg_color }};
+    color: {{ block.settings.input_text_color }};
+    width: 100%;
+  }
+
+  .ai-travel-search-input-{{ ai_gen_id }}:focus,
+  .ai-travel-search-select-{{ ai_gen_id }}:focus {
+    outline: 2px solid {{ block.settings.input_focus_color }};
+    outline-offset: 2px;
+  }
+
+  .ai-travel-search-date-wrapper-{{ ai_gen_id }} {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .ai-travel-search-date-field-{{ ai_gen_id }} {
+    flex: 1;
+    position: relative;
+  }
+
+  .ai-travel-search-date-separator-{{ ai_gen_id }} {
+    font-size: 18px;
+    color: {{ block.settings.label_color }};
+    padding-top: 28px;
+  }
+
+  .ai-travel-search-button-{{ ai_gen_id }} {
+    padding: {{ block.settings.button_padding }}px;
+    background-color: {{ block.settings.button_bg_color }};
+    color: {{ block.settings.button_text_color }};
+    border: none;
+    border-radius: {{ block.settings.button_border_radius }}px;
+    font-size: {{ block.settings.button_size }}px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .ai-travel-search-button-{{ ai_gen_id }}:hover {
+    background-color: {{ block.settings.button_hover_bg_color }};
+  }
+
+  .ai-travel-search-results-{{ ai_gen_id }} {
+    margin-top: 20px;
+    padding: 20px;
+    background-color: {{ block.settings.results_bg_color }};
+    border-radius: {{ block.settings.input_border_radius }}px;
+    display: none;
+  }
+
+  .ai-travel-search-results-{{ ai_gen_id }}.active {
+    display: block;
+  }
+
+  .ai-travel-search-results-title-{{ ai_gen_id }} {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: {{ block.settings.heading_color }};
+  }
+
+  .ai-travel-search-results-grid-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 16px;
+  }
+
+  .ai-travel-search-product-card-{{ ai_gen_id }} {
+    border: 1px solid {{ block.settings.input_border_color }};
+    border-radius: {{ block.settings.input_border_radius }}px;
+    padding: 12px;
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .ai-travel-search-product-card-{{ ai_gen_id }}:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .ai-travel-search-product-image-{{ ai_gen_id }} {
+    width: 100%;
+    aspect-ratio: 4/3;
+    object-fit: cover;
+    border-radius: 4px;
+    margin-bottom: 8px;
+  }
+
+  .ai-travel-search-product-title-{{ ai_gen_id }} {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .ai-travel-search-product-price-{{ ai_gen_id }} {
+    font-size: 14px;
+    color: {{ block.settings.label_color }};
+  }
+
+  .ai-travel-search-no-results-{{ ai_gen_id }} {
+    text-align: center;
+    padding: 40px 20px;
+    color: {{ block.settings.label_color }};
+  }
+
+  @media screen and (max-width: 768px) {
+    .ai-travel-search-container-{{ ai_gen_id }} {
+      flex-direction: column;
+    }
+
+    .ai-travel-search-image-section-{{ ai_gen_id }} {
+      min-height: 300px;
+    }
+
+    .ai-travel-search-date-wrapper-{{ ai_gen_id }} {
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .ai-travel-search-date-separator-{{ ai_gen_id }} {
+      display: none;
+    }
+
+    .ai-travel-search-results-grid-{{ ai_gen_id }} {
+      grid-template-columns: 1fr;
+    }
+  }
+{% endstyle %}
+
+<travel-search-{{ ai_gen_id }} class="ai-travel-search-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  <div class="ai-travel-search-container-{{ ai_gen_id }}">
+    <div class="ai-travel-search-image-section-{{ ai_gen_id }}">
+      {% if block.settings.image_1_enabled and block.settings.image_1 %}
+        <img
+          src="{{ block.settings.image_1 | image_url: width: 1200 }}"
+          alt="{{ block.settings.image_1.alt | escape }}"
+          class="ai-travel-search-image-{{ ai_gen_id }}"
+          loading="lazy"
+          width="{{ block.settings.image_1.width }}"
+          height="{{ block.settings.image_1.height }}"
+        >
+      {% elsif block.settings.image_2_enabled and block.settings.image_2 %}
+        <img
+          src="{{ block.settings.image_2 | image_url: width: 1200 }}"
+          alt="{{ block.settings.image_2.alt | escape }}"
+          class="ai-travel-search-image-{{ ai_gen_id }}"
+          loading="lazy"
+          width="{{ block.settings.image_2.width }}"
+          height="{{ block.settings.image_2.height }}"
+        >
+      {% else %}
+        <div class="ai-travel-search-image-placeholder-{{ ai_gen_id }}">
+          {{ 'lifestyle-1' | placeholder_svg_tag }}
+          <div class="ai-travel-search-empty-state-{{ ai_gen_id }}">
+            Add an image to get started
+          </div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="ai-travel-search-content-section-{{ ai_gen_id }}">
+      {% if block.settings.heading != blank %}
+        <h2 class="ai-travel-search-heading-{{ ai_gen_id }}">
+          {{ block.settings.heading }}
+        </h2>
+      {% endif %}
+
+      {% if block.settings.subheading_1 != blank %}
+        <div class="ai-travel-search-subheading-{{ ai_gen_id }} {% if block.settings.subheading_1_animation != 'none' %}animate-{{ block.settings.subheading_1_animation }}{% endif %}">
+          {{ block.settings.subheading_1 }}
+        </div>
+      {% endif %}
+
+      {% if block.settings.subheading_2 != blank %}
+        <div class="ai-travel-search-subheading-{{ ai_gen_id }} {% if block.settings.subheading_2_animation != 'none' %}animate-{{ block.settings.subheading_2_animation }}{% endif %}">
+          {{ block.settings.subheading_2 }}
+        </div>
+      {% endif %}
+
+      <div class="ai-travel-search-form-{{ ai_gen_id }}">
+        <div class="ai-travel-search-field-{{ ai_gen_id }}">
+          <label class="ai-travel-search-label-{{ ai_gen_id }}" for="destination-{{ ai_gen_id }}">
+            {{ block.settings.destination_label }}
+          </label>
+          <select
+            id="destination-{{ ai_gen_id }}"
+            class="ai-travel-search-select-{{ ai_gen_id }}"
+            data-destination-select
+          >
+            <option value="">{{ block.settings.destination_placeholder }}</option>
+            {% if block.settings.destination_collection != blank %}
+              {% for product in block.settings.destination_collection.products %}
+                <option value="{{ product.handle }}" data-product-id="{{ product.id }}">
+                  {{ product.title }}
+                </option>
+              {% endfor %}
+            {% endif %}
+          </select>
+        </div>
+
+        <div class="ai-travel-search-date-wrapper-{{ ai_gen_id }}">
+          <div class="ai-travel-search-date-field-{{ ai_gen_id }}">
+            <label class="ai-travel-search-label-{{ ai_gen_id }}" for="start-date-{{ ai_gen_id }}">
+              {{ block.settings.start_date_label }}
+            </label>
+            <input
+              type="date"
+              id="start-date-{{ ai_gen_id }}"
+              class="ai-travel-search-input-{{ ai_gen_id }}"
+              data-start-date
+            >
+          </div>
+
+          <div class="ai-travel-search-date-separator-{{ ai_gen_id }}">→</div>
+
+          <div class="ai-travel-search-date-field-{{ ai_gen_id }}">
+            <label class="ai-travel-search-label-{{ ai_gen_id }}" for="end-date-{{ ai_gen_id }}">
+              {{ block.settings.end_date_label }}
+            </label>
+            <input
+              type="date"
+              id="end-date-{{ ai_gen_id }}"
+              class="ai-travel-search-input-{{ ai_gen_id }}"
+              data-end-date
+            >
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="ai-travel-search-button-{{ ai_gen_id }}"
+          data-search-button
+        >
+          {{ block.settings.button_text }}
+        </button>
+      </div>
+
+      <div class="ai-travel-search-results-{{ ai_gen_id }}" data-results-container>
+        <div class="ai-travel-search-results-title-{{ ai_gen_id }}">
+          Available Packages
+        </div>
+        <div class="ai-travel-search-results-grid-{{ ai_gen_id }}" data-results-grid></div>
+        <div class="ai-travel-search-no-results-{{ ai_gen_id }}" data-no-results style="display: none;">
+          No packages found matching your criteria. Please try different dates or destination.
+        </div>
+      </div>
+    </div>
+  </div>
+</travel-search-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class TravelSearch{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+        this.destinationSelect = this.querySelector('[data-destination-select]');
+        this.startDateInput = this.querySelector('[data-start-date]');
+        this.endDateInput = this.querySelector('[data-end-date]');
+        this.searchButton = this.querySelector('[data-search-button]');
+        this.resultsContainer = this.querySelector('[data-results-container]');
+        this.resultsGrid = this.querySelector('[data-results-grid]');
+        this.noResults = this.querySelector('[data-no-results]');
+        this.allProducts = [];
+      }
+
+      connectedCallback() {
+        this.setMinDate();
+        this.loadAllProducts();
+        this.setupEventListeners();
+      }
+
+      setMinDate() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        const todayString = year + '-' + month + '-' + day;
+        
+        this.startDateInput.min = todayString;
+        this.endDateInput.min = todayString;
+      }
+
+      loadAllProducts() {
+        const collectionHandle = '{{ block.settings.destination_collection.handle }}';
+        if (!collectionHandle) return;
+
+        fetch('/collections/' + collectionHandle + '/products.json?limit=250')
+          .then(response => response.json())
+          .then(data => {
+            this.allProducts = data.products;
+          })
+          .catch(error => {
+            console.error('Error loading products:', error);
+          });
+      }
+
+      setupEventListeners() {
+        this.startDateInput.addEventListener('change', () => {
+          this.endDateInput.min = this.startDateInput.value;
+        });
+
+        this.searchButton.addEventListener('click', () => {
+          this.performSearch();
+        });
+
+        this.destinationSelect.addEventListener('change', () => {
+          if (this.startDateInput.value && this.endDateInput.value) {
+            this.performSearch();
+          }
+        });
+      }
+
+      performSearch() {
+        const destination = this.destinationSelect.value;
+        const startDate = this.startDateInput.value;
+        const endDate = this.endDateInput.value;
+
+        if (!destination || !startDate || !endDate) {
+          alert('Please select a destination and travel dates');
+          return;
+        }
+
+        const daysDiff = this.calculateDaysDifference(startDate, endDate);
+        
+        if (daysDiff < 1) {
+          alert('End date must be after start date');
+          return;
+        }
+
+        this.filterAndDisplayProducts(destination, daysDiff);
+      }
+
+      calculateDaysDifference(start, end) {
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        const diffTime = Math.abs(endDate - startDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays;
+      }
+
+      filterAndDisplayProducts(destination, days) {
+        const filteredProducts = this.allProducts.filter(product => {
+          const matchesDestination = product.handle === destination;
+          
+          if (!matchesDestination) return false;
+
+          const durationMatch = this.matchesDuration(product, days);
+          return durationMatch;
+        });
+
+        this.displayResults(filteredProducts);
+      }
+
+      matchesDuration(product, selectedDays) {
+        const title = product.title.toLowerCase();
+        const tags = product.tags || [];
+        
+        const durationPatterns = [
+          { pattern: /(\d+)\s*-\s*(\d+)\s*days?/i, type: 'range' },
+          { pattern: /(\d+)\s*days?/i, type: 'exact' }
+        ];
+
+        for (const tag of tags) {
+          for (const { pattern, type } of durationPatterns) {
+            const match = tag.match(pattern);
+            if (match) {
+              if (type === 'range') {
+                const minDays = parseInt(match[1]);
+                const maxDays = parseInt(match[2]);
+                if (selectedDays >= minDays && selectedDays <= maxDays) {
+                  return true;
+                }
+              } else if (type === 'exact') {
+                const exactDays = parseInt(match[1]);
+                const tolerance = {{ block.settings.duration_tolerance }};
+                if (Math.abs(selectedDays - exactDays) <= tolerance) {
+                  return true;
+                }
+              }
+            }
+          }
+        }
+
+        for (const { pattern, type } of durationPatterns) {
+          const match = title.match(pattern);
+          if (match) {
+            if (type === 'range') {
+              const minDays = parseInt(match[1]);
+              const maxDays = parseInt(match[2]);
+              if (selectedDays >= minDays && selectedDays <= maxDays) {
+                return true;
+              }
+            } else if (type === 'exact') {
+              const exactDays = parseInt(match[1]);
+              const tolerance = {{ block.settings.duration_tolerance }};
+              if (Math.abs(selectedDays - exactDays) <= tolerance) {
+                return true;
+              }
+            }
+          }
+        }
+
+        return false;
+      }
+
+      displayResults(products) {
+        this.resultsContainer.classList.add('active');
+        this.resultsGrid.innerHTML = '';
+
+        if (products.length === 0) {
+          this.noResults.style.display = 'block';
+          this.resultsGrid.style.display = 'none';
+          return;
+        }
+
+        this.noResults.style.display = 'none';
+        this.resultsGrid.style.display = 'grid';
+
+        products.forEach(product => {
+          const card = this.createProductCard(product);
+          this.resultsGrid.appendChild(card);
+        });
+      }
+
+      createProductCard(product) {
+        const card = document.createElement('a');
+        card.href = '/products/' + product.handle;
+        card.className = 'ai-travel-search-product-card-{{ ai_gen_id }}';
+
+        const imageUrl = product.images && product.images[0] 
+          ? product.images[0].src 
+          : '';
+
+        const price = product.variants && product.variants[0] 
+          ? this.formatMoney(product.variants[0].price)
+          : '';
+
+        card.innerHTML = `
+          ${imageUrl ? `<img src="${imageUrl}" alt="${product.title}" class="ai-travel-search-product-image-{{ ai_gen_id }}" loading="lazy">` : ''}
+          <div class="ai-travel-search-product-title-{{ ai_gen_id }}">${product.title}</div>
+          ${price ? `<div class="ai-travel-search-product-price-{{ ai_gen_id }}">${price}</div>` : ''}
+        `;
+
+        return card;
+      }
+
+      formatMoney(cents) {
+        const amount = (cents / 100).toFixed(2);
+        return '{{ cart.currency.symbol }}' + amount;
+      }
+    }
+
+    customElements.define('travel-search-{{ ai_gen_id }}', TravelSearch{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Travel package search",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "desktop_width_percent",
+      "label": "Desktop width",
+      "min": 50,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 100
+    },
+    {
+      "type": "select",
+      "id": "image_position",
+      "label": "Image position",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "header",
+      "content": "Images"
+    },
+    {
+      "type": "checkbox",
+      "id": "image_1_enabled",
+      "label": "Enable image 1",
+      "default": true
+    },
+    {
+      "type": "image_picker",
+      "id": "image_1",
+      "label": "Image 1"
+    },
+    {
+      "type": "checkbox",
+      "id": "image_2_enabled",
+      "label": "Enable image 2",
+      "default": false
+    },
+    {
+      "type": "image_picker",
+      "id": "image_2",
+      "label": "Image 2"
+    },
+    {
+      "type": "header",
+      "content": "Content"
+    },
+    {
+      "type": "inline_richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Find Your Perfect Journey"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size",
+      "min": 20,
+      "max": 60,
+      "step": 2,
+      "unit": "px",
+      "default": 36
+    },
+    {
+      "type": "select",
+      "id": "heading_alignment",
+      "label": "Heading alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "color",
+      "id": "heading_color",
+      "label": "Heading color",
+      "default": "#121212"
+    },
+    {
+      "type": "richtext",
+      "id": "subheading_1",
+      "label": "Subheading 1",
+      "default": "<p>Explore amazing destinations with our curated travel packages</p>"
+    },
+    {
+      "type": "select",
+      "id": "subheading_1_animation",
+      "label": "Subheading 1 animation",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade-in",
+          "label": "Fade in"
+        },
+        {
+          "value": "slide-up",
+          "label": "Slide up"
+        },
+        {
+          "value": "slide-left",
+          "label": "Slide left"
+        }
+      ],
+      "default": "fade-in"
+    },
+    {
+      "type": "richtext",
+      "id": "subheading_2",
+      "label": "Subheading 2",
+      "default": "<p>Select your destination and travel dates to see available packages</p>"
+    },
+    {
+      "type": "select",
+      "id": "subheading_2_animation",
+      "label": "Subheading 2 animation",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade-in",
+          "label": "Fade in"
+        },
+        {
+          "value": "slide-up",
+          "label": "Slide up"
+        },
+        {
+          "value": "slide-left",
+          "label": "Slide left"
+        }
+      ],
+      "default": "slide-up"
+    },
+    {
+      "type": "range",
+      "id": "subheading_size",
+      "label": "Subheading size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "select",
+      "id": "subheading_alignment",
+      "label": "Subheading alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "color",
+      "id": "subheading_color",
+      "label": "Subheading color",
+      "default": "#666666"
+    },
+    {
+      "type": "range",
+      "id": "content_padding",
+      "label": "Content padding",
+      "min": 20,
+      "max": 80,
+      "step": 5,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "content_spacing",
+      "label": "Content spacing",
+      "min": 10,
+      "max": 40,
+      "step": 5,
+      "unit": "px",
+      "default": 20
+    },
+    {
+      "type": "color",
+      "id": "content_bg_color",
+      "label": "Content background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "header",
+      "content": "Search form"
+    },
+    {
+      "type": "collection",
+      "id": "destination_collection",
+      "label": "Destination collection"
+    },
+    {
+      "type": "text",
+      "id": "destination_label",
+      "label": "Destination label",
+      "default": "Select Destination"
+    },
+    {
+      "type": "text",
+      "id": "destination_placeholder",
+      "label": "Destination placeholder",
+      "default": "Choose a country"
+    },
+    {
+      "type": "text",
+      "id": "start_date_label",
+      "label": "Start date label",
+      "default": "Travel Start Date"
+    },
+    {
+      "type": "text",
+      "id": "end_date_label",
+      "label": "End date label",
+      "default": "Travel End Date"
+    },
+    {
+      "type": "range",
+      "id": "duration_tolerance",
+      "label": "Duration tolerance",
+      "min": 1,
+      "max": 3,
+      "step": 1,
+      "unit": "day",
+      "default": 2,
+      "info": "Show packages within this many days of selected duration"
+    },
+    {
+      "type": "range",
+      "id": "label_size",
+      "label": "Label size",
+      "min": 12,
+      "max": 20,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "color",
+      "id": "label_color",
+      "label": "Label color",
+      "default": "#121212"
+    },
+    {
+      "type": "header",
+      "content": "Input fields"
+    },
+    {
+      "type": "color",
+      "id": "input_bg_color",
+      "label": "Background",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "input_text_color",
+      "label": "Text color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "input_border_color",
+      "label": "Border color",
+      "default": "#CCCCCC"
+    },
+    {
+      "type": "range",
+      "id": "input_border_width",
+      "label": "Border width",
+      "min": 1,
+      "max": 4,
+      "step": 1,
+      "unit": "px",
+      "default": 1
+    },
+    {
+      "type": "range",
+      "id": "input_border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "color",
+      "id": "input_focus_color",
+      "label": "Focus color",
+      "default": "#334FB4"
+    },
+    {
+      "type": "header",
+      "content": "Search button"
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button text",
+      "default": "Search Packages"
+    },
+    {
+      "type": "range",
+      "id": "button_size",
+      "label": "Button text size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "range",
+      "id": "button_padding",
+      "label": "Button padding",
+      "min": 10,
+      "max": 25,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "color",
+      "id": "button_bg_color",
+      "label": "Background",
+      "default": "#334FB4"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Text color",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_bg_color",
+      "label": "Hover background",
+      "default": "#121212"
+    },
+    {
+      "type": "range",
+      "id": "button_border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Results"
+    },
+    {
+      "type": "color",
+      "id": "results_bg_color",
+      "label": "Results background",
+      "default": "#F3F3F3"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Travel package search"
+    }
+  ]
+}
+{% endschema %}
