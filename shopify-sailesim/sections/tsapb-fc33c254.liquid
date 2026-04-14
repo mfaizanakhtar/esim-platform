@@ -1,0 +1,681 @@
+<!-- --VERSION-15-- -->
+
+{% style %}
+:root {
+--vtl-neutral-100: #222;
+--vtl-neutral-70: #5e5e5e;
+--vtl-neutral-01: #fff;
+--vtl-size-2: 2px;
+--vtl-size-4: 4px;
+--vtl-size-8: 8px;
+--vtl-size-14: 14px;
+--vtl-size-16: 16px;
+--vtl-size-20: 20px;
+--vtl-size-24: 24px;
+--vtl-size-32: 32px;
+--vtl-size-40: 40px;
+--vtl-size-64: 64px;
+--vtl-size-96: 96px;
+--vtl-size-full: 9999px;
+--vtl-font-weight-400: 400;
+--vtl-font-weight-600: 600;
+--vtl-line-height-140: 1.4;
+--vtl-border-radius-full: var(--vtl-size-full);
+--vtl-color-bg-fill-default-on-light: var(--vtl-neutral-100);
+--vtl-color-bg-fill-inverse-on-light: var(--vtl-neutral-01);
+--vtl-color-text-disable-on-light: var(--vtl-neutral-70);
+--vtl-color-text-on-bg-fill-on-light: var(--vtl-neutral-01);
+--vtl-space-2: var(--vtl-size-2);
+--vtl-space-4: var(--vtl-size-4);
+--vtl-space-8: var(--vtl-size-8);
+--vtl-space-16: var(--vtl-size-16);
+--vtl-space-20: var(--vtl-size-20);
+--vtl-space-24: var(--vtl-size-24);
+--vtl-space-32: var(--vtl-size-32);
+--vtl-space-40: var(--vtl-size-40);
+--vtl-space-64: var(--vtl-size-64);
+--vtl-space-96: var(--vtl-size-96);
+--vtl-font-size-14: var(--vtl-size-14);
+}
+
+
+{% endstyle %}
+
+<!-- --UUID-fc33c254-- -->
+
+
+<section class="Vtls-{{ section.id | handle }} VtlsRotatingTextBar 
+								VtlsRotatingTextBar--backgroundStyle-{{ section.settings.section_background }} 
+								VtlsRotatingTextBar--height-{{ section.settings.rotating_bar_height }} 
+								VtlsRotatingTextBar--textSize-{{ section.settings.text_size }} 
+								VtlsRotatingTextBar--textStyle-{{ section.settings.text_style }}">
+	<div class="VtlsRotatingTextBarContainer 
+							VtlsRotatingTextBarContainer--height-{{ section.settings.rotating_bar_height }}
+							{% if request.visual_preview_mode %}VtlsRotatingTextBarContainer--previewStyles{% endif %}">
+		{% if section.settings.rotating_bar_layout == "slider" %}
+			<rotating-bar-slider class="VtlsRotatingTextBarSliderContainer">
+				{%- if section.blocks.size > 1 -%}
+					<button
+						class="VtlsRotatingTextBarSliderContainer__Btn VtlsRotatingTextBarSliderContainer__Btn--prev"
+						aria-controls="announcement-bar"
+						aria-label="Previous"
+					>
+						<svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<path d="M12.375 2.75L5.625 9.5L12.375 16.25" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+						</svg>
+					</button>
+				{%- endif -%}
+				<div class="VtlsRotatingTextBarSlider VtlsRotatingBarText--textStyle-{{ section.settings.text_style }}">
+					{% for block in section.blocks %}
+						{%- liquid
+							assign text_wrapper = "span"
+							if block.settings.text_link != blank
+								assign text_wrapper = "a"
+							endif
+						-%}
+						{%- if block.settings.text_alternative_font -%}
+							{%- liquid
+								assign body_font_bold = block.settings.description_font | font_modify: 'weight', 'bold'
+								assign body_font_italic = block.settings.description_font | font_modify: 'style', 'italic'
+								assign body_font_bold_italic = body_font_bold | font_modify: 'style', 'italic'
+							%}
+							<style>
+								{{- block.settings.text_font | font_face: font_display: 'swap' -}}
+								{{ body_font_bold | font_face: font_display: 'swap' }}
+								{{ body_font_italic | font_face: font_display: 'swap' }}
+								{{ body_font_bold_italic | font_face: font_display: 'swap' }}
+							</style>
+						{%- endif -%}
+						{%- capture text_css_variables -%}
+							--text-font: {{- block.settings.text_font.family -}};
+						{%- endcapture -%}
+						<div
+							class="VtlsRotatingTextBarSlider__Slide"
+							data-block-id="{{ block.id }}"
+							style="{{- text_css_variables | strip_newlines | escape -}}"
+							{{ block.shopify_attributes }}
+						>
+							{%- if block.settings.title != blank -%}
+								<{{ text_wrapper }}
+									href="{{ block.settings.text_link }}"
+									class="
+										VtlsRotatingTextBarSlider__Text VtlsRotatingBarText
+										{% if block.settings.text_alternative_font == true %}VtlsRotatingBarText--alternativeFont{% endif %}
+									"
+								>
+									{{ block.settings.title }}
+								</{{ text_wrapper }}>
+							{%- endif -%}
+						</div>
+					{% endfor %}
+				</div>
+				{%- if section.blocks.size > 1 -%}
+					<button
+						class="VtlsRotatingTextBarSliderContainer__Btn VtlsRotatingTextBarSliderContainer__Btn--next"
+						aria-controls="announcement-bar"
+						aria-label="Next"
+					>
+						<svg width="18" height="19" viewBox="0 0 18 19" fill="none" xmlns="http://www.w3.org/2000/svg">
+							<path d="M5.625 2.75L12.375 9.5L5.625 16.25" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+						</svg>
+					</button>
+				{%- endif -%}
+			</rotating-bar-slider>
+		{% elsif section.settings.rotating_bar_layout == "auto-rotating" %}
+			<div class="VtlsRotatingTextBarTickerContainer">
+				<vtls-rotating-ticker
+					class="VtlsRotatingTextBarTicker VtlsRotatingBarText--textStyle-{{ section.settings.text_style }}"
+					data-speed="{{ section.settings.rotating_bar_speed | default: 10 }}"
+				>
+					{%- for index in (1..10) -%}
+						<div class="VtlsRotatingTextBarTicker__Wrapper">
+							{% for block in section.blocks %}
+								{%- liquid
+									assign text_wrapper = "span"
+									if block.settings.text_link != blank
+										assign text_wrapper = "a"
+									endif
+								-%}
+								{%- if block.settings.text_alternative_font -%}
+									{%- liquid
+										assign body_font_bold = block.settings.text_font | font_modify: 'weight', 'bold'
+										assign body_font_italic = block.settings.description_font | font_modify: 'style', 'italic'
+										assign body_font_bold_italic = body_font_bold | font_modify: 'style', 'italic'
+									%}
+									<style>
+										{{- block.settings.text_font | font_face: font_display: 'swap' -}}
+										{{ body_font_bold | font_face: font_display: 'swap' }}
+										{{ body_font_italic | font_face: font_display: 'swap' }}
+										{{ body_font_bold_italic | font_face: font_display: 'swap' }}
+									</style>
+								{%- endif -%}
+								{%- capture text_css_variables -%}
+									--text-font: {{- block.settings.text_font.family -}};
+							    {%- endcapture -%}
+								<div
+									class="VtlsRotatingTextBarTicker__Item"
+									style="{{- text_css_variables | strip_newlines | escape -}}"
+									{{ block.shopify_attributes }}
+								>
+									{%- if block.settings.title != blank -%}
+										<{{ text_wrapper }}
+											href="{{ block.settings.text_link }}"
+											class="
+												VtlsRotatingTextBarTicker__Text VtlsRotatingBarText
+												{% if block.settings.text_alternative_font == true %}VtlsRotatingBarText--alternativeFont{% endif %}
+											"
+										>
+											{{ block.settings.title }}
+										</{{ text_wrapper }}>
+									{%- endif -%}
+								</div>
+								<span class="VtlsCircleShape"></span>
+							{% endfor %}
+						</div>
+					{%- endfor -%}
+				</vtls-rotating-ticker>
+			</div>
+		{% endif %}
+	</div>
+</section>
+
+{% schema %}
+{
+	"name": "❤️ Rotating Text Bar",
+	"settings": [
+		{
+			"type": "header",
+			"content": "General"
+		},
+		{
+			"type": "select",
+			"id": "rotating_bar_layout",
+			"label": "Bar layout",
+			"options": [
+				{
+					"value": "slider",
+					"label": "Slider"
+				},
+				{
+					"value": "auto-rotating",
+					"label": "Auto-rotate"
+				}
+			],
+			"default": "slider"
+		},
+		{
+			"type": "select",
+			"id": "rotating_bar_speed",
+			"label": "Rotate speed",
+			"visible_if": "{{ section.settings.rotating_bar_layout == 'auto-rotating' }}",
+			"options": [
+				{
+					"value": "30",
+					"label": "Slow"
+				},
+				{
+					"value": "12",
+					"label": "Medium"
+				},
+				{
+					"value": "8",
+					"label": "Fast"
+				}
+			],
+			"default": "12"
+		},
+		{
+			"type": "select",
+			"id": "rotating_bar_height",
+			"label": "Bar height",
+			"options": [
+				{
+					"value": "small",
+					"label": "Small"
+				},
+				{
+					"value": "medium",
+					"label": "Medium"
+				},
+				{
+					"value": "large",
+					"label": "Large"
+				}
+			],
+			"default": "medium"
+		},
+		{
+			"type": "header",
+			"content": "Text"
+		},
+		{
+			"type": "select",
+			"id": "text_size",
+			"label": "Text size",
+			"options": [
+				{
+					"value": "14",
+					"label": "Small"
+				},
+				{
+					"value": "16",
+					"label": "Medium"
+				},
+				{
+					"value": "20",
+					"label": "Large"
+				}
+			],
+			"default": "16"
+		},
+		{
+			"type": "select",
+			"id": "text_style",
+			"label": "Text style",
+			"options": [
+				{
+					"value": "regular",
+					"label": "Regular"
+				},
+				{
+					"value": "bold",
+					"label": "Bold"
+				}
+			],
+			"default": "regular"
+		},
+		{
+			"type": "color",
+			"id": "text_color",
+			"label": "Text color",
+			"default": "#ffffff"
+		},
+		{
+			"type": "header",
+			"content": "Design"
+		},
+		{
+			"type": "select",
+			"id": "section_background",
+			"label": "Section background",
+			"options": [
+				{
+					"value": "color",
+					"label": "Color"
+				},
+				{
+					"value": "gradient",
+					"label": "Gradient"
+				}
+			],
+			"default": "color"
+		},
+		{
+			"type": "color",
+			"id": "rotating_bar_background",
+			"label": "Background color",
+			"default": "#222222",
+			"visible_if": "{{ section.settings.section_background == 'color' }}"
+		},
+		{
+			"type": "color_background",
+			"id": "section_gradient",
+			"label": "Background gradient",
+			"default": "linear-gradient(to right, #fed951, #ff46c7)",
+			"visible_if": "{{ section.settings.section_background == 'gradient' }}"
+		},
+		{
+			"type": "header",
+			"content": "Layout"
+		},
+		{
+			"type": "range",
+			"id": "vertical_margin",
+			"min": 0,
+			"max": 100,
+			"step": 2,
+			"unit": "px",
+			"label": "Top - bottom margin (desktop)",
+			"default": 0
+		},
+		{
+			"type": "range",
+			"id": "vertical_margin_mobile",
+			"min": 0,
+			"max": 100,
+			"step": 2,
+			"unit": "px",
+			"label": "Top - bottom margin (mobile)",
+			"default": 0
+		}
+	],
+	"blocks": [
+		{
+			"name": "Announcement",
+			"type": "announcement",
+			"settings": [
+				{
+					"type": "inline_richtext",
+					"id": "title",
+					"label": "Announcement text",
+					"default": "Announcement text"
+				},
+				{
+					"type": "url",
+					"id": "text_link",
+					"label": "Text link"
+				},
+				{
+					"type": "checkbox",
+					"id": "text_alternative_font",
+					"label": "Apply alternative font",
+					"default": false
+				},
+				{
+					"type": "font_picker",
+					"id": "text_font",
+					"label": "Font",
+					"default": "sans_serif_n4",
+					"visible_if": "{{ block.settings.text_alternative_font == true }}"
+				}
+			]
+		}
+	],
+	"presets": [
+		{
+			"name": "❤️ Square: Rotating Text Bar",
+			"category": "Square sections",
+			"blocks": [
+				{
+					"type": "announcement"
+				},
+				{
+					"type": "announcement"
+				},
+				{
+					"type": "announcement"
+				}
+			]
+		}
+	]
+}
+{% endschema %}
+
+{% style %}
+	.Vtls-{{ section.id | handle }} {
+		--section-vertical-margin: {{- section.settings.vertical_margin -}}px;
+		--section-vertical-margin-mobile: {{- section.settings.vertical_margin_mobile -}}px;
+		--section-background-color: {{ section.settings.rotating_bar_background }};
+		--section-background-gradient: {{ section.settings.section_gradient }};
+		--section-text-style: {{ section.settings.text_style }};
+		--section-text-font: {{ section.settings.text_font }};
+		--section-text-alternative-font: {{ section.settings.text_alternative_font }};
+		--section-text-color: {{ section.settings.text_color }};
+		--section-text-size: {{ section.settings.text_size }}px;
+		--section-scrolling-speed: {{ section.settings.scrolling_speed }}s;
+	}
+
+	
+
+.Vtls-{{ section.id | handle }}.VtlsRotatingTextBar{display:block;margin:var(--section-vertical-margin-mobile) 0}.Vtls-{{ section.id | handle }}.VtlsRotatingTextBar--backgroundStyle-color{background-color:var(--section-background-color, var(--vtl-color-bg-fill-default-on-light))}.Vtls-{{ section.id | handle }}.VtlsRotatingTextBar--backgroundStyle-gradient{background:var(--section-background-gradient)}@media(min-width: 992px){.Vtls-{{ section.id | handle }}.VtlsRotatingTextBar{margin:var(--section-vertical-margin) 0}}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarContainer--previewStyles{margin:var(--vtl-space-96) 0}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarContainer--height-small{padding:var(--vtl-space-2) 0}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarContainer--height-medium{padding:var(--vtl-space-8) 0}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarContainer--height-large{padding:var(--vtl-space-16) 0}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderWrapper{position:relative;overflow:hidden}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderContainer{position:relative;justify-content:space-between;max-width:940px;margin-inline-start:auto;padding:0 var(--vtl-space-20);align-items:center;margin-inline-end:auto;display:flex}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderContainer__Btn{border:none;width:var(--vtl-space-20);height:var(--vtl-space-20);display:flex;align-items:center;padding:0;justify-content:center;background:rgba(0,0,0,0);cursor:pointer;pointer-events:all}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderContainer__Btn path{stroke:var(--section-text-color, var(--vtl-color-text-on-bg-fill-on-light))}[dir=rtl] .Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderContainer__Btn svg,html[dir=rtl] .Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderContainer__Btn svg,body[dir=rtl] .Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderContainer__Btn svg,html[style*="direction: rtl"] .Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderContainer__Btn svg,body[style*="direction: rtl"] .Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSliderContainer__Btn svg{transform:scaleX(-1)}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSlider{width:100%;padding:0 var(--vtl-space-8);text-align:center;place-items:center;display:grid}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSlider__Slide{width:100%;grid-area:1/-1;opacity:0;visibility:hidden;transform:translateY(5%);transition:transform .6s cubic-bezier(0.4, 0, 0.2, 1),opacity .6s ease-in-out;will-change:transform,opacity}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarSlider__Slide-IsVisible{position:relative;opacity:1;visibility:visible;transform:translateY(0);z-index:1}.Vtls-{{ section.id | handle }} .VtlsRotatingBarText{font-size:calc(var(--section-text-size)*.85);color:var(--section-text-color, var(--vtl-color-text-on-bg-fill-on-light));text-align:center;margin:0;padding:0;text-decoration:none;width:100%;display:inline-block}.Vtls-{{ section.id | handle }} .VtlsRotatingBarText a{color:var(--block-description-color);margin:0;padding:0;text-decoration:underline;text-underline-offset:var(--vtl-space-2);transition:opacity .3s ease-in}.Vtls-{{ section.id | handle }} .VtlsRotatingBarText a:hover{opacity:.85}.Vtls-{{ section.id | handle }} .VtlsRotatingBarText--textStyle-regular{font-weight:var(--vtl-font-weight-400)}.Vtls-{{ section.id | handle }} .VtlsRotatingBarText--textStyle-bold{font-weight:var(--vtl-font-weight-600)}.Vtls-{{ section.id | handle }} .VtlsRotatingBarText--alternativeFont{font-family:var(--text-font)}@media(min-width: 992px){.Vtls-{{ section.id | handle }} .VtlsRotatingBarText{font-size:var(--section-text-size)}}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarTicker{grid:auto/auto-flow max-content;justify-content:center;display:grid;overflow:hidden}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarTicker__Wrapper{grid:auto/auto-flow auto var(--vtl-space-64);place-items:center;width:100%;grid-auto-columns:auto var(--vtl-space-64);display:grid;animation:marqueeAnimation var(--rotating-ticker-duration, 0s) linear infinite}.Vtls-{{ section.id | handle }} .VtlsRotatingTextBarTicker .VtlsCircleShape{display:block;width:var(--vtl-space-4);background-color:var(--section-text-color);height:var(--vtl-space-4);border-radius:var(--vtl-border-radius-full)}@keyframes marqueeAnimation{0%{transform:translateX(0%)}100%{transform:translateX(-100%)}}
+
+{% endstyle %}
+
+<script>
+	(function () {
+		const uninstallMessage = 'Displaying this section requires an active Square: Theme Sections & AI Pages subscription. Reinstall the <a href="https://apps.shopify.com/theme-sections-ai-page-builder" target="_blank">Square: Theme Sections & AI Pages app</a> to activate it or consider removing the section.';
+		const downgradeMessage = 'You downgraded to a free plan. You need to upgrade your <a href="https://apps.shopify.com/theme-sections-ai-page-builder" target="_blank">Square: Theme Sections & AI Pages app</a> plan to activate it or consider removing the section.';
+		const projectId = '5';
+		const sectionsSelector = '.shopify-section';
+		const apps = {
+			'1': {
+				prefix: 'vitals',
+				hostname: 'https://appsolve.io'
+			},
+			'5': {
+				prefix: 'tsapb',
+				hostname: 'https://theme-sections.sqa-api.com'
+			}
+		};
+
+		const cacheKeysMetaFields = '{{ shop.metafields.vitals.tsck }}';
+		const shopId = '{{ shop.id }}';
+
+		const getHostname = () => {
+			if (apps[projectId].hostname) {
+				return apps[projectId].hostname;
+			}
+
+			console.error(`hostname for appId ${projectId} cannot be determined.`);
+			return undefined;
+		}
+
+		const disableSection = (message, selector) => {
+			const mainContainer = document.querySelector(selector);
+			const contentContainer = document.querySelector(`${selector} > section`);
+
+			if ('{{ request.design_mode }}' === 'true') {
+				contentContainer.innerHTML = `<h2 class="VtlsUninstallBG"><div class="VtlsUninstallBG__Text">${message}</div></h2>`;
+			} else {
+				mainContainer.style.display = 'none';
+				mainContainer.remove();
+			}
+		};
+
+		const getThemeSectionIdsByUUID = (installedThemeSections, uuid, appId) => {
+			const listIds = [];
+
+			installedThemeSections.forEach((installedThemeSection) => {
+				if (installedThemeSection.id.includes(`${apps[appId].prefix}_${uuid}`)) {
+					listIds.push(installedThemeSection.id);
+				}
+			})
+
+			return listIds;
+		}
+
+		const getThemeSectionsStatusList = (url) => fetch(url, {
+			method: 'GET',
+			headers: { 'Content-Type': 'application/json' },
+		}).then((response) => response.json());
+
+		const evaluateThemeSections = (url) => {
+			getThemeSectionsStatusList(url).then(response => {
+				const { data, f, i } = response;
+				const installedThemeSections = document.querySelectorAll(sectionsSelector);
+
+				data.forEach((themeSection) => {
+					const { e, u, a } = themeSection;
+
+					if (!e) {
+						const themeSectionsWithUUID = getThemeSectionIdsByUUID(installedThemeSections, u, a);
+						let message = '';
+
+						if (f) {
+							message = downgradeMessage;
+						}
+
+						if (!i) {
+							message = uninstallMessage;
+						}
+
+						themeSectionsWithUUID.forEach((themeSectionSelector) => {
+							disableSection(message, `#${themeSectionSelector}`);
+						})
+					}
+				});
+			})
+		}
+
+		if (shopId) {
+			if (window.vtlsSecurityCheckStarted === undefined) {
+				window.vtlsSecurityCheckStarted = true;
+
+				let url = '';
+				const hostname = getHostname();
+
+				if (!hostname) {
+					return;
+				}
+
+				const baseUrl = `${hostname}/bundle/api/v2/sf/ts`;
+
+				if (cacheKeysMetaFields) {
+					url = `${baseUrl}/${shopId}/${cacheKeysMetaFields}.json`;
+				} else {
+					const timestamp = Math.round(new Date().getTime() / 1000 / 10000) * 10000;
+					url = `${baseUrl}/${shopId}/${timestamp}.json`;
+				}
+
+				evaluateThemeSections(url);
+			}
+		}
+	})();
+</script>
+
+{% style %}
+	
+
+.VtlsUninstallBG{background-color:var(--vtl-color-bg-fill-inverse-on-light);background-image:url("data:image/avif;base64,iVBORw0KGgoAAAANSUhEUgAABOcAAABkCAQAAABnAJxfAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAACYktHRAD/h4/MvwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB+gLFQgmAgUXFkMAAARaSURBVHja7daxbSRBEATB8ZzvKw0h1dcIlJS4jl25Azlavffn9/3v++e//+vvCwqFQqFQKBRKSklEUCgUCoVCoVAMOgqFQqFQKJSzSiKCQqFQKBQKhWLQUSgUCoVCoZxVEhEUCoVCoVAoFIOOQqFQKBQK5VOURASFQqFQKBQKZVUSERQKhUKhUCiUVUlEUCgUCoVCoVBWZbtOPoVCoVAoFArlovIKERQKhUKhUCiUVXmFCAqFQqFQKBTKqrxCBIVCoVAoFAplVV4hgkKhUCgUCoUyK4kICoVCoVAoFMqqJCIoFAqFQqFQKKuSiKBQKBQKhUKhrEoigkKhUCgUCoVi0FEoFAqFQqGcVRIRFAqFQqFQKBSDjkKhUCgUCuWskoigUCgUCoVCoRh0FAqFQqFQKGeVRASFQqFQKBQKxaCjUCgUCoVCOaskIigUCoVCoVAoBh2FQqFQKBTKWSURQaFQKBQKhUIx6CgUCoVCoVDOKokICoVCoVAoFIpBR6FQKBQKhXJWSURQKBQKhUKhUAw6CoVCoVAolLNKIoJCoVAoFAqFYtBRKBQKhUKhnFUSERQKhUKhUCgUg45CoVAoFArlrJKIoFAoFAqFQqEYdBQKhUKhUChnlUQEhUKhUCgUCsWgo1AoFAqFQvkUJRFBoVAoFAqFQlmVRASFQqFQKBQKZVUSERQKhUKhUCiUVdmuk0+hUCgUCoVCuai8QgSFQqFQKBQKZVVeIYJCoVAoFAqFsiqvEEGhUCgUCoVCWZVXiKBQKBQKhUKhzEoigkKhUCgUCoWyKokICoVCoVAoFMqqJCIoFAqFQqFQKKuSiKBQKBQKhUKhGHQUCoVCoVAoZ5VEBIVCoVAoFArFoKNQKBQKhUI5qyQiKBQKhUKhUCgGHYVCoVAoFMpZJRFBoVAoFAqFQjHoKBQKhUKhUM4qiQgKhUKhUCgUikFHoVAoFAqFclZJRFAoFAqFQqFQDDoKhUKhUCiUs0oigkKhUCgUCoVi0FEoFAqFQqGcVRIRFAqFQqFQKBSDjkKhUCgUCuWskoigUCgUCoVCoRh0FAqFQqFQKGeVRASFQqFQKBQKxaCjUCgUCoVCOaskIigUCoVCoVAoBh2FQqFQKBTKWSURQaFQKBQKhUIx6CgUCoVCoVA+RUlEUCgUCoVCoVBWJRFBoVAoFAqFQlmVRASFQqFQKBQKZVW26+RTKBQKhUKhUC4qrxBBoVAoFAqFQlmVV4igUCgUCoVCoazKK0RQKBQKhUKhUFblFSIoFAqFQqFQKLOSiKBQKBQKhUKhrEoigkKhUCgUCoWyKokICoVCoVAoFMqqJCIoFAqFQqFQKAYdhUKhUCgUylklEUGhUCgUCoVCMegoFAqFQqFQziqJCAqFQqFQKBSKQUehUCgUCoVyVklEUCgUCoVCoVAMOgqFQqFQKJSzSiKCQqFQKBQKhWLQUSgUCoVCoZxVEhEUCoVCoVAoFIOOQqFQKBQK5dOVX5nMB52iezhxAAAAJXRFWHRkYXRlOmNyZWF0ZQAyMDI0LTExLTIxVDA4OjM4OjAyKzAwOjAw30WrCwAAACV0RVh0ZGF0ZTptb2RpZnkAMjAyNC0xMS0yMVQwODozODowMiswMDowMK4YE7cAAAAodEVYdGRhdGU6dGltZXN0YW1wADIwMjQtMTEtMjFUMDg6Mzg6MDIrMDA6MDD5DTJoAAAAAElFTkSuQmCC");background-position:center;background-size:cover;text-align:center;padding:var(--vtl-space-32);margin:0}.VtlsUninstallBG__Text{color:var(--vtl-color-text-disable-on-light);font-family:Inter,sans-serif;font-size:var(--vtl-font-size-14);font-weight:var(--vtl-font-weight-400);line-height:var(--vtl-line-height-140);padding:var(--vtl-space-16) var(--vtl-space-16) var(--vtl-space-16) var(--vtl-space-40);background-color:var(--vtl-color-bg-fill-inverse-on-light);display:inline-block}.VtlsUninstallBG__Text::before{content:url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%3E%0A%09%09%09%3Cpath%20d%3D%22M9.99994%206.75C10.4142%206.75%2010.7499%207.08579%2010.7499%207.5V11C10.7499%2011.4142%2010.4142%2011.75%209.99994%2011.75C9.58573%2011.75%209.24994%2011.4142%209.24994%2011V7.5C9.24994%207.08579%209.58573%206.75%209.99994%206.75Z%22%20fill%3D%22%23B28400%22%2F%3E%0A%09%09%09%3Cpath%20d%3D%22M11%2013.5C11%2014.0523%2010.5523%2014.5%2010%2014.5C9.44772%2014.5%209%2014.0523%209%2013.5C9%2012.9477%209.44772%2012.5%2010%2012.5C10.5523%2012.5%2011%2012.9477%2011%2013.5Z%22%20fill%3D%22%23B28400%22%2F%3E%0A%09%09%09%3Cpath%20fill-rule%3D%22evenodd%22%20clip-rule%3D%22evenodd%22%20d%3D%22M10%203.5C8.95471%203.5%208.21616%204.20232%207.84762%204.94672C7.65565%205.33448%206.75984%207.0441%205.84305%208.79353L5.81531%208.84646C4.9229%2010.5493%204.01714%2012.2777%203.80716%2012.702C3.4351%2013.4537%203.32931%2014.4519%203.89953%2015.316C4.46911%2016.1791%205.44222%2016.5%206.36356%2016.5L13.6364%2016.5C14.5577%2016.5%2015.5308%2016.1791%2016.1004%2015.316C16.6707%2014.4519%2016.5649%2013.4537%2016.1928%2012.702C15.9832%2012.2784%2015.08%2010.555%2014.1889%208.85476L14.1569%208.79352C13.24%207.044%2012.3443%205.33454%2012.1524%204.94693C11.784%204.20242%2011.0454%203.5%2010%203.5ZM9.1919%205.61225C9.59605%204.79592%2010.4041%204.79592%2010.8081%205.61225C11.0102%206.02061%2011.9201%207.75686%2012.8296%209.49243C13.7383%2011.2262%2014.6466%2012.9594%2014.8485%2013.3673C15.2525%2014.1837%2014.8485%2015%2013.6364%2015L6.36356%2015C5.1515%2015%204.74746%2014.1837%205.1515%2013.3673C5.35376%2012.9587%206.26468%2011.2205%207.1748%209.4838C8.08283%207.75111%208.99005%206.01994%209.1919%205.61225Z%22%20fill%3D%22%23B28400%22%2F%3E%0A%09%09%3C%2Fsvg%3E");position:absolute;width:var(--vtl-space-20);height:var(--vtl-space-20);margin-left:calc(-1*var(--vtl-space-24))}.VtlsUninstallBG__Text a{color:var(--vtl-color-text-disable-on-light)}.VtlsUninstallBG__Text a:hover{text-decoration:none}
+
+{% endstyle %}
+
+
+<script>
+	(() => {
+		class VtlsRotatingTicker extends HTMLElement {
+			constructor() {
+				super();
+				this.updateAnimationDuration = this.updateAnimationDuration.bind(this);
+			}
+
+			connectedCallback() {
+				requestAnimationFrame(() => {
+					this.updateAnimationDuration();
+				});
+				window.addEventListener('resize', this.updateAnimationDuration);
+			}
+
+			disconnectedCallback() {
+				window.removeEventListener('resize', this.updateAnimationDuration);
+			}
+
+			getScrollingSpeed() {
+				return parseInt(this.getAttribute('data-speed') || '10', 10);
+			}
+
+			getResponsiveSpeed(contentWidth) {
+				const minWidth = 360;
+				const maxWidth = 1920;
+				return 1 + (Math.min(maxWidth, contentWidth) - minWidth) / (maxWidth - minWidth);
+			}
+
+			updateAnimationDuration() {
+				const contentWidth = this.clientWidth;
+				const item = this.querySelector('.VtlsRotatingTextBarTicker__Wrapper');
+				let retryCount = 0;
+
+				if (!item || contentWidth === 0 || item.clientWidth === 0) {
+					if (retryCount < 5) {
+						setTimeout(() => this.updateAnimationDuration(retryCount + 1), 100);
+					}
+					return;
+				}
+
+				const speed = this.getScrollingSpeed();
+				const durationMultiplier = this.getResponsiveSpeed(contentWidth);
+				const itemWidth = item.clientWidth;
+				const duration = ((speed * durationMultiplier * itemWidth) / contentWidth).toFixed(2);
+
+				this.style.setProperty('--rotating-ticker-duration', `${duration}s`);
+			}
+		}
+
+		class RotatingBarSlider extends HTMLElement {
+			constructor() {
+				super();
+				this.slides = [];
+				this.currentIndex = 0;
+				this.showPrev = this.showPrev.bind(this);
+				this.showNext = this.showNext.bind(this);
+				this.handleBlockSelection = this.handleBlockSelection.bind(this);
+			}
+
+			connectedCallback() {
+				this.setHTMLelements();
+				this.setEventListeners();
+				this.showSlide(this.currentIndex);
+				document.addEventListener('shopify:block:select', this.handleBlockSelection);
+			}
+
+			disconnectedCallback() {
+				this.removeEventListeners();
+				document.removeEventListener('shopify:block:select', this.handleBlockSelection);
+			}
+
+			setHTMLelements() {
+				this.slides = Array.from(this.querySelectorAll('.VtlsRotatingTextBarSlider__Slide'));
+				this.prevBtn = this.querySelector('.VtlsRotatingTextBarSliderContainer__Btn--prev');
+				this.nextBtn = this.querySelector('.VtlsRotatingTextBarSliderContainer__Btn--next');
+			}
+
+			setEventListeners() {
+				this.prevBtn?.addEventListener('click', this.showPrev);
+				this.nextBtn?.addEventListener('click', this.showNext);
+			}
+
+			removeEventListeners() {
+				this.prevBtn?.removeEventListener('click', this.showPrev);
+				this.nextBtn?.removeEventListener('click', this.showNext);
+			}
+
+			showSlide(index) {
+				this.slides.forEach((slide, i) => {
+					slide.classList.toggle('VtlsRotatingTextBarSlider__Slide-IsVisible', i === index);
+				});
+			}
+
+			showNext() {
+				this.currentIndex = (this.currentIndex + 1) % this.slides.length;
+				this.showSlide(this.currentIndex);
+			}
+
+			showPrev() {
+				this.currentIndex = (this.currentIndex - 1 + this.slides.length) % this.slides.length;
+				this.showSlide(this.currentIndex);
+			}
+			
+			handleBlockSelection(event) {
+				if (!event.detail || !event.detail.blockId) {
+					return;
+				}
+				const selectedBlockId = event.detail.blockId.toString();
+				const selectedIndex = this.slides.findIndex(slide => {
+						return slide.dataset.blockId === selectedBlockId;
+				});
+				if (selectedIndex !== -1) {
+						this.currentIndex = selectedIndex;
+						this.showSlide(this.currentIndex);
+				}
+			}
+		}
+
+		document.addEventListener('shopify:section:load', () => {
+			if (!customElements.get('rotating-bar-slider')) {
+				customElements.define('rotating-bar-slider', RotatingBarSlider);
+			}
+			if (!customElements.get('vtls-rotating-ticker')) {
+				customElements.define('vtls-rotating-ticker', VtlsRotatingTicker);
+			}
+		});
+
+		document.addEventListener('DOMContentLoaded', () => {
+			if (!customElements.get('rotating-bar-slider')) {
+				customElements.define('rotating-bar-slider', RotatingBarSlider);
+			}
+			if (!customElements.get('vtls-rotating-ticker')) {
+				customElements.define('vtls-rotating-ticker', VtlsRotatingTicker);
+			}
+		});
+	})();
+</script>

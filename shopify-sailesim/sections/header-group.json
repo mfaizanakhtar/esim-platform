@@ -1,0 +1,344 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "name": "t:sections.header.name",
+  "type": "header",
+  "sections": {
+    "announcement-bar": {
+      "type": "announcement-bar",
+      "blocks": {
+        "announcement-bar-0": {
+          "type": "announcement",
+          "settings": {
+            "text": "Welcome to our store",
+            "link": ""
+          }
+        },
+        "announcement_X7wNqm": {
+          "type": "announcement",
+          "settings": {
+            "text": "Welcome to our store",
+            "link": ""
+          }
+        }
+      },
+      "block_order": [
+        "announcement-bar-0",
+        "announcement_X7wNqm"
+      ],
+      "disabled": true,
+      "settings": {
+        "auto_rotate": false,
+        "change_slides_speed": 5,
+        "color_scheme": "scheme-1",
+        "show_line_separator": true,
+        "show_social": false,
+        "enable_country_selector": false,
+        "enable_language_selector": false
+      }
+    },
+    "tsapb_fc33c254_r7bkY8": {
+      "type": "tsapb-fc33c254",
+      "blocks": {
+        "announcement_6nteew": {
+          "type": "announcement",
+          "settings": {
+            "title": "⚡ Instant eSIM delivery",
+            "text_link": "",
+            "text_alternative_font": false,
+            "text_font": "sans_serif_n4"
+          }
+        },
+        "announcement_KY4YRW": {
+          "type": "announcement",
+          "settings": {
+            "title": "🌍 Global coverage",
+            "text_link": "",
+            "text_alternative_font": false,
+            "text_font": "sans_serif_n4"
+          }
+        },
+        "announcement_PE3NFp": {
+          "type": "announcement",
+          "disabled": true,
+          "settings": {
+            "title": "💬 24/7 WhatsApp support",
+            "text_link": "",
+            "text_alternative_font": false,
+            "text_font": "sans_serif_n4"
+          }
+        }
+      },
+      "block_order": [
+        "announcement_6nteew",
+        "announcement_KY4YRW",
+        "announcement_PE3NFp"
+      ],
+      "name": "Rotating Text Bar",
+      "settings": {
+        "rotating_bar_layout": "auto-rotating",
+        "rotating_bar_speed": "8",
+        "rotating_bar_height": "small",
+        "text_size": "16",
+        "text_style": "regular",
+        "text_color": "#ffffff",
+        "section_background": "color",
+        "rotating_bar_background": "#222222",
+        "section_gradient": "linear-gradient(90deg, rgba(254, 217, 81, 1), rgba(255, 70, 199, 1) 100%)",
+        "vertical_margin": 0,
+        "vertical_margin_mobile": 0
+      }
+    },
+    "header": {
+      "type": "header",
+      "settings": {
+        "logo_position": "middle-left",
+        "mobile_logo_position": "center",
+        "menu": "main-menu",
+        "menu_type_desktop": "dropdown",
+        "sticky_header_type": "on-scroll-up",
+        "show_line_separator": true,
+        "color_scheme": "scheme-1",
+        "menu_color_scheme": "scheme-1",
+        "enable_country_selector": true,
+        "enable_language_selector": true,
+        "enable_customer_avatar": true,
+        "margin_bottom": 0,
+        "padding_top": 16,
+        "padding_bottom": 20
+      }
+    },
+    "17760843844200e0cd": {
+      "type": "_blocks",
+      "blocks": {
+        "ai_gen_block_f0ca76b_aHkYEQ": {
+          "type": "ai_gen_block_f0ca76b",
+          "settings": {
+            "desktop_width_percent": 100,
+            "image_position": "left",
+            "image_1_enabled": true,
+            "image_2_enabled": false,
+            "heading": "Find Your Perfect Journey",
+            "heading_size": 36,
+            "heading_alignment": "left",
+            "heading_color": "#121212",
+            "subheading_1": "<p>Explore amazing destinations with our curated travel packages</p>",
+            "subheading_1_animation": "fade-in",
+            "subheading_2": "<p>Select your destination and travel dates to see available packages</p>",
+            "subheading_2_animation": "slide-up",
+            "subheading_size": 16,
+            "subheading_alignment": "left",
+            "subheading_color": "#666666",
+            "content_padding": 40,
+            "content_spacing": 20,
+            "content_bg_color": "#FFFFFF",
+            "destination_collection": "",
+            "destination_label": "Select Destination",
+            "destination_placeholder": "Choose a country",
+            "start_date_label": "Travel Start Date",
+            "end_date_label": "Travel End Date",
+            "duration_tolerance": 2,
+            "label_size": 14,
+            "label_color": "#121212",
+            "input_bg_color": "#FFFFFF",
+            "input_text_color": "#121212",
+            "input_border_color": "#CCCCCC",
+            "input_border_width": 1,
+            "input_border_radius": 16,
+            "input_focus_color": "#334FB4",
+            "button_text": "Search Packages",
+            "button_size": 16,
+            "button_padding": 14,
+            "button_bg_color": "#334FB4",
+            "button_text_color": "#FFFFFF",
+            "button_hover_bg_color": "#121212",
+            "button_border_radius": 10,
+            "results_bg_color": "#F3F3F3"
+          },
+          "blocks": {}
+        },
+        "ai_gen_block_85f2107_XA64gN": {
+          "type": "ai_gen_block_85f2107",
+          "settings": {
+            "image_side": "right",
+            "section_height": 600,
+            "active_image": "image_1",
+            "image_position": "center",
+            "mobile_image_position": "top",
+            "heading": "Discover Your Next Adventure",
+            "heading_size": 48,
+            "heading_color": "#121212",
+            "heading_weight": "700",
+            "heading_spacing": 16,
+            "subheading_1": "Find the perfect travel package",
+            "subheading_1_size": 20,
+            "subheading_1_color": "#121212",
+            "subheading_1_weight": "400",
+            "subheading_1_spacing": 12,
+            "subheading_1_animation": "none",
+            "subheading_1_animation_duration": 1,
+            "subheading_1_animation_delay": 0.5,
+            "subheading_2": "For your dream destination",
+            "subheading_2_size": 18,
+            "subheading_2_color": "#121212",
+            "subheading_2_weight": "400",
+            "subheading_2_spacing": 12,
+            "subheading_2_animation": "none",
+            "subheading_2_animation_duration": 1,
+            "subheading_2_animation_delay": 1,
+            "show_country_selector": true,
+            "country_collection": "",
+            "country_label": "Destination country",
+            "country_placeholder": "Search or select country",
+            "show_date_selector": true,
+            "date_label": "Travel dates",
+            "date_placeholder": "Select start and end dates",
+            "show_custom_field_1": false,
+            "custom_field_1_label": "Number of travelers",
+            "custom_field_1_type": "select",
+            "custom_field_1_placeholder": "Select number",
+            "custom_field_1_options": "1, 2, 3, 4, 5+",
+            "show_custom_field_2": false,
+            "custom_field_2_label": "Budget range",
+            "custom_field_2_type": "select",
+            "custom_field_2_placeholder": "Select budget",
+            "custom_field_2_options": "Under €500, €500-€1000, €1000-€2000, €2000+",
+            "button_text": "Search Packages",
+            "button_font_size": 16,
+            "button_font_weight": "500",
+            "button_text_transform": "none",
+            "button_padding_vertical": 14,
+            "button_padding_horizontal": 24,
+            "button_color": "#121212",
+            "button_text_color": "#ffffff",
+            "button_border_color": "#121212",
+            "button_border_width": 0,
+            "button_border_radius": 0,
+            "button_hover_color": "#334fb4",
+            "button_hover_text_color": "#ffffff",
+            "button_hover_border_color": "#334fb4",
+            "button_top_spacing": 8,
+            "search_url": "",
+            "content_padding": 40,
+            "content_max_width": 500,
+            "content_vertical_alignment": "center",
+            "content_horizontal_alignment": "flex-start",
+            "text_alignment": "left",
+            "form_spacing": 24,
+            "label_size": 14,
+            "label_weight": "500",
+            "input_font_size": 14,
+            "input_padding": 12,
+            "input_border_width": 1,
+            "input_border_radius": 0,
+            "content_background_color": "#ffffff",
+            "label_color": "#121212",
+            "input_background_color": "#ffffff",
+            "input_text_color": "#121212",
+            "input_border_color": "#cccccc"
+          },
+          "blocks": {}
+        },
+        "ai_gen_block_68b81f1_48cBF4": {
+          "type": "ai_gen_block_68b81f1",
+          "disabled": true,
+          "settings": {
+            "desktop_width_percent": 80,
+            "layout_direction": "row",
+            "spacing_between": 16,
+            "label_text": "",
+            "label_size": 16,
+            "label_weight": "600",
+            "label_color": "#121212",
+            "label_animation": "none",
+            "placeholder_text": "Search for a country...",
+            "placeholder_animation": "glow",
+            "input_font_size": 16,
+            "input_padding": 20,
+            "border_thickness": 1,
+            "border_radius": 22,
+            "animation_duration": 3,
+            "animation_timing": "ease-in-out",
+            "background_color": "#ffffff",
+            "text_color": "#121212",
+            "placeholder_color": "#999999",
+            "border_color": "#cccccc",
+            "focus_border_color": "#121212",
+            "icon_color": "#666666",
+            "dropdown_max_height": 300,
+            "dropdown_bg_color": "#ffffff",
+            "dropdown_text_color": "#121212",
+            "dropdown_hover_color": "#f3f3f3"
+          },
+          "blocks": {}
+        },
+        "ai_gen_block_617bc53_GRLzYw": {
+          "type": "ai_gen_block_617bc53",
+          "disabled": true,
+          "settings": {
+            "number_of_tabs": 3,
+            "tab_alignment": "center",
+            "tab_spacing": 16,
+            "tabs_bottom_spacing": 40,
+            "tab_font_size": 16,
+            "tab_padding_horizontal": 24,
+            "tab_padding_vertical": 12,
+            "tab_border_radius": 20,
+            "tab_border_thickness": 1,
+            "tab_background_color": "#f4f4f4",
+            "tab_text_color": "#666666",
+            "tab_border_color": "#e0e0e0",
+            "tab_hover_background_color": "#e8e8e8",
+            "tab_hover_color": "#121212",
+            "tab_hover_border_color": "#cccccc",
+            "tab_active_background_color": "#121212",
+            "tab_active_color": "#ffffff",
+            "tab_active_border_color": "#121212",
+            "tab_1_enabled": true,
+            "tab_1_title": "New arrivals",
+            "tab_1_collection": "",
+            "tab_2_enabled": true,
+            "tab_2_title": "Best sellers",
+            "tab_2_collection": "",
+            "tab_3_enabled": true,
+            "tab_3_title": "Featured",
+            "tab_3_collection": "",
+            "tab_4_enabled": false,
+            "tab_4_title": "On sale",
+            "tab_4_collection": "",
+            "tab_5_enabled": false,
+            "tab_5_title": "Trending",
+            "tab_5_collection": "",
+            "product_sort_order": "manual",
+            "products_per_row_desktop": 4,
+            "products_per_row_mobile": "2",
+            "product_grid_gap": 16,
+            "price_color": "#121212",
+            "desktop_width_percent": 100
+          },
+          "blocks": {}
+        }
+      },
+      "block_order": [
+        "ai_gen_block_f0ca76b_aHkYEQ",
+        "ai_gen_block_85f2107_XA64gN",
+        "ai_gen_block_68b81f1_48cBF4",
+        "ai_gen_block_617bc53_GRLzYw"
+      ],
+      "settings": {}
+    }
+  },
+  "order": [
+    "announcement-bar",
+    "tsapb_fc33c254_r7bkY8",
+    "header",
+    "17760843844200e0cd"
+  ]
+}

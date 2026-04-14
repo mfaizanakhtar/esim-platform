@@ -1,0 +1,168 @@
+/*
+ * ------------------------------------------------------------
+ * IMPORTANT: The contents of this file are auto-generated.
+ *
+ * This file may be updated by the Shopify admin theme editor
+ * or related systems. Please exercise caution as any changes
+ * made to this file may be overwritten.
+ * ------------------------------------------------------------
+ */
+{
+  "sections": {
+    "hero-slideshow": {
+      "type": "slideshow",
+      "blocks": {
+        "slide-0": {
+          "type": "slide",
+          "settings": {
+            "image_overlay_opacity": 0,
+            "heading": "Image slide",
+            "heading_size": "h1",
+            "subheading": "",
+            "button_label": "Button label",
+            "link": "shopify://collections",
+            "button_style_secondary": false,
+            "show_text_box": false,
+            "box_align": "middle-right",
+            "text_alignment": "left",
+            "text_alignment_mobile": "center",
+            "color_scheme": "scheme-1"
+          }
+        }
+      },
+      "block_order": [
+        "slide-0"
+      ],
+      "disabled": true,
+      "settings": {
+        "layout": "full_bleed",
+        "slide_height": "small",
+        "slider_visual": "dots",
+        "auto_rotate": false,
+        "change_slides_speed": 5,
+        "image_behavior": "none",
+        "show_text_below": true,
+        "accessibility_info": "Slideshow about our brand"
+      }
+    },
+    "all-products": {
+      "type": "featured-collection",
+      "disabled": true,
+      "settings": {
+        "collection": "all",
+        "products_to_show": 24,
+        "title": "Featured collection",
+        "heading_size": "h2",
+        "description": "",
+        "show_description": true,
+        "description_style": "subtitle",
+        "columns_desktop": 6,
+        "enable_desktop_slider": false,
+        "full_width": false,
+        "show_view_all": true,
+        "view_all_style": "solid",
+        "color_scheme": "scheme-1",
+        "image_ratio": "adapt",
+        "image_shape": "default",
+        "show_secondary_image": true,
+        "show_vendor": false,
+        "show_rating": false,
+        "quick_add": "none",
+        "columns_mobile": "2",
+        "swipe_on_mobile": false,
+        "padding_top": 24,
+        "padding_bottom": 24
+      }
+    },
+    "tsapb_ca577056_c6TYCA": {
+      "type": "tsapb-ca577056",
+      "blocks": {
+        "collection_LmxVkC": {
+          "type": "collection",
+          "settings": {
+            "collection": "frontpage",
+            "heading": ""
+          }
+        },
+        "collection_y8RQzj": {
+          "type": "collection",
+          "settings": {
+            "collection": "",
+            "heading": ""
+          }
+        },
+        "collection_hwkrHm": {
+          "type": "collection",
+          "settings": {
+            "collection": "",
+            "heading": ""
+          }
+        },
+        "collection_EQVxa7": {
+          "type": "collection",
+          "settings": {
+            "collection": "",
+            "heading": ""
+          }
+        },
+        "collection_UaU6nR": {
+          "type": "collection",
+          "settings": {
+            "collection": "",
+            "heading": ""
+          }
+        }
+      },
+      "block_order": [
+        "collection_LmxVkC",
+        "collection_y8RQzj",
+        "collection_hwkrHm",
+        "collection_EQVxa7",
+        "collection_UaU6nR"
+      ],
+      "name": "Collection Circles",
+      "settings": {
+        "heading": "Regions",
+        "heading_size": "24",
+        "heading_style": "regular",
+        "heading_alignment": "center",
+        "collection_heading_size": "20",
+        "layout_desktop": "carousel",
+        "collections_per_row_desktop": 5,
+        "layout_mobile": "carousel",
+        "collections_per_row_mobile": "3",
+        "section_width": 90,
+        "section_max_width": "",
+        "vertical_padding": 40,
+        "vertical_margin": 0,
+        "vertical_padding_mobile": 20,
+        "vertical_margin_mobile": 0,
+        "section_background": "",
+        "heading_color": "#222222",
+        "collection_heading_color": "#222222",
+        "images_border_color": ""
+      }
+    },
+    "image-banner": {
+      "type": "image-banner",
+      "settings": {
+        "image_overlay_opacity": 0,
+        "image_height": "small",
+        "image_behavior": "none",
+        "desktop_content_position": "top-left",
+        "desktop_content_alignment": "center",
+        "show_text_box": false,
+        "color_scheme": "",
+        "stack_images_on_mobile": true,
+        "mobile_content_alignment": "center",
+        "show_text_below": true
+      }
+    }
+  },
+  "order": [
+    "hero-slideshow",
+    "all-products",
+    "tsapb_ca577056_c6TYCA",
+    "image-banner"
+  ]
+}

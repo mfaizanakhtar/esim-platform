@@ -5,6 +5,7 @@ import type { ShopifyGraphQLResponse } from './shopify-types';
 dotenv.config();
 
 const SHOP_DOMAIN = process.env.SHOPIFY_SHOP_DOMAIN;
+const ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 const CLIENT_ID = process.env.SHOPIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SHOPIFY_CLIENT_SECRET;
 
@@ -14,6 +15,9 @@ interface AccessTokenResponse {
 }
 
 export async function getAccessToken(): Promise<string> {
+  if (ACCESS_TOKEN) {
+    return ACCESS_TOKEN;
+  }
   const response = await axios.post<AccessTokenResponse>(
     `https://${SHOP_DOMAIN}/admin/oauth/access_token`,
     {
@@ -29,7 +33,7 @@ export async function shopifyGraphQL<T>(query: string): Promise<ShopifyGraphQLRe
   const accessToken = await getAccessToken();
 
   const response = await axios.post<ShopifyGraphQLResponse<T>>(
-    `https://${SHOP_DOMAIN}/admin/api/2026-01/graphql.json`,
+    `https://${SHOP_DOMAIN}/admin/api/2026-04/graphql.json`,
     { query },
     {
       headers: {

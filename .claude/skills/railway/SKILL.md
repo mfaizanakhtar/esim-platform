@@ -9,8 +9,9 @@
 | `logs.sh <service> [--build] [--lines N]` | Fetch deploy or build logs |
 | `redeploy.sh <service>` | Trigger a redeploy and tail build logs |
 | `vars.sh <service> [KEY=VALUE ...]` | List or set environment variables |
+| `shopify-vars.sh [--shop] [--client-id] [--client-secret] [--access-token] [--custom-domain]` | Update all Shopify env vars at once (store migration) |
 
-**Service names**: `dashboard`, `fulfillment-engine`
+**Service names**: `esim-api`, `esim-worker`, `Dashboard`
 
 ---
 
@@ -62,8 +63,18 @@ The agent does not need to ask the user to login manually — the script handles
 
 ### Set an environment variable
 ```bash
-./.claude/skills/railway/vars.sh dashboard VITE_API_URL=https://your-app.up.railway.app/admin
-./.claude/skills/railway/vars.sh fulfillment-engine ADMIN_API_KEY=new-secret
+./.claude/skills/railway/vars.sh Dashboard VITE_API_URL=https://api.sailesim.com/admin
+./.claude/skills/railway/vars.sh esim-api ADMIN_API_KEY=new-secret
+```
+
+### Migrate to a new Shopify store
+```bash
+./.claude/skills/railway/shopify-vars.sh \
+  --shop new-store.myshopify.com \
+  --client-id <client-id> \
+  --client-secret <client-secret> \
+  --access-token <shpat_...> \
+  --custom-domain new-domain.com
 ```
 
 ---
@@ -72,8 +83,9 @@ The agent does not need to ask the user to login manually — the script handles
 
 | Railway Service | What It Is | Key Env Vars |
 |----------------|-----------|--------------|
-| `fulfillment-engine` | Fastify API + pg-boss worker | `DATABASE_URL`, `ADMIN_API_KEY`, `SHOPIFY_*`, `FIROAM_*`, `TGT_*` |
-| `dashboard` | React SPA served by `serve` | `VITE_API_URL` (must point to fulfillment-engine Railway URL + `/admin`) |
+| `esim-api` | Fastify HTTP API | `DATABASE_URL`, `ADMIN_API_KEY`, `SHOPIFY_*`, `FIROAM_*`, `TGT_*` |
+| `esim-worker` | pg-boss background worker | Same env vars as `esim-api` — shares DB |
+| `Dashboard` | React SPA served by `serve` | `VITE_API_URL` (must point to esim-api URL + `/admin`) |
 
 **Important**: `VITE_API_URL` is a build-time variable for Vite. Changing it in Railway vars requires a **full redeploy** (not just a restart) to take effect.
 
