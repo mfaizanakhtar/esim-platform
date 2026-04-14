@@ -33,8 +33,9 @@ type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancell
 
 function ThankYouEsimBlock() {
   const { backend_url, storefront_url } = useSettings<{ backend_url?: string; storefront_url?: string }>();
-  const backendUrl = (backend_url as string | undefined) ?? '';
-  const storefrontUrl = (storefront_url as string | undefined) ?? '';
+  const backendUrl = ((backend_url as string | undefined) ?? '').trim().replace(/\/+$/, '');
+  const storefrontUrl = ((storefront_url as string | undefined) ?? '').trim().replace(/\/+$/, '');
+  const accountOrdersUrl = storefrontUrl ? `${storefrontUrl}/account/orders` : null;
 
   const api = useApi<'purchase.thank-you.cart-line-item.render-after'>();
   const orderConfirmation = useSubscription(
@@ -165,7 +166,11 @@ function ThankYouEsimBlock() {
 
         <Text appearance="subdued">
           {"We've also emailed you a copy — find it anytime in "}
-          <Link to={`${storefrontUrl}/account/orders`}>your account orders</Link>
+          {accountOrdersUrl ? (
+            <Link to={accountOrdersUrl}>your account orders</Link>
+          ) : (
+            'your account orders'
+          )}
           {'.'}
         </Text>
       </BlockStack>

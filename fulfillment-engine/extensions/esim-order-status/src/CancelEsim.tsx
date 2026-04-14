@@ -14,7 +14,7 @@ import { useState, useCallback } from 'react';
 
 export function useCancelEsim(accessToken: string | undefined, onSuccess: () => void) {
   const { backend_url } = useSettings<{ backend_url?: string }>();
-  const backendUrl = (backend_url as string | undefined) ?? '';
+  const backendUrl = ((backend_url as string | undefined) ?? '').trim().replace(/\/+$/, '');
 
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -22,6 +22,10 @@ export function useCancelEsim(accessToken: string | undefined, onSuccess: () => 
 
   const handleCancel = useCallback(async () => {
     if (!accessToken) return;
+    if (!backendUrl) {
+      setCancelError('Service configuration missing. Please contact support.');
+      return;
+    }
     setCancelling(true);
     setCancelError(null);
     try {
