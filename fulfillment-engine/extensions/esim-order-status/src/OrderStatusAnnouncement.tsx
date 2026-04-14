@@ -1,6 +1,7 @@
 import {
   reactExtension,
   useAppMetafields,
+  useSettings,
   InlineStack,
   Text,
   Button,
@@ -11,7 +12,7 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
-import { type DeliveryMetafieldEntry, BACKEND, parseTokenMap, PROVISIONING_QUIPS } from './shared';
+import { type DeliveryMetafieldEntry, parseTokenMap, PROVISIONING_QUIPS } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -23,6 +24,9 @@ export default reactExtension(
 );
 
 function EsimOrderStatusAnnouncement() {
+  const { backend_url } = useSettings<{ backend_url?: string }>();
+  const backendUrl = (backend_url as string | undefined) ?? '';
+
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
   const tokenMap = parseTokenMap(tokensRaw);
@@ -59,7 +63,7 @@ function EsimOrderStatusAnnouncement() {
         clearInterval(interval);
         return;
       }
-      void fetch(`${BACKEND}/esim/delivery/${token}`)
+      void fetch(`${backendUrl}/esim/delivery/${token}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data: DeliveryMetafieldEntry | null) => {
           if (data && ['delivered', 'failed', 'cancelled'].includes(data.status)) {
@@ -73,7 +77,7 @@ function EsimOrderStatusAnnouncement() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [pollingEntry?.accessToken]);
+  }, [pollingEntry?.accessToken, backendUrl]);
 
   // ── Quip rotation ────────────────────────────────────────────────────────
   const anyProvisioning = resolvedEntries.some((e) => e.status === 'provisioning');

@@ -10,8 +10,6 @@ export interface DeliveryMetafieldEntry {
   isTopup?: boolean;
 }
 
-export const BACKEND = 'https://esim-api-production-a56a.up.railway.app';
-
 export const PROVISIONING_QUIPS = [
   'Beep boop... waking up your SIM...',
   'Negotiating with cell towers worldwide...',
