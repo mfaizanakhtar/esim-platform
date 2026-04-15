@@ -14,7 +14,7 @@ const StoredPayloadSchema = z.object({
   iccid: z.string().optional(),
 });
 
-const SHOPIFY_CUSTOM_DOMAIN = process.env.SHOPIFY_CUSTOM_DOMAIN ?? 'fluxyfi.com';
+const SHOPIFY_CUSTOM_DOMAIN = process.env.SHOPIFY_CUSTOM_DOMAIN ?? 'sailesim.com';
 
 /**
  * Public eSIM delivery routes — authenticated via UUID access token only.

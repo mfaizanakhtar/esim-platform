@@ -25,6 +25,7 @@ export interface DeliveryEmailData {
   region?: string;
   dataAmount?: string;
   validity?: string;
+  usageUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,7 +53,9 @@ export function parseSmdpFromLpa(lpa: string): string {
  * Uses a CID reference for the QR code image (Gmail-compatible inline image).
  */
 export function buildEmailHtml(data: DeliveryEmailData): string {
-  const { orderNumber, productName, esimPayload, region, dataAmount, validity } = data;
+  const { orderNumber, productName, esimPayload, region, dataAmount, validity, usageUrl } = data;
+  const resolvedUsageUrl =
+    usageUrl ?? `https://sailesim.com/pages/my-esim-usage?iccid=${esimPayload.iccid}`;
 
   const smdpAddress = parseSmdpFromLpa(esimPayload.lpa);
   const productTitle = productName || 'Your eSIM';
@@ -234,7 +237,7 @@ export function buildEmailHtml(data: DeliveryEmailData): string {
         <table border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
           <tr>
             <td align="center" bgcolor="#3b82f6" style="border-radius: 8px; padding: 14px 28px; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3);">
-              <a href="https://fluxyfi.com/pages/my-esim-usage?iccid=${esimPayload.iccid}" target="_blank" style="color: #ffffff; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+              <a href="${resolvedUsageUrl}" target="_blank" style="color: #ffffff; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
                 📈 View My Usage Dashboard
               </a>
             </td>
@@ -259,7 +262,7 @@ export function buildEmailHtml(data: DeliveryEmailData): string {
     
     <div class="footer">
       <p>Need help? Reply to this email or contact our support team.</p>
-      <p>© ${new Date().getFullYear()} Fluxify. All rights reserved.</p>
+      <p>© ${new Date().getFullYear()} SaileSIM. All rights reserved.</p>
     </div>
   </div>
 </body>
@@ -276,9 +279,11 @@ export function buildEmailHtml(data: DeliveryEmailData): string {
  * Used as the fallback for email clients that don't render HTML.
  */
 export function buildEmailText(data: DeliveryEmailData): string {
-  const { orderNumber, productName, esimPayload, region, dataAmount, validity } = data;
+  const { orderNumber, productName, esimPayload, region, dataAmount, validity, usageUrl } = data;
   const productTitle = productName || 'Your eSIM';
   const smdpAddress = parseSmdpFromLpa(esimPayload.lpa);
+  const resolvedUsageUrl =
+    usageUrl ?? `https://sailesim.com/pages/my-esim-usage?iccid=${esimPayload.iccid}`;
 
   return `
 🎉 Your eSIM is Ready!
@@ -293,7 +298,7 @@ ${validity ? `Validity: ${validity}` : ''}
 
 📊 TRACK YOUR DATA USAGE
 Monitor your eSIM data usage in real-time:
-https://fluxyfi.com/pages/my-esim-usage?iccid=${esimPayload.iccid}
+${resolvedUsageUrl}
 
 Check your remaining data, usage history, and validity period.
 
@@ -327,6 +332,6 @@ Android:
 
 Need help? Reply to this email.
 
-© ${new Date().getFullYear()} Fluxify
+© ${new Date().getFullYear()} SaileSIM
 `;
 }
