@@ -1,6 +1,6 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "fb0eb60941e0e7bb38a2ca344b3bd123"
+client_id = "1d9541e35a5924941f451d33bf1c4c8f"
 name = "esim_fulfillment"
 application_url = "https://api.sailesim.com"
 embedded = false
