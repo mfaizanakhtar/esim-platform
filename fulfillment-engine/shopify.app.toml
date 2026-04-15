@@ -2,7 +2,7 @@
 
 client_id = "1d9541e35a5924941f451d33bf1c4c8f"
 name = "esim_fulfillment"
-application_url = "https://api.sailesim.com"
+application_url = "https://dashboard.sailesim.com"
 embedded = false
 
 [webhooks]
