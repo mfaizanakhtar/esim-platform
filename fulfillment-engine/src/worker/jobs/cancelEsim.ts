@@ -14,6 +14,7 @@ const DecryptedPayloadSchema = z.object({
 interface CancelEsimJobData {
   deliveryId: string;
   orderId: string;
+  refund?: boolean;
 }
 
 /**
@@ -27,7 +28,7 @@ interface CancelEsimJobData {
  * Always writes a note + tag to the Shopify order so the merchant can see what happened.
  */
 export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
-  const { deliveryId, orderId } = data;
+  const { deliveryId, orderId, refund } = data;
 
   const delivery = await prisma.esimDelivery.findUnique({ where: { id: deliveryId } });
   if (!delivery) {
@@ -61,6 +62,7 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
     } catch (err) {
       logger.warn({ deliveryId, err }, 'cancelEsim: failed to write note/tag (non-fatal)');
     }
+    if (refund) await maybeIssueRefund(shopify, orderId, deliveryId);
     return;
   }
 
@@ -189,6 +191,7 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
       `eSIM cancelled with FiRoam. ICCID: ${iccid}.`,
       ['esim-cancelled'],
     );
+    if (refund) await maybeIssueRefund(shopify, orderId, deliveryId);
     logger.info({ deliveryId, iccid }, 'cancelEsim: FiRoam cancelled successfully');
     return;
   }
@@ -228,6 +231,7 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
       `TGT eSIM refund processed. ICCID: ${iccid}. Note: TGT vendor cancel is not automated — please cancel in TGT portal if not yet activated.`,
       ['esim-cancelled', 'esim-tgt-manual-cancel-needed'],
     );
+    if (refund) await maybeIssueRefund(shopify, orderId, deliveryId);
     logger.info(
       { deliveryId, iccid },
       'cancelEsim: TGT marked cancelled (manual vendor step needed)',
@@ -248,8 +252,21 @@ export async function handleCancelEsim(data: CancelEsimJobData): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Helper
+// Helpers
 // ---------------------------------------------------------------------------
+
+async function maybeIssueRefund(
+  shopify: ReturnType<typeof getShopifyClient>,
+  orderId: string,
+  deliveryId: string,
+): Promise<void> {
+  try {
+    await shopify.cancelShopifyOrder(orderId);
+    logger.info({ deliveryId, orderId }, 'cancelEsim: Shopify refund issued');
+  } catch (err) {
+    logger.error({ deliveryId, orderId, err }, 'cancelEsim: Shopify refund failed (non-fatal)');
+  }
+}
 
 async function writeOutcome(
   shopify: ReturnType<typeof getShopifyClient>,

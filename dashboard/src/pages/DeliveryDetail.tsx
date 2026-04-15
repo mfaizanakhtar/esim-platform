@@ -143,9 +143,7 @@ export function DeliveryDetail() {
         </p>
       )}
       {cancelMutation.isSuccess && (
-        <p className="text-sm text-green-600">
-          {cancelMutation.data?.refunded ? 'Delivery cancelled and refunded.' : 'Delivery cancelled.'}
-        </p>
+        <p className="text-sm text-green-600">Cancellation queued. Refresh in a moment to see the updated status.</p>
       )}
       {cancelMutation.isError && (
         <p className="text-sm text-red-600">

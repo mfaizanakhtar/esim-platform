@@ -27,10 +27,7 @@ export function useCancelDelivery(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vars: { refund: boolean }) =>
-      apiClient.post<{ ok: boolean; refunded: boolean; message: string }>(
-        `/deliveries/${id}/cancel`,
-        vars,
-      ),
+      apiClient.post<{ ok: boolean; message: string }>(`/deliveries/${id}/cancel`, vars),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['deliveries'] });
       void qc.invalidateQueries({ queryKey: ['delivery', id] });

@@ -589,7 +589,7 @@ describe('Admin Routes', () => {
       expect(res.json().error).toContain('already cancelled');
     });
 
-    it('cancels delivery without refund when refund=false', async () => {
+    it('enqueues cancel-esim job without refund when refund=false', async () => {
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
         makeDelivery({ status: 'pending' }),
       );
@@ -601,16 +601,16 @@ describe('Admin Routes', () => {
         payload: { refund: false },
       });
 
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, refunded: false });
-      expect(adminMocks.mockHandleCancelEsim).toHaveBeenCalledWith({
-        deliveryId: 'del-001',
-        orderId: 'order-123',
-      });
-      expect(adminMocks.mockCancelShopifyOrder).not.toHaveBeenCalled();
+      expect(res.statusCode).toBe(202);
+      expect(res.json()).toMatchObject({ ok: true });
+      expect(adminMocks.mockJobSend).toHaveBeenCalledWith(
+        'cancel-esim',
+        expect.objectContaining({ deliveryId: 'del-001', orderId: 'order-123', refund: false }),
+        expect.any(Object),
+      );
     });
 
-    it('cancels delivery and issues refund when refund=true', async () => {
+    it('enqueues cancel-esim job with refund=true when requested', async () => {
       vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
         makeDelivery({ status: 'delivered' }),
       );
@@ -622,30 +622,13 @@ describe('Admin Routes', () => {
         payload: { refund: true },
       });
 
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, refunded: true });
-      expect(adminMocks.mockHandleCancelEsim).toHaveBeenCalledWith({
-        deliveryId: 'del-001',
-        orderId: 'order-123',
-      });
-      expect(adminMocks.mockCancelShopifyOrder).toHaveBeenCalledWith('order-123');
-    });
-
-    it('cancels delivery but refunded=false when Shopify refund throws', async () => {
-      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
-        makeDelivery({ status: 'delivered' }),
+      expect(res.statusCode).toBe(202);
+      expect(res.json()).toMatchObject({ ok: true });
+      expect(adminMocks.mockJobSend).toHaveBeenCalledWith(
+        'cancel-esim',
+        expect.objectContaining({ deliveryId: 'del-001', orderId: 'order-123', refund: true }),
+        expect.any(Object),
       );
-      adminMocks.mockCancelShopifyOrder.mockRejectedValueOnce(new Error('order closed'));
-
-      const res = await app.inject({
-        method: 'POST',
-        url: '/deliveries/del-001/cancel',
-        headers: JSON_HEADERS,
-        payload: { refund: true },
-      });
-
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, refunded: false });
     });
   });
 

@@ -7,7 +7,6 @@ import { decrypt } from '~/utils/crypto';
 import TgtClient from '~/vendor/tgtClient';
 import FiRoamClient from '~/vendor/firoamClient';
 import { getShopifyClient } from '~/shopify/client';
-import { handleCancelEsim } from '~/worker/jobs/cancelEsim';
 import { logger } from '~/utils/logger';
 import OpenAI from 'openai';
 import { getRegisteredProviders } from '~/vendor/registry';
@@ -201,8 +200,8 @@ export default function adminRoutes(
    * Cancel a delivery from the admin dashboard.
    * Body: { refund?: boolean } — if true, also issues a full Shopify refund.
    *
-   * Reuses handleCancelEsim() for the vendor cancel + DB status update + Shopify note/tag.
-   * The refund step calls cancelShopifyOrder() and is non-fatal (order may already be closed).
+   * Enqueues a cancel-esim job (vendor cancel + DB update + Shopify note/tag).
+   * Passing refund=true also triggers cancelShopifyOrder inside the job (non-fatal).
    */
   app.post('/deliveries/:id/cancel', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
@@ -218,25 +217,19 @@ export default function adminRoutes(
       return reply.code(409).send({ error: 'Delivery is already cancelled' });
     }
 
-    await handleCancelEsim({ deliveryId: id, orderId: delivery.orderId });
+    const queue = getJobQueue();
+    await queue.send(
+      'cancel-esim',
+      { deliveryId: id, orderId: delivery.orderId, refund: body.refund === true },
+      { retryLimit: 2, expireInSeconds: 3600 },
+    );
 
-    let refunded = false;
-    if (body.refund === true) {
-      try {
-        const shopify = getShopifyClient();
-        await shopify.cancelShopifyOrder(delivery.orderId);
-        refunded = true;
-      } catch (err) {
-        logger.error({ err, deliveryId: id }, 'Admin cancel: Shopify refund failed (non-fatal)');
-      }
-    }
-
-    app.log.info(`[Admin] Cancelled delivery ${id} (refunded=${refunded})`);
-    return reply.send({
-      ok: true,
-      refunded,
-      message: refunded ? `Delivery ${id} cancelled and refunded` : `Delivery ${id} cancelled`,
-    });
+    app.log.info(`[Admin] Queued cancel-esim for delivery ${id} (refund=${body.refund === true})`);
+    const message =
+      body.refund === true
+        ? `Cancellation + refund queued for delivery ${id}`
+        : `Cancellation queued for delivery ${id}`;
+    return reply.code(202).send({ ok: true, message });
   });
 
   app.post('/deliveries/:id/resend-email', async (request: FastifyRequest, reply: FastifyReply) => {
