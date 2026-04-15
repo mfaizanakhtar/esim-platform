@@ -65,7 +65,7 @@ Written to the order by the API. Read by the UI extension.
 
 ```json
 {
-  "<accessToken>": {
+  "<lineItemId>": {
     "status": "provisioning",
     "accessToken": "uuid",
     "lpa": "lpa://...",

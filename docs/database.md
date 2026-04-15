@@ -21,7 +21,7 @@ Core record. One per Shopify line item. Tracks provisioning from start to finish
 | `customerEmail` | String? | Delivery email address |
 | `vendorReferenceId` | String? | Vendor's order reference |
 | `provider` | String? | `firoam` or `tgt` |
-| `iccidHash` | String? (unique) | HMAC-SHA256(iccid, ENCRYPTION_KEY) — enables O(1) ICCID lookup |
+| `iccidHash` | String? (indexed) | HMAC-SHA256(iccid, ENCRYPTION_KEY) — enables O(1) ICCID lookup |
 | `payloadEncrypted` | String? | AES-256-GCM encrypted `{ vendorId, lpa, activationCode, iccid }` |
 | `accessToken` | String? (unique) | UUID written to Shopify metafield; UI extension polls with this |
 | `topupIccid` | String? | If top-up: existing ICCID to renew |
@@ -62,7 +62,7 @@ Maps a Shopify SKU to a vendor product code. Multiple mappings per SKU (tried in
 | `createdAt` | DateTime | |
 | `updatedAt` | DateTime | |
 
-**Unique:** `(shopifySku, provider)` — one active mapping per SKU per provider
+**Unique:** `(shopifySku, provider)` — one mapping per SKU per provider
 
 ---
 
@@ -121,7 +121,7 @@ Tracks AI-powered SKU → catalog matching jobs.
 | Field | Type | Notes |
 |-------|------|-------|
 | `id` | String (cuid) | Primary key |
-| `status` | String | `running` → `done` | `error` | `interrupted` |
+| `status` | String | `running` → `done` \| `error` \| `interrupted` |
 | `provider` | String? | Filter applied |
 | `unmappedOnly` | Boolean | Whether only unmapped SKUs were processed |
 | `totalBatches` | Int? | Total batches planned |
@@ -161,7 +161,7 @@ TGT-specific async order record. Created when TGT order is placed; updated when 
 | `vendorReferenceId` | String (unique) | TGT `orderNo` |
 | `payloadJson` | Json? | TGT API response |
 | `payloadEncrypted` | String? | Encrypted credentials |
-| `status` | String | `created` → `fulfilled` | `failed` |
+| `status` | String | `created` → `fulfilled` \| `failed` |
 | `lastError` | String? | |
 | `createdAt` | DateTime | |
 | `updatedAt` | DateTime | |

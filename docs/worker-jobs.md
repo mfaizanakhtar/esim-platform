@@ -71,8 +71,8 @@ The worker runs as a separate Railway service (`esim-worker`) using the same cod
 
 **Trigger:** Enqueued after TGT order creation (hybrid or polling mode)
 **File:** `src/worker/jobs/tgtPoll.ts`
-**Interval:** `TGT_POLL_INTERVAL_SECONDS` (default: 15s)
-**Max attempts:** `TGT_POLL_MAX_ATTEMPTS` (default: 8)
+**Interval:** `TGT_POLL_INTERVAL_SECONDS` (default: 5s)
+**Max attempts:** `TGT_POLL_MAX_ATTEMPTS` (default: 60)
 
 ### Flow
 

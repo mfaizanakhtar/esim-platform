@@ -5,7 +5,7 @@
 All eSIM credentials are encrypted before being stored in the database.
 
 **Algorithm:** AES-256-GCM
-**Key:** `ENCRYPTION_KEY` env var (32 bytes, hex-encoded)
+**Key:** `ENCRYPTION_KEY` env var — accepts hex, base64, or raw passphrase (SHA-256 derived)
 **Source:** `fulfillment-engine/src/utils/crypto.ts`
 
 **What's encrypted:**

@@ -8,7 +8,7 @@
 ### Authentication
 - Login with phone + password → receive session token
 - Token cached with auto-refresh
-- Every request signed with HMAC-SHA256 using `FIROAM_SIGN_KEY`
+- Every request signed with MD5 using `FIROAM_SIGN_KEY`
 
 ### providerSku Format
 

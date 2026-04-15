@@ -2,7 +2,7 @@
 
 No authentication required. CORS enabled for all origins.
 
-**Source:** `fulfillment-engine/src/api/usage.ts`, `src/api/esim.ts`
+**Source:** `fulfillment-engine/src/api/usage.ts`, `fulfillment-engine/src/api/esim.ts`
 
 ---
 
@@ -17,7 +17,7 @@ Search for eSIM usage data. Used by the Shopify usage page (`/pages/esim-usage`)
 | Input | Match type | Result |
 |-------|-----------|--------|
 | Contains `@` | Email | Multi-result grid |
-| Matches `/^#?\d{1,8}$/` | Order number | Single result |
+| Matches `/^\d+$/` | Order number | Single result |
 | Anything else | ICCID | Single result |
 
 **Single result response:**

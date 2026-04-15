@@ -114,6 +114,7 @@ cd dashboard && npm run build
 ```
 
 ### Common patterns
+
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `Cannot find module` | Missing dep or wrong build command | Check `package.json` |
