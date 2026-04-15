@@ -682,7 +682,9 @@ export default function adminRoutes(
         const requestedDaysCount =
           requestedPackageType === 'daypass' && typeof item.daysCount === 'number'
             ? item.daysCount
-            : null;
+            : requestedPackageType === 'daypass'
+              ? (parseShopifySku(shopifySku)?.validityDays ?? null)
+              : null;
 
         // Derive providerSku from catalog
         let providerSku: string;
