@@ -26,7 +26,8 @@ export type DeliveryStatus =
   | 'delivered'
   | 'failed'
   | 'awaiting_callback'
-  | 'polling';
+  | 'polling'
+  | 'cancelled';
 
 export interface Delivery {
   id: string;

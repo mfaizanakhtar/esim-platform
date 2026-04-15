@@ -195,6 +195,43 @@ export default function adminRoutes(
     return reply.send({ ok: true, message: `Delivery ${id} re-enqueued` });
   });
 
+  /**
+   * POST /admin/deliveries/:id/cancel
+   * Cancel a delivery from the admin dashboard.
+   * Body: { refund?: boolean } — if true, also issues a full Shopify refund.
+   *
+   * Enqueues a cancel-esim job (vendor cancel + DB update + Shopify note/tag).
+   * Passing refund=true also triggers cancelShopifyOrder inside the job (non-fatal).
+   */
+  app.post('/deliveries/:id/cancel', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { refund?: boolean };
+
+    const delivery = await prisma.esimDelivery.findUnique({ where: { id } });
+    if (!delivery) {
+      return reply.code(404).send({ error: 'Delivery not found' });
+    }
+    if (delivery.status === 'cancelled') {
+      return reply.code(409).send({ error: 'Delivery is already cancelled' });
+    }
+
+    const queue = getJobQueue();
+    await queue.send(
+      'cancel-esim',
+      { deliveryId: id, orderId: delivery.orderId, refund: body.refund === true },
+      { retryLimit: 2, expireInSeconds: 3600 },
+    );
+
+    app.log.info(`[Admin] Queued cancel-esim for delivery ${id} (refund=${body.refund === true})`);
+    const message =
+      body.refund === true
+        ? `Cancellation + refund queued for delivery ${id}`
+        : `Cancellation queued for delivery ${id}`;
+    return reply.code(202).send({ ok: true, message });
+  });
+
   app.post('/deliveries/:id/resend-email', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
