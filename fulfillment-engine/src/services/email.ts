@@ -329,10 +329,17 @@ async function generateEsimPDF(data: DeliveryEmailData): Promise<string> {
         .fontSize(9)
         .font('Helvetica')
         .fillColor('#1a1f71')
-        .text(`https://fluxyfi.com/pages/my-esim-usage?iccid=${esimPayload.iccid}`, 50, yPos, {
-          link: `https://fluxyfi.com/pages/my-esim-usage?iccid=${esimPayload.iccid}`,
-          underline: true,
-        });
+        .text(
+          data.usageUrl ?? `https://sailesim.com/pages/my-esim-usage?iccid=${esimPayload.iccid}`,
+          50,
+          yPos,
+          {
+            link:
+              data.usageUrl ??
+              `https://sailesim.com/pages/my-esim-usage?iccid=${esimPayload.iccid}`,
+            underline: true,
+          },
+        );
       yPos += 13;
       doc.fontSize(9).font('Helvetica').fillColor('#666666');
       doc.text('Check remaining data, usage history, and validity period', 50, yPos);
@@ -387,7 +394,7 @@ export async function sendDeliveryEmail(
     const textBody = buildEmailText(data);
     logger.debug('Email content built');
 
-    const fromEmail = process.env.EMAIL_FROM || 'orders@fluxyfi.com';
+    const fromEmail = process.env.EMAIL_FROM || 'orders@sailesim.com';
     const bccEmail = process.env.EMAIL_BCC;
     const resendApiKey = process.env.RESEND_API_KEY;
 
@@ -459,7 +466,7 @@ export async function sendTopupEmail(
   logger.info({ orderName, to }, 'Preparing top-up confirmation email');
 
   try {
-    const fromEmail = process.env.EMAIL_FROM || 'orders@fluxyfi.com';
+    const fromEmail = process.env.EMAIL_FROM || 'orders@sailesim.com';
     const bccEmail = process.env.EMAIL_BCC;
     const resendApiKey = process.env.RESEND_API_KEY;
 

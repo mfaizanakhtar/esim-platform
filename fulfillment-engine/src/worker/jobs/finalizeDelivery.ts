@@ -10,7 +10,7 @@ import {
 import { getShopifyClient } from '~/shopify/client';
 import { logger } from '~/utils/logger';
 
-const SHOPIFY_CUSTOM_DOMAIN = process.env.SHOPIFY_CUSTOM_DOMAIN ?? 'fluxyfi.com';
+const SHOPIFY_CUSTOM_DOMAIN = process.env.SHOPIFY_CUSTOM_DOMAIN ?? 'sailesim.com';
 
 export interface DeliveryMetadata {
   productName?: string;
@@ -134,6 +134,7 @@ export async function finalizeDelivery(
           region: args.metadata?.region,
           dataAmount: args.metadata?.dataAmount,
           validity: args.metadata?.validity,
+          usageUrl: `https://${SHOPIFY_CUSTOM_DOMAIN}/pages/my-esim-usage?iccid=${resolvedIccid}`,
         });
 
     await recordDeliveryAttempt(

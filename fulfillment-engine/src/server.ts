@@ -18,8 +18,8 @@ export default async function buildServer() {
   // Configure CORS for Shopify storefront
   await app.register(cors, {
     origin: (origin, callback) => {
-      const shopifyDomain = process.env.SHOPIFY_SHOP_DOMAIN; // fluxyfi-com.myshopify.com
-      const customDomain = process.env.SHOPIFY_CUSTOM_DOMAIN; // fluxyfi.com (optional)
+      const shopifyDomain = process.env.SHOPIFY_SHOP_DOMAIN; // sailesim.myshopify.com
+      const customDomain = process.env.SHOPIFY_CUSTOM_DOMAIN; // sailesim.com (optional)
 
       const allowedOrigins = [
         `https://${shopifyDomain}`,
