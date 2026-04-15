@@ -1,16 +1,17 @@
 import { useParams, Link } from 'react-router-dom';
 import { useDelivery } from '@/hooks/useDelivery';
-import { useRetryDelivery, useResendEmail } from '@/hooks/useDeliveryMutations';
+import { useRetryDelivery, useResendEmail, useCancelDelivery } from '@/hooks/useDeliveryMutations';
 import { StatusBadge } from '@/components/deliveries/StatusBadge';
 import { EsimPayloadCard } from '@/components/deliveries/EsimPayloadCard';
 import { formatDistanceToNow, format } from 'date-fns';
-import { ArrowLeft, RefreshCw, Mail } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Mail, XCircle } from 'lucide-react';
 
 export function DeliveryDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: delivery, isLoading, isError } = useDelivery(id ?? '');
   const retryMutation = useRetryDelivery(id ?? '');
   const resendMutation = useResendEmail(id ?? '');
+  const cancelMutation = useCancelDelivery(id ?? '');
 
   if (isLoading) {
     return (
@@ -78,10 +79,14 @@ export function DeliveryDetail() {
       )}
 
       {/* Actions */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button
           onClick={() => retryMutation.mutate()}
-          disabled={retryMutation.isPending || delivery.status === 'delivered'}
+          disabled={
+            retryMutation.isPending ||
+            delivery.status === 'delivered' ||
+            delivery.status === 'cancelled'
+          }
           className="flex items-center gap-2 px-4 py-2 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
         >
           <RefreshCw className="h-4 w-4" />
@@ -94,6 +99,30 @@ export function DeliveryDetail() {
         >
           <Mail className="h-4 w-4" />
           {resendMutation.isPending ? 'Sending...' : 'Resend Email'}
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm('Cancel this eSIM delivery? The eSIM will be cancelled with the vendor. No refund will be issued.')) {
+              cancelMutation.mutate({ refund: false });
+            }
+          }}
+          disabled={cancelMutation.isPending || delivery.status === 'cancelled'}
+          className="flex items-center gap-2 px-4 py-2 text-sm border border-red-300 text-red-600 rounded-md hover:bg-red-50 disabled:opacity-50 transition-colors"
+        >
+          <XCircle className="h-4 w-4" />
+          {cancelMutation.isPending ? 'Cancelling...' : 'Cancel'}
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm('Cancel this eSIM delivery AND issue a full refund to the customer in Shopify? This cannot be undone.')) {
+              cancelMutation.mutate({ refund: true });
+            }
+          }}
+          disabled={cancelMutation.isPending || delivery.status === 'cancelled'}
+          className="flex items-center gap-2 px-4 py-2 text-sm border border-red-400 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-50 transition-colors"
+        >
+          <XCircle className="h-4 w-4" />
+          {cancelMutation.isPending ? 'Cancelling...' : 'Cancel + Refund'}
         </button>
       </div>
 
@@ -111,6 +140,16 @@ export function DeliveryDetail() {
       {resendMutation.isError && (
         <p className="text-sm text-red-600">
           Resend failed: {(resendMutation.error as Error).message}
+        </p>
+      )}
+      {cancelMutation.isSuccess && (
+        <p className="text-sm text-green-600">
+          {cancelMutation.data?.refunded ? 'Delivery cancelled and refunded.' : 'Delivery cancelled.'}
+        </p>
+      )}
+      {cancelMutation.isError && (
+        <p className="text-sm text-red-600">
+          Cancel failed: {(cancelMutation.error as Error).message}
         </p>
       )}
 

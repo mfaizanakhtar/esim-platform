@@ -7,6 +7,7 @@ import { decrypt } from '~/utils/crypto';
 import TgtClient from '~/vendor/tgtClient';
 import FiRoamClient from '~/vendor/firoamClient';
 import { getShopifyClient } from '~/shopify/client';
+import { handleCancelEsim } from '~/worker/jobs/cancelEsim';
 import { logger } from '~/utils/logger';
 import OpenAI from 'openai';
 import { getRegisteredProviders } from '~/vendor/registry';
@@ -193,6 +194,49 @@ export default function adminRoutes(
     app.log.info(`[Admin] Re-enqueued delivery ${id} for retry`);
 
     return reply.send({ ok: true, message: `Delivery ${id} re-enqueued` });
+  });
+
+  /**
+   * POST /admin/deliveries/:id/cancel
+   * Cancel a delivery from the admin dashboard.
+   * Body: { refund?: boolean } — if true, also issues a full Shopify refund.
+   *
+   * Reuses handleCancelEsim() for the vendor cancel + DB status update + Shopify note/tag.
+   * The refund step calls cancelShopifyOrder() and is non-fatal (order may already be closed).
+   */
+  app.post('/deliveries/:id/cancel', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as { refund?: boolean };
+
+    const delivery = await prisma.esimDelivery.findUnique({ where: { id } });
+    if (!delivery) {
+      return reply.code(404).send({ error: 'Delivery not found' });
+    }
+    if (delivery.status === 'cancelled') {
+      return reply.code(409).send({ error: 'Delivery is already cancelled' });
+    }
+
+    await handleCancelEsim({ deliveryId: id, orderId: delivery.orderId });
+
+    let refunded = false;
+    if (body.refund === true) {
+      try {
+        const shopify = getShopifyClient();
+        await shopify.cancelShopifyOrder(delivery.orderId);
+        refunded = true;
+      } catch (err) {
+        logger.error({ err, deliveryId: id }, 'Admin cancel: Shopify refund failed (non-fatal)');
+      }
+    }
+
+    app.log.info(`[Admin] Cancelled delivery ${id} (refunded=${refunded})`);
+    return reply.send({
+      ok: true,
+      refunded,
+      message: refunded ? `Delivery ${id} cancelled and refunded` : `Delivery ${id} cancelled`,
+    });
   });
 
   app.post('/deliveries/:id/resend-email', async (request: FastifyRequest, reply: FastifyReply) => {

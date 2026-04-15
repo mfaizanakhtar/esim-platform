@@ -31,6 +31,8 @@ const adminMocks = vi.hoisted(() => {
     mockBackfillMissingEmbeddings: vi.fn().mockResolvedValue(0),
     mockBuildCatalogText: vi.fn().mockReturnValue(''),
     mockParseCatalogEntry: vi.fn().mockResolvedValue(null),
+    mockHandleCancelEsim: vi.fn().mockResolvedValue(undefined),
+    mockCancelShopifyOrder: vi.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -119,7 +121,12 @@ vi.mock('~/shopify/client', () => ({
     getVariantInfoByGids: adminMocks.mockGetVariantInfoByGids,
     deleteProduct: adminMocks.mockDeleteProduct,
     deleteVariants: adminMocks.mockDeleteVariants,
+    cancelShopifyOrder: adminMocks.mockCancelShopifyOrder,
   })),
+}));
+
+vi.mock('~/worker/jobs/cancelEsim', () => ({
+  handleCancelEsim: (...args: unknown[]) => adminMocks.mockHandleCancelEsim(...args),
 }));
 
 vi.mock('openai', () => {
@@ -306,6 +313,8 @@ describe('Admin Routes', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     adminMocks.mockJobSend.mockResolvedValue('job-id-admin');
+    adminMocks.mockHandleCancelEsim.mockResolvedValue(undefined);
+    adminMocks.mockCancelShopifyOrder.mockResolvedValue(undefined);
     app = Fastify({ logger: false });
     app.register(adminRoutes);
     await app.ready();
@@ -547,6 +556,96 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(adminMocks.mockJobSend).toHaveBeenCalled();
+    });
+  });
+
+  // ── POST /deliveries/:id/cancel ─────────────────────────────────────────
+
+  describe('POST /deliveries/:id/cancel', () => {
+    it('returns 404 when delivery not found', async () => {
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/deliveries/bad-id/cancel',
+        headers: JSON_HEADERS,
+        payload: { refund: false },
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 409 when delivery is already cancelled', async () => {
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+        makeDelivery({ status: 'cancelled' }),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/deliveries/del-001/cancel',
+        headers: JSON_HEADERS,
+        payload: { refund: false },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error).toContain('already cancelled');
+    });
+
+    it('cancels delivery without refund when refund=false', async () => {
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+        makeDelivery({ status: 'pending' }),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/deliveries/del-001/cancel',
+        headers: JSON_HEADERS,
+        payload: { refund: false },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, refunded: false });
+      expect(adminMocks.mockHandleCancelEsim).toHaveBeenCalledWith({
+        deliveryId: 'del-001',
+        orderId: 'order-123',
+      });
+      expect(adminMocks.mockCancelShopifyOrder).not.toHaveBeenCalled();
+    });
+
+    it('cancels delivery and issues refund when refund=true', async () => {
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+        makeDelivery({ status: 'delivered' }),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/deliveries/del-001/cancel',
+        headers: JSON_HEADERS,
+        payload: { refund: true },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, refunded: true });
+      expect(adminMocks.mockHandleCancelEsim).toHaveBeenCalledWith({
+        deliveryId: 'del-001',
+        orderId: 'order-123',
+      });
+      expect(adminMocks.mockCancelShopifyOrder).toHaveBeenCalledWith('order-123');
+    });
+
+    it('cancels delivery but refunded=false when Shopify refund throws', async () => {
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+        makeDelivery({ status: 'delivered' }),
+      );
+      adminMocks.mockCancelShopifyOrder.mockRejectedValueOnce(new Error('order closed'));
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/deliveries/del-001/cancel',
+        headers: JSON_HEADERS,
+        payload: { refund: true },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ ok: true, refunded: false });
     });
   });
 
