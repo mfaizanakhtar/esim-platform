@@ -71,8 +71,8 @@ The worker runs as a separate Railway service (`esim-worker`) using the same cod
 
 **Trigger:** Enqueued after TGT order creation (hybrid or polling mode)
 **File:** `src/worker/jobs/tgtPoll.ts`
-**Interval:** `TGT_POLL_INTERVAL_SECONDS` (default: 5s)
-**Max attempts:** `TGT_POLL_MAX_ATTEMPTS` (default: 60)
+**Interval:** `TGT_POLL_INTERVAL_SECONDS` (default: 15s)
+**Max attempts:** `TGT_POLL_MAX_ATTEMPTS` (default: 8)
 
 ### Flow
 
@@ -80,32 +80,55 @@ The worker runs as a separate Railway service (`esim-worker`) using the same cod
 1. Call TGT tryResolveOrderCredentials(orderNo)
 │
 ├── Credentials ready
-│   ├── Decrypt and store
-│   └── Enqueue 'finalize-delivery'
+│   └── Call finalizeDelivery() → status='delivered'
 │
 ├── Not ready yet
-│   ├── If attempts < max → reschedule poll
-│   └── If max reached → set status='awaiting_callback'
-│                         (wait for POST /api/tgt/callback)
+│   ├── If attempts < max → reschedule poll (after TGT_POLL_INTERVAL_SECONDS)
+│   └── If max reached (hybrid mode) → set status='awaiting_callback'
+│       ├── Wait for POST https://api.sailesim.com/webhook/tgt/callback
+│       └── (polling mode: set status='failed')
 │
-└── Error → log and retry
+└── Error → log, retry on next tick
 ```
 
 ---
 
 ## cancel-esim
 
-**Trigger:** Enqueued by `orders/cancelled` webhook handler
+**Trigger:** Enqueued by `POST /admin/deliveries/:id/cancel` (dashboard) or `orders/cancelled` Shopify webhook
 **File:** `src/worker/jobs/cancelEsim.ts`
+**Retry policy:** 2 retries, 1-hour expiry
 
 ### Flow
 
 ```
-1. Load delivery
-2. If status is already terminal (delivered, failed, cancelled) → skip
-3. If credentials were provisioned → call vendor cancel (if supported)
-4. Set status='cancelled'
+1. Load delivery — if already terminal (cancelled/failed) → skip (idempotent)
+2. If status ≠ 'delivered' → mark cancelled in DB immediately (no vendor action needed)
+3. If status = 'delivered':
+   │
+   ├── FiRoam
+   │   ├── queryEsimOrder(iccid) — check activation (usedMb > 0 or beginDate set)
+   │   ├── If activated → block cancel, tag 'esim-cancel-failed' + 'esim-activated'
+   │   └── If not activated → cancelOrder(orderNum, iccid) → mark cancelled
+   │
+   └── TGT (no cancel API)
+       ├── queryOrders(iccid) — check profileStatus / activatedStartTime
+       ├── If activated → block cancel, tag 'esim-cancel-failed' + 'esim-activated'
+       └── If not activated → mark cancelled in DB
+           └── tag 'esim-tgt-manual-cancel-needed' — must cancel in TGT portal
+
+4. Always write note + tag to Shopify order
+5. If refund=true → call shopify.cancelShopifyOrder() to issue full refund
 ```
+
+### Shopify Outcome Tags
+
+| Tag | Meaning |
+|-----|---------|
+| `esim-cancelled` | eSIM cancelled successfully |
+| `esim-cancel-failed` | Cancel failed — manual action required |
+| `esim-activated` | eSIM was already in use by customer |
+| `esim-tgt-manual-cancel-needed` | Must cancel in TGT portal manually |
 
 ---
 
