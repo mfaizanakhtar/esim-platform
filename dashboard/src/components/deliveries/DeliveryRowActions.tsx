@@ -17,6 +17,7 @@ export function DeliveryRowActions({ id, status }: Props) {
   return (
     <div className="flex items-center gap-1">
       <button
+        aria-label="Retry delivery"
         title="Retry"
         onClick={(e) => {
           e.preventDefault();
@@ -25,20 +26,21 @@ export function DeliveryRowActions({ id, status }: Props) {
         disabled={!canRetry || retryMutation.isPending}
         className="p-1 rounded hover:bg-muted disabled:opacity-30 text-muted-foreground hover:text-foreground transition-colors"
       >
-        <RefreshCw className={`h-3.5 w-3.5 ${retryMutation.isPending ? 'animate-spin' : ''}`} />
+        <RefreshCw aria-hidden="true" className={`h-3.5 w-3.5 ${retryMutation.isPending ? 'animate-spin' : ''}`} />
       </button>
       <button
+        aria-label="Cancel delivery"
         title="Cancel"
         onClick={(e) => {
           e.preventDefault();
-          if (window.confirm('Cancel this eSIM delivery? The eSIM will be cancelled with the vendor.')) {
+          if (window.confirm('Cancel this eSIM delivery? The eSIM will be cancelled with the vendor. No refund will be issued.')) {
             cancelMutation.mutate({ refund: false });
           }
         }}
         disabled={!canCancel || cancelMutation.isPending}
         className="p-1 rounded hover:bg-red-50 disabled:opacity-30 text-muted-foreground hover:text-red-600 transition-colors"
       >
-        <XCircle className="h-3.5 w-3.5" />
+        <XCircle aria-hidden="true" className="h-3.5 w-3.5" />
       </button>
     </div>
   );

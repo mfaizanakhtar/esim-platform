@@ -83,7 +83,7 @@ export function Deliveries() {
               <th className="text-left px-4 py-3 font-medium">Status</th>
               <th className="text-left px-4 py-3 font-medium">Created</th>
               <th className="text-left px-4 py-3 font-medium">SKU</th>
-              <th className="px-4 py-3" />
+              <th className="px-4 py-3"><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
           <tbody className="divide-y">
