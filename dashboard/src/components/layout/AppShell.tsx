@@ -61,7 +61,7 @@ export function AppShell() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem('sidebar-collapsed') === 'true',
+    () => localStorage.getItem('sidebar-collapsed') !== 'false',
   );
 
   function handleLogout() {
