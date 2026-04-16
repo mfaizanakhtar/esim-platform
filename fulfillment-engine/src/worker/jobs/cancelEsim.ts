@@ -264,7 +264,15 @@ async function maybeIssueRefund(
     await shopify.cancelShopifyOrder(orderId);
     logger.info({ deliveryId, orderId }, 'cancelEsim: Shopify refund issued');
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     logger.error({ deliveryId, orderId, err }, 'cancelEsim: Shopify refund failed (non-fatal)');
+    // Surface the failure in lastError so it's visible in the dashboard
+    await prisma.esimDelivery
+      .update({
+        where: { id: deliveryId },
+        data: { lastError: `refund_failed: ${msg}` },
+      })
+      .catch(() => undefined); // DB write failure is truly non-fatal
   }
 }
 

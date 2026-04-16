@@ -473,6 +473,7 @@ export class ShopifyClient {
       );
 
     // Step 1: Fetch transactions and refundable line items
+    // Note: Order.transactions is a plain list in the Shopify Admin API — no pagination args
     const orderRes = await graphql(
       `
         query getOrderForRefund($id: ID!) {
@@ -485,7 +486,7 @@ export class ShopifyClient {
                 }
               }
             }
-            transactions(first: 10) {
+            transactions {
               id
               kind
               gateway
@@ -504,6 +505,12 @@ export class ShopifyClient {
       `,
       { id: gid },
     );
+
+    const fetchErrors = orderRes.data?.errors;
+    if (fetchErrors?.length > 0) {
+      const msg = fetchErrors.map((e: { message: string }) => e.message).join(', ');
+      throw new Error(`Shopify order fetch GraphQL errors: ${msg}`);
+    }
 
     const order = orderRes.data?.data?.order;
     if (!order) {
@@ -542,7 +549,6 @@ export class ShopifyClient {
         kind: 'REFUND',
         gateway: tx.gateway,
         amount: tx.maximumRefundableV2?.amount ?? tx.amountSet?.shopMoney?.amount ?? '0',
-        orderId: gid,
       }))
       .filter((tx) => parseFloat(tx.amount) > 0);
 
