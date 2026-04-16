@@ -16,12 +16,14 @@ vi.mock('~/utils/crypto', () => ({
 const mockAppendOrderNote = vi.fn(async () => undefined);
 const mockAddOrderTags = vi.fn(async () => undefined);
 const mockWriteDeliveryMetafield = vi.fn(async () => undefined);
+const mockCancelShopifyOrder = vi.fn(async () => undefined);
 
 vi.mock('~/shopify/client', () => ({
   getShopifyClient: vi.fn(() => ({
     appendOrderNote: mockAppendOrderNote,
     addOrderTags: mockAddOrderTags,
     writeDeliveryMetafield: mockWriteDeliveryMetafield,
+    cancelShopifyOrder: mockCancelShopifyOrder,
   })),
 }));
 
@@ -299,6 +301,37 @@ describe('handleCancelEsim', () => {
       await expect(
         handleCancelEsim({ deliveryId: 'd1', orderId: 'order-1' }),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('refund: true path', () => {
+    beforeEach(() => {
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(baseDelivery as never);
+      mockQueryEsimOrder.mockResolvedValue({ success: true, orders: [] });
+      mockFiroamCancelOrder.mockResolvedValue({ success: true });
+    });
+
+    it('calls cancelShopifyOrder when refund=true and FiRoam cancel succeeds', async () => {
+      await handleCancelEsim({ deliveryId: 'd1', orderId: 'order-1', refund: true });
+
+      expect(mockCancelShopifyOrder).toHaveBeenCalledWith('order-1');
+    });
+
+    it('surfaces refund error in lastError when cancelShopifyOrder throws', async () => {
+      mockCancelShopifyOrder.mockRejectedValueOnce(
+        new Error('Shopify order fetch GraphQL errors: Field not found'),
+      );
+
+      await expect(
+        handleCancelEsim({ deliveryId: 'd1', orderId: 'order-1', refund: true }),
+      ).resolves.toBeUndefined();
+
+      const updateCalls = vi.mocked(prisma.esimDelivery.update).mock.calls;
+      const lastErrorCall = updateCalls.find(
+        (c) => typeof (c[0].data as { lastError?: string }).lastError === 'string',
+      );
+      expect(lastErrorCall).toBeDefined();
+      expect((lastErrorCall![0].data as { lastError: string }).lastError).toMatch(/refund_failed/);
     });
   });
 
