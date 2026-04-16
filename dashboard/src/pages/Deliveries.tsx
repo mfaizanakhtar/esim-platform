@@ -1,6 +1,7 @@
 import { useSearchParams, Link } from 'react-router-dom';
 import { useDeliveries } from '@/hooks/useDeliveries';
 import { StatusBadge } from '@/components/deliveries/StatusBadge';
+import { DeliveryRowActions } from '@/components/deliveries/DeliveryRowActions';
 import { format } from 'date-fns';
 
 const PAGE_SIZE = 50;
@@ -13,6 +14,7 @@ const STATUS_OPTIONS = [
   { value: 'failed', label: 'Failed' },
   { value: 'awaiting_callback', label: 'Awaiting Callback' },
   { value: 'polling', label: 'Polling' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 export function Deliveries() {
@@ -81,13 +83,14 @@ export function Deliveries() {
               <th className="text-left px-4 py-3 font-medium">Status</th>
               <th className="text-left px-4 py-3 font-medium">Created</th>
               <th className="text-left px-4 py-3 font-medium">SKU</th>
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y">
             {isFetching &&
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i}>
-                  {Array.from({ length: 5 }).map((__, j) => (
+                  {Array.from({ length: 6 }).map((__, j) => (
                     <td key={j} className="px-4 py-3">
                       <div className="h-4 bg-muted animate-pulse rounded" />
                     </td>
@@ -97,7 +100,7 @@ export function Deliveries() {
 
             {!isFetching && isError && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                   Failed to load deliveries. Check your connection or API key.
                 </td>
               </tr>
@@ -125,12 +128,15 @@ export function Deliveries() {
                 <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
                   {delivery.variantId}
                 </td>
+                <td className="px-4 py-3">
+                  <DeliveryRowActions id={delivery.id} status={delivery.status} />
+                </td>
               </tr>
             ))}
 
             {!isFetching && data?.deliveries.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                   No deliveries found.
                 </td>
               </tr>
