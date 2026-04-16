@@ -27,6 +27,16 @@
   100% { transform: translateX(350%); }
 }
 
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+@keyframes slide-out-right {
+  from { transform: translateX(0); }
+  to   { transform: translateX(100%); }
+}
+
 @layer base {
   :root {
     --background: oklch(1 0 0);

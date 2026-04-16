@@ -31,6 +31,19 @@ export function useCancelDelivery(id: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['deliveries'] });
       void qc.invalidateQueries({ queryKey: ['delivery', id] });
+      // Poll every 2s for ~14s to catch the async cancel job completing.
+      // Stops early if no active observers remain (e.g. user navigated away).
+      let ticks = 0;
+      const timer = setInterval(() => {
+        ticks++;
+        const observed = qc.getQueryCache().find({ queryKey: ['deliveries'] });
+        if (!observed || observed.getObserversCount() === 0 || ticks >= 7) {
+          clearInterval(timer);
+          return;
+        }
+        void qc.invalidateQueries({ queryKey: ['deliveries'] });
+        void qc.invalidateQueries({ queryKey: ['delivery', id] });
+      }, 2000);
     },
   });
 }
