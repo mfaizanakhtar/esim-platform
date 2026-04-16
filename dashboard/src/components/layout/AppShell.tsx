@@ -1,7 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { LayoutDashboard, Map as MapIcon, Package, LogOut, Menu, X } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Map as MapIcon,
+  Package,
+  LogOut,
+  Menu,
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from 'lucide-react';
 
 const navItems = [
   { to: '/deliveries', label: 'Deliveries', icon: LayoutDashboard },
@@ -51,10 +60,21 @@ export function AppShell() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem('sidebar-collapsed') === 'true',
+  );
 
   function handleLogout() {
     logout();
     navigate('/login');
+  }
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem('sidebar-collapsed', String(next));
+      return next;
+    });
   }
 
   return (
@@ -71,16 +91,18 @@ export function AppShell() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-56 border-r flex flex-col bg-white transition-transform duration-200 md:static md:translate-x-0 md:visible ${
+        className={`fixed inset-y-0 left-0 z-50 border-r flex flex-col bg-white transition-all duration-200 md:static md:translate-x-0 md:visible ${
           sidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
-        }`}
+        } ${collapsed ? 'w-14 md:w-14' : 'w-56 md:w-56'}`}
       >
-        <div className="p-4 border-b flex items-center justify-between">
-          <Link to="/deliveries" className="text-lg font-semibold">
-            eSIM Admin
-          </Link>
+        <div className="p-3 border-b flex items-center justify-between min-h-[53px]">
+          {!collapsed && (
+            <Link to="/deliveries" className="text-lg font-semibold truncate">
+              eSIM Admin
+            </Link>
+          )}
           <button
-            className="md:hidden p-1 rounded hover:bg-muted transition-colors"
+            className="md:hidden p-1 rounded hover:bg-muted transition-colors ml-auto"
             onClick={() => setSidebarOpen(false)}
             aria-label="Close menu"
           >
@@ -94,27 +116,50 @@ export function AppShell() {
               <Link
                 key={to}
                 to={to}
+                title={collapsed ? label : undefined}
                 onClick={() => setSidebarOpen(false)}
                 aria-current={isActive ? 'page' : undefined}
                 className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors ${
+                  collapsed ? 'justify-center' : ''
+                } ${
                   isActive
                     ? 'bg-gray-900 text-white'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
                 }`}
               >
-                <Icon className="h-4 w-4" />
-                {label}
+                <Icon className="h-4 w-4 shrink-0" />
+                {!collapsed && label}
               </Link>
             );
           })}
         </nav>
-        <div className="p-2 border-t">
+        <div className="p-2 border-t space-y-1">
+          {/* Collapse toggle — desktop only */}
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={`hidden md:flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground w-full transition-colors ${
+              collapsed ? 'justify-center' : ''
+            }`}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-4 w-4 shrink-0" />
+            ) : (
+              <>
+                <PanelLeftClose className="h-4 w-4 shrink-0" />
+                Collapse
+              </>
+            )}
+          </button>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground w-full transition-colors"
+            title={collapsed ? 'Logout' : undefined}
+            className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground w-full transition-colors ${
+              collapsed ? 'justify-center' : ''
+            }`}
           >
-            <LogOut className="h-4 w-4" />
-            Logout
+            <LogOut className="h-4 w-4 shrink-0" />
+            {!collapsed && 'Logout'}
           </button>
         </div>
       </aside>
