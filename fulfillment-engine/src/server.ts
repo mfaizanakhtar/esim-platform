@@ -75,7 +75,8 @@ export default async function buildServer() {
     // Store raw body for HMAC verification
     (req as unknown as { rawBody: string }).rawBody = body as string;
     try {
-      const json = JSON.parse(body as string);
+      const str = (body as string).trim();
+      const json = str ? JSON.parse(str) : {};
       done(null, json);
     } catch (err) {
       done(err as Error, undefined);
