@@ -91,9 +91,9 @@ export function AppShell() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 border-r flex flex-col bg-white transition-all duration-200 md:static md:translate-x-0 md:visible ${
+        className={`fixed inset-y-0 left-0 z-50 w-56 border-r flex flex-col bg-white transition-all duration-200 md:static md:translate-x-0 md:visible ${
           sidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
-        } ${collapsed ? 'w-14 md:w-14' : 'w-56 md:w-56'}`}
+        } ${collapsed ? 'md:w-14' : 'md:w-56'}`}
       >
         <div className="p-3 border-b flex items-center justify-between min-h-[53px]">
           {!collapsed && (

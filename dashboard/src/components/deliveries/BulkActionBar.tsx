@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { X, RefreshCw, XCircle } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -11,6 +12,7 @@ interface Props {
 
 export function BulkActionBar({ selectedIds, selectedDeliveries, onClear }: Props) {
   const qc = useQueryClient();
+  const [isPending, setIsPending] = useState(false);
   const visible = selectedIds.length > 0;
 
   const retryableIds = selectedDeliveries
@@ -22,18 +24,36 @@ export function BulkActionBar({ selectedIds, selectedDeliveries, onClear }: Prop
     .map((d) => d.id);
 
   async function handleBulkRetry() {
-    await Promise.allSettled(retryableIds.map((id) => apiClient.post(`/deliveries/${id}/retry`)));
-    void qc.invalidateQueries({ queryKey: ['deliveries'] });
-    onClear();
+    setIsPending(true);
+    try {
+      const results = await Promise.allSettled(
+        retryableIds.map((id) => apiClient.post(`/deliveries/${id}/retry`)),
+      );
+      void qc.invalidateQueries({ queryKey: ['deliveries'] });
+      retryableIds.forEach((id) => void qc.invalidateQueries({ queryKey: ['delivery', id] }));
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) window.alert(`${failed} retry request(s) failed.`);
+      onClear();
+    } finally {
+      setIsPending(false);
+    }
   }
 
   async function handleBulkCancel() {
     if (!window.confirm(`Cancel ${cancellableIds.length} delivery(ies)? No refunds will be issued.`)) return;
-    await Promise.allSettled(
-      cancellableIds.map((id) => apiClient.post(`/deliveries/${id}/cancel`, { refund: false })),
-    );
-    void qc.invalidateQueries({ queryKey: ['deliveries'] });
-    onClear();
+    setIsPending(true);
+    try {
+      const results = await Promise.allSettled(
+        cancellableIds.map((id) => apiClient.post(`/deliveries/${id}/cancel`, { refund: false })),
+      );
+      void qc.invalidateQueries({ queryKey: ['deliveries'] });
+      cancellableIds.forEach((id) => void qc.invalidateQueries({ queryKey: ['delivery', id] }));
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) window.alert(`${failed} cancel request(s) failed.`);
+      onClear();
+    } finally {
+      setIsPending(false);
+    }
   }
 
   return (
@@ -45,7 +65,8 @@ export function BulkActionBar({ selectedIds, selectedDeliveries, onClear }: Prop
       <span className="font-medium">{selectedIds.length} selected</span>
       <button
         onClick={onClear}
-        className="flex items-center gap-1 px-2.5 py-1 rounded border border-white/30 hover:bg-white/10 transition-colors text-xs"
+        disabled={isPending}
+        className="flex items-center gap-1 px-2.5 py-1 rounded border border-white/30 hover:bg-white/10 disabled:opacity-50 transition-colors text-xs"
       >
         <X className="h-3.5 w-3.5" />
         Clear
@@ -53,16 +74,18 @@ export function BulkActionBar({ selectedIds, selectedDeliveries, onClear }: Prop
       {retryableIds.length > 0 && (
         <button
           onClick={() => void handleBulkRetry()}
-          className="flex items-center gap-1 px-2.5 py-1 rounded border border-white/30 hover:bg-white/10 transition-colors text-xs"
+          disabled={isPending}
+          className="flex items-center gap-1 px-2.5 py-1 rounded border border-white/30 hover:bg-white/10 disabled:opacity-50 transition-colors text-xs"
         >
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw className={`h-3.5 w-3.5 ${isPending ? 'animate-spin' : ''}`} />
           Retry ({retryableIds.length})
         </button>
       )}
       {cancellableIds.length > 0 && (
         <button
           onClick={() => void handleBulkCancel()}
-          className="flex items-center gap-1 px-2.5 py-1 rounded bg-red-600 hover:bg-red-700 transition-colors text-xs"
+          disabled={isPending}
+          className="flex items-center gap-1 px-2.5 py-1 rounded bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors text-xs"
         >
           <XCircle className="h-3.5 w-3.5" />
           Cancel ({cancellableIds.length})

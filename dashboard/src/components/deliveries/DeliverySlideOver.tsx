@@ -207,9 +207,9 @@ export function DeliverySlideOver({ deliveryId, onClose }: Props) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 bg-black/30 z-40" />
         <Dialog.Content
-          aria-label="Delivery details"
-          className="fixed right-0 inset-y-0 z-50 w-full max-w-lg bg-white shadow-xl flex flex-col data-[state=open]:[animation:slideInRight_200ms_ease-out] data-[state=closed]:[animation:slideOutRight_150ms_ease-in]"
+          className="fixed right-0 inset-y-0 z-50 w-full max-w-lg bg-white shadow-xl flex flex-col data-[state=open]:[animation:slide-in-right_200ms_ease-out] data-[state=closed]:[animation:slide-out-right_150ms_ease-in]"
         >
+          <Dialog.Title className="sr-only">Delivery details</Dialog.Title>
           {deliveryId && <SlideOverContent deliveryId={deliveryId} onClose={onClose} />}
         </Dialog.Content>
       </Dialog.Portal>

@@ -27,12 +27,12 @@
   100% { transform: translateX(350%); }
 }
 
-@keyframes slideInRight {
+@keyframes slide-in-right {
   from { transform: translateX(100%); }
   to   { transform: translateX(0); }
 }
 
-@keyframes slideOutRight {
+@keyframes slide-out-right {
   from { transform: translateX(0); }
   to   { transform: translateX(100%); }
 }
