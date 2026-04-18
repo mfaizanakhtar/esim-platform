@@ -1679,7 +1679,9 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, embedded: 1 });
+      expect(res.json()).toMatchObject({ ok: true, background: 'embedding_and_parsing' });
+      // Background task — let microtasks flush
+      await new Promise((r) => setTimeout(r, 50));
       expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
     });
 
@@ -1747,6 +1749,8 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true, provider: 'firoam' });
+      // Background task — let microtasks flush
+      await new Promise((r) => setTimeout(r, 50));
       expect(vi.mocked(prisma.$executeRaw)).toHaveBeenCalled();
     });
 
@@ -1769,7 +1773,8 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, embedded: 1 });
+      expect(res.json()).toMatchObject({ ok: true, background: 'embedding_and_parsing' });
+      await new Promise((r) => setTimeout(r, 50));
       expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
     });
 
@@ -1821,7 +1826,8 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true, provider: 'tgt' });
-      // parsedJson was stored
+      // Background task — let microtasks flush
+      await new Promise((r) => setTimeout(r, 50));
       expect(vi.mocked(prisma.$executeRaw)).toHaveBeenCalled();
     });
   });

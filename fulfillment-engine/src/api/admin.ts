@@ -2582,7 +2582,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
 
     // ── FiRoam sync ──────────────────────────────────────────────────────────
     if (provider === 'firoam') {
-      const maxSkus = Math.min(Math.max(body.maxSkus || 500, 1), 2000);
+      const maxSkus = Math.min(Math.max(body.maxSkus || 2000, 1), 2000);
       const client = new FiRoamClient();
 
       const skuResult = await client.getSkus();
@@ -2692,76 +2692,81 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           AND "isActive" = true
       `;
 
-      let embedded = 0;
-      const OPENAI_API_KEY_SYNC = process.env.OPENAI_API_KEY;
-      if (OPENAI_API_KEY_SYNC && upsertedIds.length > 0) {
-        try {
-          const entries = (await providerSkuCatalog.findMany({
-            where: { id: { in: upsertedIds } },
-            select: { id: true, productName: true, region: true, dataAmount: true, validity: true },
-          })) as Array<{
-            id: string;
-            productName: string;
-            region: string | null;
-            dataAmount: string | null;
-            validity: string | null;
-          }>;
-          if (entries.length > 0) {
-            const openaiSync = new OpenAI({ apiKey: OPENAI_API_KEY_SYNC });
-            const texts = entries.map(buildCatalogText);
-            const vectors = await embedBatch(texts, openaiSync);
-            await Promise.all(entries.map((e, i) => storeEmbedding(e.id, vectors[i])));
-            embedded = entries.length;
-            logger.info({ count: entries.length }, 'Stored catalog embeddings after firoam sync');
+      // Fire-and-forget: embedding + parsing runs in the background
+      const hasOpenAiKey = !!process.env.OPENAI_API_KEY;
+      if (hasOpenAiKey && upsertedIds.length > 0) {
+        void (async () => {
+          try {
+            const entries = (await providerSkuCatalog.findMany({
+              where: { id: { in: upsertedIds } },
+              select: {
+                id: true,
+                productName: true,
+                region: true,
+                dataAmount: true,
+                validity: true,
+              },
+            })) as Array<{
+              id: string;
+              productName: string;
+              region: string | null;
+              dataAmount: string | null;
+              validity: string | null;
+            }>;
+            if (entries.length > 0) {
+              const openaiSync = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+              const texts = entries.map(buildCatalogText);
+              const vectors = await embedBatch(texts, openaiSync);
+              await Promise.all(entries.map((e, i) => storeEmbedding(e.id, vectors[i])));
+              logger.info({ count: entries.length }, 'Stored catalog embeddings after firoam sync');
+            }
+          } catch (err) {
+            logger.warn({ err }, 'Embedding failed after firoam sync — run backfill to retry');
           }
-        } catch (err) {
-          logger.warn({ err }, 'Embedding failed after firoam sync — run backfill to retry');
-        }
-      }
 
-      let firoamParsed = 0;
-      if (OPENAI_API_KEY_SYNC && upsertedIds.length > 0) {
-        try {
-          const unparsedEntries = (await providerSkuCatalog.findMany({
-            where: { id: { in: upsertedIds } },
-            select: {
-              id: true,
-              productName: true,
-              region: true,
-              countryCodes: true,
-              dataAmount: true,
-              validity: true,
-            },
-          })) as Array<{
-            id: string;
-            productName: string;
-            region: string | null;
-            countryCodes: unknown;
-            dataAmount: string | null;
-            validity: string | null;
-          }>;
-          const openaiParse = new OpenAI({ apiKey: OPENAI_API_KEY_SYNC });
-          const PARSE_BATCH = 20;
-          for (let i = 0; i < unparsedEntries.length; i += PARSE_BATCH) {
-            const batch = unparsedEntries.slice(i, i + PARSE_BATCH);
-            await Promise.all(
-              batch.map(async (e) => {
-                const parsed = await parseCatalogEntry(e, openaiParse);
-                if (parsed) {
-                  await prisma.$executeRaw`
-                    UPDATE "ProviderSkuCatalog"
-                    SET "parsedJson" = ${JSON.stringify(parsed)}::jsonb
-                    WHERE id = ${e.id}
-                  `;
-                  firoamParsed += 1;
-                }
-              }),
-            );
+          try {
+            const unparsedEntries = (await providerSkuCatalog.findMany({
+              where: { id: { in: upsertedIds } },
+              select: {
+                id: true,
+                productName: true,
+                region: true,
+                countryCodes: true,
+                dataAmount: true,
+                validity: true,
+              },
+            })) as Array<{
+              id: string;
+              productName: string;
+              region: string | null;
+              countryCodes: unknown;
+              dataAmount: string | null;
+              validity: string | null;
+            }>;
+            const openaiParse = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+            const PARSE_BATCH = 20;
+            let firoamParsed = 0;
+            for (let i = 0; i < unparsedEntries.length; i += PARSE_BATCH) {
+              const batch = unparsedEntries.slice(i, i + PARSE_BATCH);
+              await Promise.all(
+                batch.map(async (e) => {
+                  const parsed = await parseCatalogEntry(e, openaiParse);
+                  if (parsed) {
+                    await prisma.$executeRaw`
+                      UPDATE "ProviderSkuCatalog"
+                      SET "parsedJson" = ${JSON.stringify(parsed)}::jsonb
+                      WHERE id = ${e.id}
+                    `;
+                    firoamParsed += 1;
+                  }
+                }),
+              );
+            }
+            logger.info({ count: firoamParsed }, 'Parsed catalog entries after firoam sync');
+          } catch (err) {
+            logger.warn({ err }, 'Parsing failed after firoam sync — run parse-all to retry');
           }
-          logger.info({ count: firoamParsed }, 'Parsed catalog entries after firoam sync');
-        } catch (err) {
-          logger.warn({ err }, 'Parsing failed after firoam sync — run parse-all to retry');
-        }
+        })();
       }
 
       return reply.send({
@@ -2771,14 +2776,13 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         processedPackages,
         totalSkus: skuResult.skus.length,
         skipsNoApiCode,
-        embedded,
-        parsed: firoamParsed,
         deactivated,
+        background: hasOpenAiKey && upsertedIds.length > 0 ? 'embedding_and_parsing' : 'none',
       });
     }
 
     const pageSize = Math.min(Math.max(body.pageSize || 100, 1), 100);
-    const maxPages = Math.min(Math.max(body.maxPages || 10, 1), 200);
+    const maxPages = Math.min(Math.max(body.maxPages || 200, 1), 300);
     const lang = body.lang || 'en';
 
     const client = new TgtClient();
@@ -2872,77 +2876,81 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         AND "isActive" = true
     `;
 
-    let tgtEmbedded = 0;
-    const OPENAI_API_KEY_TGT = process.env.OPENAI_API_KEY;
-    if (OPENAI_API_KEY_TGT && tgtUpsertedIds.length > 0) {
-      try {
-        const tgtEntries = (await providerSkuCatalog.findMany({
-          where: { id: { in: tgtUpsertedIds } },
-          select: { id: true, productName: true, region: true, dataAmount: true, validity: true },
-        })) as Array<{
-          id: string;
-          productName: string;
-          region: string | null;
-          dataAmount: string | null;
-          validity: string | null;
-        }>;
-        if (tgtEntries.length > 0) {
-          const openaiTgt = new OpenAI({ apiKey: OPENAI_API_KEY_TGT });
-          const tgtTexts = tgtEntries.map(buildCatalogText);
-          const tgtVectors = await embedBatch(tgtTexts, openaiTgt);
-          await Promise.all(tgtEntries.map((e, i) => storeEmbedding(e.id, tgtVectors[i])));
-          tgtEmbedded = tgtEntries.length;
-          logger.info({ count: tgtEntries.length }, 'Stored catalog embeddings after tgt sync');
+    // Fire-and-forget: embedding + parsing runs in the background
+    const hasOpenAiKeyTgt = !!process.env.OPENAI_API_KEY;
+    if (hasOpenAiKeyTgt && tgtUpsertedIds.length > 0) {
+      void (async () => {
+        try {
+          const tgtEntries = (await providerSkuCatalog.findMany({
+            where: { id: { in: tgtUpsertedIds } },
+            select: {
+              id: true,
+              productName: true,
+              region: true,
+              dataAmount: true,
+              validity: true,
+            },
+          })) as Array<{
+            id: string;
+            productName: string;
+            region: string | null;
+            dataAmount: string | null;
+            validity: string | null;
+          }>;
+          if (tgtEntries.length > 0) {
+            const openaiTgt = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+            const tgtTexts = tgtEntries.map(buildCatalogText);
+            const tgtVectors = await embedBatch(tgtTexts, openaiTgt);
+            await Promise.all(tgtEntries.map((e, i) => storeEmbedding(e.id, tgtVectors[i])));
+            logger.info({ count: tgtEntries.length }, 'Stored catalog embeddings after tgt sync');
+          }
+        } catch (err) {
+          logger.warn({ err }, 'Embedding failed after tgt sync — run backfill to retry');
         }
-      } catch (err) {
-        logger.warn({ err }, 'Embedding failed after tgt sync — run backfill to retry');
-      }
-    }
 
-    let tgtParsed = 0;
-    const OPENAI_API_KEY_TGT_PARSE = process.env.OPENAI_API_KEY;
-    if (OPENAI_API_KEY_TGT_PARSE && tgtUpsertedIds.length > 0) {
-      try {
-        const unparsedTgt = (await providerSkuCatalog.findMany({
-          where: { id: { in: tgtUpsertedIds } },
-          select: {
-            id: true,
-            productName: true,
-            region: true,
-            countryCodes: true,
-            dataAmount: true,
-            validity: true,
-          },
-        })) as Array<{
-          id: string;
-          productName: string;
-          region: string | null;
-          countryCodes: unknown;
-          dataAmount: string | null;
-          validity: string | null;
-        }>;
-        const openaiTgtParse = new OpenAI({ apiKey: OPENAI_API_KEY_TGT_PARSE });
-        const PARSE_BATCH = 20;
-        for (let i = 0; i < unparsedTgt.length; i += PARSE_BATCH) {
-          const batch = unparsedTgt.slice(i, i + PARSE_BATCH);
-          await Promise.all(
-            batch.map(async (e) => {
-              const parsed = await parseCatalogEntry(e, openaiTgtParse);
-              if (parsed) {
-                await prisma.$executeRaw`
-                  UPDATE "ProviderSkuCatalog"
-                  SET "parsedJson" = ${JSON.stringify(parsed)}::jsonb
-                  WHERE id = ${e.id}
-                `;
-                tgtParsed += 1;
-              }
-            }),
-          );
+        try {
+          const unparsedTgt = (await providerSkuCatalog.findMany({
+            where: { id: { in: tgtUpsertedIds } },
+            select: {
+              id: true,
+              productName: true,
+              region: true,
+              countryCodes: true,
+              dataAmount: true,
+              validity: true,
+            },
+          })) as Array<{
+            id: string;
+            productName: string;
+            region: string | null;
+            countryCodes: unknown;
+            dataAmount: string | null;
+            validity: string | null;
+          }>;
+          const openaiTgtParse = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+          const PARSE_BATCH = 20;
+          let tgtParsed = 0;
+          for (let i = 0; i < unparsedTgt.length; i += PARSE_BATCH) {
+            const batch = unparsedTgt.slice(i, i + PARSE_BATCH);
+            await Promise.all(
+              batch.map(async (e) => {
+                const parsed = await parseCatalogEntry(e, openaiTgtParse);
+                if (parsed) {
+                  await prisma.$executeRaw`
+                    UPDATE "ProviderSkuCatalog"
+                    SET "parsedJson" = ${JSON.stringify(parsed)}::jsonb
+                    WHERE id = ${e.id}
+                  `;
+                  tgtParsed += 1;
+                }
+              }),
+            );
+          }
+          logger.info({ count: tgtParsed }, 'Parsed catalog entries after tgt sync');
+        } catch (err) {
+          logger.warn({ err }, 'Parsing failed after tgt sync — run parse-all to retry');
         }
-        logger.info({ count: tgtParsed }, 'Parsed catalog entries after tgt sync');
-      } catch (err) {
-        logger.warn({ err }, 'Parsing failed after tgt sync — run parse-all to retry');
-      }
+      })();
     }
 
     return reply.send({
@@ -2951,9 +2959,8 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       processed,
       total,
       pages: pageNum,
-      embedded: tgtEmbedded,
-      parsed: tgtParsed,
       deactivated: tgtDeactivated,
+      background: hasOpenAiKeyTgt && tgtUpsertedIds.length > 0 ? 'embedding_and_parsing' : 'none',
     });
   });
 
