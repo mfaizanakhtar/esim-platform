@@ -4496,9 +4496,12 @@ describe('Admin Routes', () => {
           price: '8.00',
         },
       ]);
-      // inactiveOnly: only ESIM-EU-1GB-30D has an inactive catalog mapping
+      // inactiveOnly: EU has stale firoam + duplicate entry (dedup branch), JP is unknown SKU (variant-not-found branch)
       vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
-        { shopifySku: 'ESIM-EU-1GB-30D' } as never,
+        { shopifySku: 'ESIM-EU-1GB-30D', provider: 'firoam' } as never,
+        { shopifySku: 'ESIM-EU-1GB-30D', provider: 'firoam' } as never, // duplicate → seen.has() true
+        { shopifySku: 'ESIM-EU-1GB-30D', provider: 'tgt' } as never, // same sku, different provider
+        { shopifySku: 'ESIM-MISSING', provider: 'firoam' } as never, // not in shopify list → skipped
       ]);
       vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
       prismaAiMapJobStructured.update.mockResolvedValue({});
