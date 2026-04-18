@@ -2582,7 +2582,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
 
     // ── FiRoam sync ──────────────────────────────────────────────────────────
     if (provider === 'firoam') {
-      const maxSkus = Math.min(Math.max(body.maxSkus || 2000, 1), 2000);
+      const maxSkus = Math.min(Math.max(body.maxSkus || 500, 1), 2000);
       const client = new FiRoamClient();
 
       const skuResult = await client.getSkus();
@@ -2782,7 +2782,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     }
 
     const pageSize = Math.min(Math.max(body.pageSize || 100, 1), 100);
-    const maxPages = Math.min(Math.max(body.maxPages || 200, 1), 300);
+    const maxPages = Math.min(Math.max(body.maxPages || 20, 1), 300);
     const lang = body.lang || 'en';
 
     const client = new TgtClient();
