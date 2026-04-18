@@ -582,6 +582,14 @@ export function SkuMappings() {
                               <span className="inline-block px-2 py-0.5 bg-muted border rounded-full text-xs capitalize">
                                 {m.provider}
                               </span>
+                              {m.catalogEntry && !m.catalogEntry.isActive && (
+                                <span
+                                  className="inline-block px-1.5 py-0.5 bg-orange-100 text-orange-700 border border-orange-200 rounded text-xs font-medium"
+                                  title="This catalog entry was deactivated (removed from provider catalog). Consider remapping."
+                                >
+                                  Catalog inactive
+                                </span>
+                              )}
                               {m.catalogEntry?.netPrice && (
                                 <span className="text-xs text-muted-foreground font-mono">
                                   {m.catalogEntry.netPrice}{m.catalogEntry.currency ? ` ${m.catalogEntry.currency}` : ''}

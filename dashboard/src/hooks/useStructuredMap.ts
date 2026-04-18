@@ -13,6 +13,7 @@ type JobProgress = {
 type StartParams = {
   provider?: string;
   unmappedOnly?: boolean;
+  inactiveOnly?: boolean;
   relaxOptions?: { relaxValidity?: boolean; relaxData?: boolean; relaxRegion?: boolean };
 };
 
@@ -204,6 +205,7 @@ export function useStructuredMap() {
           {
             provider: params.provider || undefined,
             unmappedOnly: params.unmappedOnly !== false,
+            ...(params.inactiveOnly ? { inactiveOnly: true } : {}),
             ...(params.relaxOptions ? { relaxOptions: params.relaxOptions } : {}),
           },
         );

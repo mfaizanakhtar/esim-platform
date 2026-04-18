@@ -2314,6 +2314,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     params: {
       provider?: string;
       unmappedOnly?: boolean;
+      inactiveOnly?: boolean;
       relaxOptions?: StructuredRelaxOptions;
     },
   ): Promise<void> {
@@ -2331,32 +2332,70 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         throw new Error('shopify_unavailable');
       }
 
-      // Filter unmapped if requested
-      let skus = shopifySkuList;
-      if (params.unmappedOnly !== false) {
+      // Build the list of (variant, matchProvider) tasks to process.
+      // inactiveOnly: one task per stale (shopifySku, provider) pair so matching
+      // stays scoped to the provider that owns the stale mapping.
+      interface MatchTask {
+        variant: AiMapInputSku;
+        matchProvider: string | undefined;
+      }
+      let tasks: MatchTask[];
+      let skus: AiMapInputSku[];
+
+      if (params.inactiveOnly) {
         const where = params.provider ? { provider: params.provider } : {};
-        const mappedSkus = await prisma.providerSkuMapping.findMany({
-          select: { shopifySku: true },
-          distinct: ['shopifySku'],
-          where,
+        const inactiveMapped = await prisma.providerSkuMapping.findMany({
+          select: { shopifySku: true, provider: true },
+          where: { ...where, catalogEntry: { isActive: false } },
         });
-        const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
-        skus = shopifySkuList.filter((v) => !mappedSet.has(v.sku));
+        // Dedupe (shopifySku, provider) pairs then build tasks
+        const seen = new Set<string>();
+        tasks = [];
+        for (const { shopifySku, provider: staleProvider } of inactiveMapped) {
+          const key = `${shopifySku}::${staleProvider}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const variant = shopifySkuList.find((v) => v.sku === shopifySku);
+          if (variant) tasks.push({ variant, matchProvider: staleProvider });
+        }
+        // Unique variants for capturedInputSkus
+        const variantSeen = new Set<string>();
+        skus = [];
+        for (const { variant } of tasks) {
+          if (!variantSeen.has(variant.sku)) {
+            variantSeen.add(variant.sku);
+            skus.push(variant);
+          }
+        }
+      } else {
+        if (params.unmappedOnly !== false) {
+          const where = params.provider ? { provider: params.provider } : {};
+          const mappedSkus = await prisma.providerSkuMapping.findMany({
+            select: { shopifySku: true },
+            distinct: ['shopifySku'],
+            where,
+          });
+          const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
+          skus = shopifySkuList.filter((v) => !mappedSet.has(v.sku));
+        } else {
+          skus = shopifySkuList;
+        }
+        tasks = skus.map((variant) => ({ variant, matchProvider: params.provider }));
       }
 
       capturedInputSkus.push(...skus);
 
-      const totalBatches = skus.length; // one "batch" per SKU for progress granularity
+      const totalBatches = tasks.length; // one "batch" per task for progress granularity
       await prisma.aiMapJob.update({
         where: { id: jobId },
         data: { totalBatches },
       });
 
-      for (let i = 0; i < skus.length; i++) {
-        const variant = skus[i];
+      for (let i = 0; i < tasks.length; i++) {
+        const { variant, matchProvider } = tasks[i];
         const drafts = await findStructuredMatches(
           variant.sku,
-          params.provider,
+          matchProvider,
           params.relaxOptions ?? {},
         );
         allDrafts.push(...drafts);
@@ -2414,6 +2453,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       const body = (request.body || {}) as {
         provider?: string;
         unmappedOnly?: boolean;
+        inactiveOnly?: boolean;
         relaxOptions?: StructuredRelaxOptions;
       };
 
@@ -2428,6 +2468,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       void runStructuredMapJobAsync(job.id, {
         provider: body.provider,
         unmappedOnly: body.unmappedOnly,
+        inactiveOnly: body.inactiveOnly,
         relaxOptions: body.relaxOptions,
       });
 
@@ -2557,6 +2598,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       let processedPackages = 0;
       let skipsNoApiCode = 0;
       const upsertedIds: string[] = [];
+      const syncStartedAt = new Date();
 
       for (const sku of skus) {
         const pkgResult = await client.getPackages(String(sku.skuid));
@@ -2642,6 +2684,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         }
       }
 
+      const deactivated = await prisma.$executeRaw`
+        UPDATE "ProviderSkuCatalog"
+        SET "isActive" = false
+        WHERE provider = 'firoam'
+          AND "lastSyncedAt" < ${syncStartedAt}
+          AND "isActive" = true
+      `;
+
       let embedded = 0;
       const OPENAI_API_KEY_SYNC = process.env.OPENAI_API_KEY;
       if (OPENAI_API_KEY_SYNC && upsertedIds.length > 0) {
@@ -2723,6 +2773,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         skipsNoApiCode,
         embedded,
         parsed: firoamParsed,
+        deactivated,
       });
     }
 
@@ -2735,6 +2786,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     let processed = 0;
     let total = 0;
     const tgtUpsertedIds: string[] = [];
+    const tgtSyncStartedAt = new Date();
 
     while (pageNum <= maxPages) {
       const result = await client.listProducts({ pageNum, pageSize, lang });
@@ -2811,6 +2863,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       if (result.products.length < pageSize || processed >= total) break;
       pageNum += 1;
     }
+
+    const tgtDeactivated = await prisma.$executeRaw`
+      UPDATE "ProviderSkuCatalog"
+      SET "isActive" = false
+      WHERE provider = 'tgt'
+        AND "lastSyncedAt" < ${tgtSyncStartedAt}
+        AND "isActive" = true
+    `;
 
     let tgtEmbedded = 0;
     const OPENAI_API_KEY_TGT = process.env.OPENAI_API_KEY;
@@ -2893,6 +2953,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       pages: pageNum,
       embedded: tgtEmbedded,
       parsed: tgtParsed,
+      deactivated: tgtDeactivated,
     });
   });
 
