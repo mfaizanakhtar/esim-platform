@@ -2332,42 +2332,70 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         throw new Error('shopify_unavailable');
       }
 
-      // Filter SKUs based on mode
-      let skus = shopifySkuList;
+      // Build the list of (variant, matchProvider) tasks to process.
+      // inactiveOnly: one task per stale (shopifySku, provider) pair so matching
+      // stays scoped to the provider that owns the stale mapping.
+      interface MatchTask {
+        variant: AiMapInputSku;
+        matchProvider: string | undefined;
+      }
+      let tasks: MatchTask[];
+      let skus: AiMapInputSku[];
+
       if (params.inactiveOnly) {
-        // Only SKUs that have at least one mapping pointing to an inactive catalog entry
         const where = params.provider ? { provider: params.provider } : {};
         const inactiveMapped = await prisma.providerSkuMapping.findMany({
-          select: { shopifySku: true },
-          distinct: ['shopifySku'],
+          select: { shopifySku: true, provider: true },
           where: { ...where, catalogEntry: { isActive: false } },
         });
-        const inactiveSet = new Set(inactiveMapped.map((m) => m.shopifySku));
-        skus = shopifySkuList.filter((v) => inactiveSet.has(v.sku));
-      } else if (params.unmappedOnly !== false) {
-        const where = params.provider ? { provider: params.provider } : {};
-        const mappedSkus = await prisma.providerSkuMapping.findMany({
-          select: { shopifySku: true },
-          distinct: ['shopifySku'],
-          where,
-        });
-        const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
-        skus = shopifySkuList.filter((v) => !mappedSet.has(v.sku));
+        // Dedupe (shopifySku, provider) pairs then build tasks
+        const seen = new Set<string>();
+        tasks = [];
+        for (const { shopifySku, provider: staleProvider } of inactiveMapped) {
+          const key = `${shopifySku}::${staleProvider}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const variant = shopifySkuList.find((v) => v.sku === shopifySku);
+          if (variant) tasks.push({ variant, matchProvider: staleProvider });
+        }
+        // Unique variants for capturedInputSkus
+        const variantSeen = new Set<string>();
+        skus = [];
+        for (const { variant } of tasks) {
+          if (!variantSeen.has(variant.sku)) {
+            variantSeen.add(variant.sku);
+            skus.push(variant);
+          }
+        }
+      } else {
+        if (params.unmappedOnly !== false) {
+          const where = params.provider ? { provider: params.provider } : {};
+          const mappedSkus = await prisma.providerSkuMapping.findMany({
+            select: { shopifySku: true },
+            distinct: ['shopifySku'],
+            where,
+          });
+          const mappedSet = new Set(mappedSkus.map((m) => m.shopifySku));
+          skus = shopifySkuList.filter((v) => !mappedSet.has(v.sku));
+        } else {
+          skus = shopifySkuList;
+        }
+        tasks = skus.map((variant) => ({ variant, matchProvider: params.provider }));
       }
 
       capturedInputSkus.push(...skus);
 
-      const totalBatches = skus.length; // one "batch" per SKU for progress granularity
+      const totalBatches = tasks.length; // one "batch" per task for progress granularity
       await prisma.aiMapJob.update({
         where: { id: jobId },
         data: { totalBatches },
       });
 
-      for (let i = 0; i < skus.length; i++) {
-        const variant = skus[i];
+      for (let i = 0; i < tasks.length; i++) {
+        const { variant, matchProvider } = tasks[i];
         const drafts = await findStructuredMatches(
           variant.sku,
-          params.provider,
+          matchProvider,
           params.relaxOptions ?? {},
         );
         allDrafts.push(...drafts);

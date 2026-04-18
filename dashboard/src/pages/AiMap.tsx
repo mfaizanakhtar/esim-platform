@@ -170,7 +170,7 @@ export function AiMap() {
       await structuredJob.start({
         provider: providerFilter || undefined,
         unmappedOnly: forceReplace ? false : unmappedOnly,
-        inactiveOnly: !forceReplace && inactiveOnly,
+        inactiveOnly,
         relaxOptions: {
           relaxData: !requireData,
           relaxValidity: !requireValidity,
@@ -248,7 +248,7 @@ export function AiMap() {
       };
     });
     bulkCreate.mutate(
-      { inputs, forceReplace },
+      { inputs, forceReplace: forceReplace || (mode === 'structured' && inactiveOnly) },
       {
         onSuccess: (result) => {
           setBulkResult({
@@ -392,9 +392,8 @@ export function AiMap() {
                   type="checkbox"
                   checked={inactiveOnly}
                   onChange={(e) => setInactiveOnly(e.target.checked)}
-                  disabled={forceReplace}
                 />
-                <label htmlFor="inactiveOnly" className={`text-sm font-medium ${forceReplace ? 'text-muted-foreground' : ''}`}>
+                <label htmlFor="inactiveOnly" className="text-sm font-medium">
                   Only re-map SKUs with inactive catalog entries
                 </label>
               </div>
