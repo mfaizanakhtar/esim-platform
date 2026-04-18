@@ -4477,6 +4477,39 @@ describe('Admin Routes', () => {
         { timeout: 2000 },
       );
     });
+
+    it('filters to SKUs with inactive catalog entries when inactiveOnly=true', async () => {
+      prismaAiMapJobStructured.create.mockResolvedValue({ id: 'struct-job-inactive-1' });
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'ESIM-EU-1GB-30D', title: 'EU 1GB', productTitle: 'EU Plan', variantId: '1', price: '5.00' },
+        { sku: 'ESIM-JP-2GB-30D', title: 'JP 2GB', productTitle: 'JP Plan', variantId: '2', price: '8.00' },
+      ]);
+      // inactiveOnly: only ESIM-EU-1GB-30D has an inactive catalog mapping
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
+        { shopifySku: 'ESIM-EU-1GB-30D' } as never,
+      ]);
+      vi.mocked(prisma.$queryRaw).mockResolvedValue([]);
+      prismaAiMapJobStructured.update.mockResolvedValue({});
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-map/jobs',
+        headers: JSON_HEADERS,
+        payload: { inactiveOnly: true },
+      });
+
+      expect(res.statusCode).toBe(201);
+
+      await vi.waitFor(
+        () => {
+          const finalCall = prismaAiMapJobStructured.update.mock.calls.find(
+            (c) => (c[0] as { data: { status?: string } }).data?.status === 'done',
+          );
+          expect(finalCall).toBeDefined();
+        },
+        { timeout: 2000 },
+      );
+    });
   });
 
   // ---------------------------------------------------------------------------
