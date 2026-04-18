@@ -1679,8 +1679,13 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, embedded: 1 });
-      expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
+      expect(res.json()).toMatchObject({ ok: true, background: 'embedding_and_parsing' });
+      await vi.waitFor(
+        () => {
+          expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
+        },
+        { timeout: 2000 },
+      );
     });
 
     it('stores parsedJson after FiRoam sync when parseCatalogEntry returns a result', async () => {
@@ -1747,7 +1752,12 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true, provider: 'firoam' });
-      expect(vi.mocked(prisma.$executeRaw)).toHaveBeenCalled();
+      await vi.waitFor(
+        () => {
+          expect(vi.mocked(prisma.$executeRaw)).toHaveBeenCalled();
+        },
+        { timeout: 2000 },
+      );
     });
 
     it('stores embeddings after TGT sync when entries are returned', async () => {
@@ -1769,7 +1779,8 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(res.json()).toMatchObject({ ok: true, embedded: 1 });
+      expect(res.json()).toMatchObject({ ok: true, background: 'embedding_and_parsing' });
+      await new Promise((r) => setTimeout(r, 50));
       expect(adminMocks.mockStoreEmbedding).toHaveBeenCalledTimes(1);
     });
 
@@ -1821,8 +1832,12 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true, provider: 'tgt' });
-      // parsedJson was stored
-      expect(vi.mocked(prisma.$executeRaw)).toHaveBeenCalled();
+      await vi.waitFor(
+        () => {
+          expect(vi.mocked(prisma.$executeRaw)).toHaveBeenCalled();
+        },
+        { timeout: 2000 },
+      );
     });
   });
 
