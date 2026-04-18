@@ -2314,6 +2314,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     params: {
       provider?: string;
       unmappedOnly?: boolean;
+      inactiveOnly?: boolean;
       relaxOptions?: StructuredRelaxOptions;
     },
   ): Promise<void> {
@@ -2331,9 +2332,19 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         throw new Error('shopify_unavailable');
       }
 
-      // Filter unmapped if requested
+      // Filter SKUs based on mode
       let skus = shopifySkuList;
-      if (params.unmappedOnly !== false) {
+      if (params.inactiveOnly) {
+        // Only SKUs that have at least one mapping pointing to an inactive catalog entry
+        const where = params.provider ? { provider: params.provider } : {};
+        const inactiveMapped = await prisma.providerSkuMapping.findMany({
+          select: { shopifySku: true },
+          distinct: ['shopifySku'],
+          where: { ...where, catalogEntry: { isActive: false } },
+        });
+        const inactiveSet = new Set(inactiveMapped.map((m) => m.shopifySku));
+        skus = shopifySkuList.filter((v) => inactiveSet.has(v.sku));
+      } else if (params.unmappedOnly !== false) {
         const where = params.provider ? { provider: params.provider } : {};
         const mappedSkus = await prisma.providerSkuMapping.findMany({
           select: { shopifySku: true },
@@ -2414,6 +2425,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       const body = (request.body || {}) as {
         provider?: string;
         unmappedOnly?: boolean;
+        inactiveOnly?: boolean;
         relaxOptions?: StructuredRelaxOptions;
       };
 
@@ -2428,6 +2440,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       void runStructuredMapJobAsync(job.id, {
         provider: body.provider,
         unmappedOnly: body.unmappedOnly,
+        inactiveOnly: body.inactiveOnly,
         relaxOptions: body.relaxOptions,
       });
 
@@ -2557,6 +2570,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       let processedPackages = 0;
       let skipsNoApiCode = 0;
       const upsertedIds: string[] = [];
+      const syncStartedAt = new Date();
 
       for (const sku of skus) {
         const pkgResult = await client.getPackages(String(sku.skuid));
@@ -2642,6 +2656,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         }
       }
 
+      const deactivated = await prisma.$executeRaw`
+        UPDATE "ProviderSkuCatalog"
+        SET "isActive" = false
+        WHERE provider = 'firoam'
+          AND "lastSyncedAt" < ${syncStartedAt}
+          AND "isActive" = true
+      `;
+
       let embedded = 0;
       const OPENAI_API_KEY_SYNC = process.env.OPENAI_API_KEY;
       if (OPENAI_API_KEY_SYNC && upsertedIds.length > 0) {
@@ -2723,6 +2745,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         skipsNoApiCode,
         embedded,
         parsed: firoamParsed,
+        deactivated,
       });
     }
 
@@ -2735,6 +2758,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     let processed = 0;
     let total = 0;
     const tgtUpsertedIds: string[] = [];
+    const tgtSyncStartedAt = new Date();
 
     while (pageNum <= maxPages) {
       const result = await client.listProducts({ pageNum, pageSize, lang });
@@ -2811,6 +2835,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       if (result.products.length < pageSize || processed >= total) break;
       pageNum += 1;
     }
+
+    const tgtDeactivated = await prisma.$executeRaw`
+      UPDATE "ProviderSkuCatalog"
+      SET "isActive" = false
+      WHERE provider = 'tgt'
+        AND "lastSyncedAt" < ${tgtSyncStartedAt}
+        AND "isActive" = true
+    `;
 
     let tgtEmbedded = 0;
     const OPENAI_API_KEY_TGT = process.env.OPENAI_API_KEY;
@@ -2893,6 +2925,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       pages: pageNum,
       embedded: tgtEmbedded,
       parsed: tgtParsed,
+      deactivated: tgtDeactivated,
     });
   });
 

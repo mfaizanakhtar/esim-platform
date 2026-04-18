@@ -58,6 +58,7 @@ export function AiMap() {
 
   const providerFilter = searchParams.get('provider') ?? '';
   const unmappedOnly = searchParams.get('unmapped') !== 'false';
+  const inactiveOnly = searchParams.get('inactive') === 'true';
   const [mode, setMode] = useState<'ai' | 'structured'>('ai');
   const [forceReplace, setForceReplace] = useState(false);
   const [requireData, setRequireData] = useState(true);
@@ -78,6 +79,15 @@ export function AiMap() {
       const next = new URLSearchParams(prev);
       if (!value) next.set('unmapped', 'false');
       else next.delete('unmapped');
+      return next;
+    });
+  }
+
+  function setInactiveOnly(value: boolean) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set('inactive', 'true');
+      else next.delete('inactive');
       return next;
     });
   }
@@ -160,6 +170,7 @@ export function AiMap() {
       await structuredJob.start({
         provider: providerFilter || undefined,
         unmappedOnly: forceReplace ? false : unmappedOnly,
+        inactiveOnly: !forceReplace && inactiveOnly,
         relaxOptions: {
           relaxData: !requireData,
           relaxValidity: !requireValidity,
@@ -371,6 +382,27 @@ export function AiMap() {
               <p className="text-xs text-muted-foreground">
                 SKUs with existing {providerLabel(providerFilter)} mappings will be skipped, but SKUs
                 mapped only to other providers will still be included.
+              </p>
+            )}
+
+            {mode === 'structured' && (
+              <div className="flex items-center gap-2">
+                <input
+                  id="inactiveOnly"
+                  type="checkbox"
+                  checked={inactiveOnly}
+                  onChange={(e) => setInactiveOnly(e.target.checked)}
+                  disabled={forceReplace}
+                />
+                <label htmlFor="inactiveOnly" className={`text-sm font-medium ${forceReplace ? 'text-muted-foreground' : ''}`}>
+                  Only re-map SKUs with inactive catalog entries
+                </label>
+              </div>
+            )}
+            {mode === 'structured' && inactiveOnly && !forceReplace && (
+              <p className="text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded px-3 py-2">
+                Only SKUs whose current mapping points to a deactivated catalog entry will be
+                processed. Useful after a catalog sync that removed products.
               </p>
             )}
 
