@@ -24,7 +24,7 @@ function SyncButton({ provider }: { provider: string }) {
 
   function handleSync() {
     syncMutation.mutate(
-      { provider, maxSkus: 500, pageSize: 100, maxPages: 20 },
+      { provider },
       {
         onSuccess: (data) => {
           const count = data.processedPackages ?? data.processed ?? 0;
