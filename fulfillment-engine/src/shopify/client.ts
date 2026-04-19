@@ -1074,7 +1074,10 @@ export class ShopifyClient {
     );
     const existingProduct = existingResp.data?.data?.products?.nodes?.[0];
     if (existingProduct?.id) {
-      logger.info({ handle: params.handle, id: existingProduct.id }, 'Deleting existing product before recreate');
+      logger.info(
+        { handle: params.handle, id: existingProduct.id },
+        'Deleting existing product before recreate',
+      );
       await this.deleteProduct(existingProduct.id);
     }
 
