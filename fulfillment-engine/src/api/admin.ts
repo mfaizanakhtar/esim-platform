@@ -52,6 +52,7 @@ export default function adminRoutes(
     id: string;
     provider: string;
     productCode: string;
+    productType: string | null;
     skuId: string;
     skuName: string | null;
     productName: string;
@@ -713,7 +714,7 @@ export default function adminRoutes(
         const requestedPackageType =
           item.packageType === 'daypass' || item.packageType === 'fixed'
             ? (item.packageType as 'daypass' | 'fixed')
-            : entry.productCode?.includes('?')
+            : entry.productCode?.includes('?') || entry.productType === 'DAILY_PACK'
               ? 'daypass'
               : 'fixed';
         const requestedDaysCount =
@@ -1358,6 +1359,7 @@ export default function adminRoutes(
         id: string;
         provider: string;
         productCode: string;
+        productType: string | null;
         productName: string;
         region: string | null;
         dataAmount: string | null;
@@ -1484,7 +1486,10 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                     const entry = catalogEntries.find((e) => e.id === match.catalogId);
                     if (!entry) continue;
                     const parsedSku = parseShopifySku(match.shopifySku);
-                    const pkgType = entry.productCode?.includes('?') ? 'daypass' : 'fixed';
+                    const pkgType =
+                      entry.productCode?.includes('?') || entry.productType === 'DAILY_PACK'
+                        ? 'daypass'
+                        : 'fixed';
                     drafts.push({
                       shopifySku: match.shopifySku,
                       catalogId: match.catalogId,
@@ -1506,7 +1511,9 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                     if (!parsedSku) return true;
                     const entry = catalogEntries.find((e) => e.id === draft.catalogId);
                     // Reject type mismatches: DAYPASS SKU must map to daypass catalog and vice versa
-                    const isCatalogDaypass = Boolean(entry?.productCode?.includes('?'));
+                    const isCatalogDaypass =
+                      Boolean(entry?.productCode?.includes('?')) ||
+                      entry?.productType === 'DAILY_PACK';
                     if ((parsedSku.skuType === 'DAYPASS') !== isCatalogDaypass) return false;
                     if (!entry?.parsedJson) {
                       // Unverifiable — only pass through if both constraints are relaxed
@@ -1638,7 +1645,10 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                       continue;
                   }
                 }
-                const pkgType2 = entry.productCode?.includes('?') ? 'daypass' : 'fixed';
+                const pkgType2 =
+                  entry.productCode?.includes('?') || entry.productType === 'DAILY_PACK'
+                    ? 'daypass'
+                    : 'fixed';
                 // Reject type mismatches: DAYPASS SKU must map to daypass catalog and vice versa
                 if (parsedSku && (parsedSku.skuType === 'DAYPASS') !== (pkgType2 === 'daypass')) {
                   continue;
@@ -2166,8 +2176,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     validity: string | null;
     netPrice: unknown;
     productCode: string;
+    productType: string | null;
     parsedJson: ParsedCatalogAttributes | null;
   };
+
+  /** TGT uses productType='DAILY_PACK'; FiRoam uses '?' in productCode. */
+  function isCatalogDailyPack(row: ParsedCatalogRow): boolean {
+    return row.productCode.includes('?') || row.productType === 'DAILY_PACK';
+  }
 
   async function findStructuredMatches(
     sku: string,
@@ -2189,7 +2205,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       rows = strictRegion
         ? await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "productCode", "parsedJson"
+                   "productCode", "productType", "parsedJson"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
@@ -2200,7 +2216,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           `
         : await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "productCode", "parsedJson"
+                   "productCode", "productType", "parsedJson"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
@@ -2211,7 +2227,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       rows = strictRegion
         ? await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "productCode", "parsedJson"
+                   "productCode", "productType", "parsedJson"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
@@ -2221,7 +2237,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           `
         : await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "productCode", "parsedJson"
+                   "productCode", "productType", "parsedJson"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
@@ -2234,10 +2250,9 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       const p = row.parsedJson;
       if (!p) continue;
 
-      // Require package type to match: DAYPASS SKU → daypass catalog entry (productCode contains '?')
-      // FIXED SKU → non-daypass catalog entry. Prevents DAYPASS matching to fixed plans and vice versa.
-      const isCatalogDaypass = row.productCode.includes('?');
-      if (isDaypass !== isCatalogDaypass) continue;
+      // Require package type to match: DAYPASS SKU → daily-pack catalog entry, FIXED → non-daily.
+      const catalogIsDailyPack = isCatalogDailyPack(row);
+      if (isDaypass !== catalogIsDailyPack) continue;
 
       const dataMatch = p.dataMb === dataMb;
 
