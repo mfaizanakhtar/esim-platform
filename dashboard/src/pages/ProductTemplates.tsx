@@ -53,11 +53,13 @@ function ActionBar() {
   const seoMutation = useGenerateSeo();
   const pushMutation = usePushToShopify();
   const [message, setMessage] = useState<string | null>(null);
+  const [overwrite, setOverwrite] = useState(false);
+  const [forcePush, setForcePush] = useState(false);
 
   function handleGenerate() {
     setMessage(null);
     generateMutation.mutate(
-      {},
+      { overwrite },
       {
         onSuccess: (data) => {
           setMessage(
@@ -89,7 +91,7 @@ function ActionBar() {
   function handlePush() {
     setMessage(null);
     pushMutation.mutate(
-      {},
+      { force: forcePush },
       {
         onSuccess: (data) => {
           if (data.total > 0) {
@@ -134,6 +136,27 @@ function ActionBar() {
           <Upload className={`h-4 w-4 ${pushMutation.isPending ? 'animate-pulse' : ''}`} />
           {pushMutation.isPending ? 'Pushing...' : 'Push to Shopify'}
         </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={overwrite}
+            onChange={(e) => setOverwrite(e.target.checked)}
+            className="rounded"
+          />
+          Overwrite existing
+        </label>
+        <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={forcePush}
+            onChange={(e) => setForcePush(e.target.checked)}
+            className="rounded"
+          />
+          Force re-push
+        </label>
       </div>
 
       {message && <p className="text-sm text-muted-foreground">{message}</p>}
