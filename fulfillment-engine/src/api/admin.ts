@@ -2260,14 +2260,13 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       const reasons: string[] = ['region'];
 
       if (isDaypass) {
-        // FiRoam daypass: catalog validityDays=1 (single-day plan), SKU validity is the
-        // subscription length (e.g. 3D = buy 3 days) — skip validity check.
-        // TGT daily packs: catalog validityDays reflects the full period (e.g. 30),
-        // so validity MUST match to avoid 2-day SKU matching a 30-day pack.
-        const singleDayPlan = p.validityDays === 1;
-        const validityMatch = singleDayPlan || p.validityDays === validityDays;
+        // FiRoam daypass: productCode contains '?' — these are single-day plans where
+        // SKU validity (e.g. 3D) is the subscription length, not the plan period.
+        // Skip validity check for FiRoam; enforce it for TGT daily packs.
+        const isFiroamDaypass = row.productCode.includes('?');
+        const validityMatch = isFiroamDaypass || p.validityDays === validityDays;
         if (!relaxOptions.relaxData && !dataMatch) continue;
-        if (!singleDayPlan && !relaxOptions.relaxValidity && !validityMatch) continue;
+        if (!isFiroamDaypass && !relaxOptions.relaxValidity && !validityMatch) continue;
         const matchCount = 1 + (dataMatch ? 1 : 0) + (validityMatch ? 1 : 0);
         confidence = matchCount === 3 ? 1.0 : matchCount === 2 ? 0.8 : 0.6;
         if (dataMatch) reasons.push('data');
