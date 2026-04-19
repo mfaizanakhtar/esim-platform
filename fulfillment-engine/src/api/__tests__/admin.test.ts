@@ -4642,7 +4642,7 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body) as { drafts: Array<{ confidence: number }> };
       expect(body.drafts).toHaveLength(1);
-      expect(body.drafts[0].confidence).toBe(0.8); // region + validity (single-day plan auto-matches)
+      expect(body.drafts[0].confidence).toBe(0.8); // region + validity (FiRoam daypass '?' auto-matches validity)
     });
 
     it('returns empty drafts for DAYPASS when data mismatch and relaxData=false', async () => {
