@@ -1075,7 +1075,7 @@ describe('createProduct', () => {
     }
   }
 
-  it('creates a product with variants and deletes placeholder', async () => {
+  it('creates a product with variants and updates default variant', async () => {
     const client = makeStaticClient();
     mockFindByHandle(false);
 
@@ -1091,36 +1091,29 @@ describe('createProduct', () => {
         },
       });
 
-    // 2. productVariantsBulkCreate
+    // 2. getDefaultVariant query
     nock(BASE_URL)
-      .post(GQL_URL, /productVariantsBulkCreate/)
-      .reply(200, {
-        data: {
-          productVariantsBulkCreate: {
-            productVariants: [{ id: 'gid://shopify/ProductVariant/100' }],
-            userErrors: [],
-          },
-        },
-      });
-
-    // 3. getPlaceholderVariant query
-    nock(BASE_URL)
-      .post(GQL_URL, /getPlaceholderVariant/)
+      .post(GQL_URL, /getDefaultVariant/)
       .reply(200, {
         data: {
           product: {
             variants: {
-              nodes: [{ id: 'gid://shopify/ProductVariant/placeholder', sku: '' }],
+              nodes: [{ id: 'gid://shopify/ProductVariant/default' }],
             },
           },
         },
       });
 
-    // 4. deleteVariants (to remove placeholder)
+    // 3. productVariantsBulkUpdate (update default variant with SKU + price)
     nock(BASE_URL)
-      .post(GQL_URL, /productVariantsBulkDelete/)
+      .post(GQL_URL, /productVariantsBulkUpdate/)
       .reply(200, {
-        data: { productVariantsBulkDelete: { userErrors: [] } },
+        data: {
+          productVariantsBulkUpdate: {
+            productVariants: [{ id: 'gid://shopify/ProductVariant/default' }],
+            userErrors: [],
+          },
+        },
       });
 
     const result = await client.createProduct({
@@ -1180,6 +1173,28 @@ describe('createProduct', () => {
         },
       });
 
+    // getDefaultVariant
+    nock(BASE_URL)
+      .post(GQL_URL, /getDefaultVariant/)
+      .reply(200, {
+        data: {
+          product: { variants: { nodes: [{ id: 'gid://shopify/ProductVariant/default' }] } },
+        },
+      });
+
+    // productVariantsBulkUpdate (update default)
+    nock(BASE_URL)
+      .post(GQL_URL, /productVariantsBulkUpdate/)
+      .reply(200, {
+        data: {
+          productVariantsBulkUpdate: {
+            productVariants: [{ id: 'gid://shopify/ProductVariant/default' }],
+            userErrors: [],
+          },
+        },
+      });
+
+    // productVariantsBulkCreate (remaining variants fail)
     nock(BASE_URL)
       .post(GQL_URL, /productVariantsBulkCreate/)
       .reply(200, {
@@ -1198,7 +1213,10 @@ describe('createProduct', () => {
         bodyHtml: '',
         status: 'DRAFT',
         options: ['Type'],
-        variants: [{ sku: 'T-1', price: '1.00', optionValues: ['A'] }],
+        variants: [
+          { sku: 'T-1', price: '1.00', optionValues: ['A'] },
+          { sku: 'T-2', price: '2.00', optionValues: ['B'] },
+        ],
       }),
     ).rejects.toThrow('Variant creation failed');
   });

@@ -1137,8 +1137,62 @@ export class ShopifyClient {
       throw new Error('productCreate returned no product ID');
     }
 
-    // Step 2: Create variants in bulk
+    // Step 2: Update the default variant (created with the product) with SKU + price
     if (params.variants.length > 0) {
+      const firstVariant = params.variants[0];
+      const defaultVariantQuery = `
+        query getDefaultVariant($productId: ID!) {
+          product(id: $productId) {
+            variants(first: 1) { nodes { id } }
+          }
+        }
+      `;
+      const dvResp = await axios.post(
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+        { query: defaultVariantQuery, variables: { productId } },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': accessToken,
+          },
+        },
+      );
+      const defaultVariantId = dvResp.data?.data?.product?.variants?.nodes?.[0]?.id;
+      if (defaultVariantId) {
+        const updateVariantMutation = `
+          mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+            productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+              productVariants { id }
+              userErrors { field message }
+            }
+          }
+        `;
+        await axios.post(
+          `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+          {
+            query: updateVariantMutation,
+            variables: {
+              productId,
+              variants: [
+                {
+                  id: defaultVariantId,
+                  inventoryItem: { sku: firstVariant.sku },
+                  price: firstVariant.price,
+                },
+              ],
+            },
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Shopify-Access-Token': accessToken,
+            },
+          },
+        );
+      }
+
+      // Step 3: Bulk create remaining variants (skip the first — it's the default)
+      const remainingVariants = params.variants.slice(1);
       const variantMutation = `
         mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
           productVariantsBulkCreate(productId: $productId, variants: $variants) {
@@ -1149,8 +1203,8 @@ export class ShopifyClient {
       `;
 
       const BATCH_SIZE = 250;
-      for (let i = 0; i < params.variants.length; i += BATCH_SIZE) {
-        const batch = params.variants.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < remainingVariants.length; i += BATCH_SIZE) {
+        const batch = remainingVariants.slice(i, i + BATCH_SIZE);
         const variantInputs = batch.map((v) => ({
           inventoryItem: { sku: v.sku },
           price: v.price,
@@ -1182,35 +1236,6 @@ export class ShopifyClient {
           );
           throw new Error(`Variant creation failed: ${JSON.stringify(variantData.userErrors)}`);
         }
-      }
-
-      // Step 3: Delete the placeholder variant (created with the product)
-      const placeholderQuery = `
-        query getPlaceholderVariant($productId: ID!) {
-          product(id: $productId) {
-            variants(first: 1, query: "sku:''") {
-              nodes { id sku }
-            }
-          }
-        }
-      `;
-      const phResp = await axios.post(
-        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
-        { query: placeholderQuery, variables: { productId } },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Shopify-Access-Token': accessToken,
-          },
-        },
-      );
-      const placeholders =
-        phResp.data?.data?.product?.variants?.nodes?.filter((v: { sku: string }) => !v.sku) ?? [];
-      if (placeholders.length > 0) {
-        await this.deleteVariants(
-          productId,
-          placeholders.map((v: { id: string }) => v.id),
-        );
       }
     }
 
