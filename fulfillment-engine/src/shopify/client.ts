@@ -1098,7 +1098,10 @@ export class ShopifyClient {
       status: params.status,
       productType: params.productType ?? 'eSIM',
       tags: params.tags ?? [],
-      productOptions: params.options.map((name) => ({ name, values: [{ name: '_placeholder' }] })),
+      productOptions: params.options.map((name, idx) => ({
+        name,
+        values: [{ name: params.variants[0]?.optionValues[idx] ?? 'Default' }],
+      })),
     };
 
     const media = params.imageUrl
