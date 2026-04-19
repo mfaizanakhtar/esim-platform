@@ -592,7 +592,7 @@ export function SkuMappings() {
                               )}
                               {m.catalogEntry?.netPrice && (() => {
                                 const raw = Number(m.catalogEntry.netPrice);
-                                const isDaypass = m.packageType === 'daypass' && m.daysCount && m.daysCount > 1;
+                                const isDaypass = m.packageType === 'daypass' && m.daysCount && m.daysCount > 1 && m.provider === 'firoam';
                                 const effective = isDaypass ? raw * m.daysCount! : raw;
                                 const cur = m.catalogEntry.currency ? ` ${m.catalogEntry.currency}` : '';
                                 return (

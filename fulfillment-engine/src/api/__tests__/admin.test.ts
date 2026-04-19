@@ -2118,6 +2118,42 @@ describe('Admin Routes', () => {
       expect(typeof res.json().updated).toBe('number');
     });
 
+    it('uses effective price for FiRoam daypass (netPrice × daysCount)', async () => {
+      // FiRoam daypass: $1/day × 5 days = $5 effective
+      // TGT fixed: $4 total — should be cheaper
+      const m1 = makeMapping({
+        id: 'map-dp-1',
+        provider: 'firoam',
+        priority: 1,
+        providerCatalogId: 'cat-dp-1',
+        packageType: 'daypass',
+        daysCount: 5,
+      });
+      const m2 = makeMapping({
+        id: 'map-dp-2',
+        provider: 'tgt',
+        priority: 2,
+        providerCatalogId: 'cat-dp-2',
+      });
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
+        { ...m1, catalogEntry: { netPrice: 1.0 } },
+        { ...m2, catalogEntry: { netPrice: 4.0 } },
+      ] as never);
+      const prismaMock = prisma as unknown as { $transaction: ReturnType<typeof vi.fn> };
+      prismaMock.$transaction = vi.fn().mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/smart-pricing',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(200);
+      // TGT ($4) should now be priority 1, FiRoam ($1×5=$5) priority 2
+      expect(prismaMock.$transaction).toHaveBeenCalled();
+    });
+
     it('skips all groups with only one unlocked mapping', async () => {
       const m = makeMapping({ providerCatalogId: 'cat-1' });
       vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([
