@@ -12,6 +12,7 @@ const Catalog = lazy(() => import('@/pages/Catalog').then((m) => ({ default: m.C
 const ProductTemplates = lazy(() =>
   import('@/pages/ProductTemplates').then((m) => ({ default: m.ProductTemplates })),
 );
+const Pricing = lazy(() => import('@/pages/Pricing').then((m) => ({ default: m.Pricing })));
 
 export function App() {
   return (
@@ -57,6 +58,14 @@ export function App() {
             element={
               <Suspense fallback={<PageLoader />}>
                 <Catalog />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/pricing"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <Pricing />
               </Suspense>
             }
           />
