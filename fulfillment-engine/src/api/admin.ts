@@ -1131,49 +1131,50 @@ export default function adminRoutes(
         return variants;
       }
 
-      // 4. Create products
-      let created = 0;
-      const errors: string[] = [];
+      // 4. Fire-and-forget: create products in the background
+      void (async () => {
+        let created = 0;
+        let errors = 0;
 
-      for (const code of toCreate) {
-        const country = getCountryByCode(code)!;
-        const variants = buildVariants(code);
+        for (const code of toCreate) {
+          const country = getCountryByCode(code)!;
+          const variants = buildVariants(code);
 
-        try {
-          await shopify.createProduct({
-            title: country.name,
-            handle: country.slug,
-            bodyHtml: '<p>Instant digital eSIM. Activate in minutes. No physical SIM required.</p>',
-            status: 'ACTIVE',
-            productType: 'eSIM',
-            tags: ['esim', code.toLowerCase()],
-            options: ['Plan Type', 'Validity', 'Volume'],
-            variants,
-            imageUrl: `https://flagcdn.com/w640/${code.toLowerCase()}.png`,
-          });
-          created++;
-          logger.info(
-            { code, name: country.name, variants: variants.length },
-            'Created Shopify product',
-          );
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          errors.push(`${code} (${country.name}): ${msg}`);
-          logger.error({ code, err }, 'Failed to create Shopify product');
-        }
+          try {
+            await shopify.createProduct({
+              title: country.name,
+              handle: country.slug,
+              bodyHtml:
+                '<p>Instant digital eSIM. Activate in minutes. No physical SIM required.</p>',
+              status: 'ACTIVE',
+              productType: 'eSIM',
+              tags: ['esim', code.toLowerCase()],
+              options: ['Plan Type', 'Validity', 'Volume'],
+              variants,
+              imageUrl: `https://flagcdn.com/w640/${code.toLowerCase()}.png`,
+            });
+            created++;
+            logger.info(
+              { code, name: country.name, variants: variants.length },
+              'Created Shopify product',
+            );
+          } catch (err) {
+            errors++;
+            logger.error({ code, err }, 'Failed to create Shopify product');
+          }
 
-        // Rate limit: ~1 product/sec to stay under Shopify API limits
-        if (created < toCreate.length) {
+          // Rate limit: ~1 product/sec to stay under Shopify API limits
           await new Promise((r) => setTimeout(r, 1000));
         }
-      }
+
+        logger.info({ created, errors, total: toCreate.length }, 'Bulk product creation complete');
+      })();
 
       return reply.send({
         ok: true,
-        created,
-        skipped: skipped.length,
-        errors,
         total: toCreate.length,
+        skipped: skipped.length,
+        background: 'product_creation_started',
       });
     },
   );
