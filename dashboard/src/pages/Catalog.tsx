@@ -61,8 +61,10 @@ function CreateProductsButton() {
       {},
       {
         onSuccess: (data) => {
-          if (data.created !== undefined) {
-            setLastResult(`Created ${data.created} products (${data.skipped ?? 0} skipped)`);
+          if (data.background) {
+            setLastResult(`Creating ${data.total ?? 0} products in background (${data.skipped ?? 0} skipped). Check logs for progress.`);
+          } else if (data.dryRun) {
+            setLastResult(`Dry run: ${data.toCreate?.length ?? 0} to create`);
           }
         },
         onError: (err) => {
