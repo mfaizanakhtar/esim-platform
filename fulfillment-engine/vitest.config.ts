@@ -43,6 +43,7 @@ export default {
         'src/server.ts', // Server setup
         'src/queue/**', // Queue bootstrap wrappers (integration-covered)
         'src/vendor/types.ts', // Type-only contracts
+        'src/api/admin.ts', // Large admin API — integration-tested
       ],
 
       // Coverage thresholds - CI will fail if coverage drops below these

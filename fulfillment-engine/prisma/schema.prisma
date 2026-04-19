@@ -144,3 +144,43 @@ model AiMapJob {
 
   @@map("AiMapJob")
 }
+
+model ShopifyProductTemplate {
+  id               String                         @id @default(cuid())
+  countryCode      String                         @unique
+  title            String
+  handle           String                         @unique
+  descriptionHtml  String                         @db.Text
+  status           String                         @default("DRAFT")
+  productType      String                         @default("eSIM")
+  vendor           String                         @default("SAILeSIM")
+  tags             Json                           @default("[]")
+  imageUrl         String?
+  seoTitle         String?
+  seoDescription   String?                        @db.Text
+  shopifyProductId String?                        @unique
+  shopifyPushedAt  DateTime?
+  createdAt        DateTime                       @default(now())
+  updatedAt        DateTime                       @updatedAt
+  variants         ShopifyProductTemplateVariant[]
+
+  @@index([status])
+}
+
+model ShopifyProductTemplateVariant {
+  id         String                 @id @default(cuid())
+  templateId String
+  sku        String
+  price      Decimal                @db.Decimal(10, 2)
+  planType   String                 // "Day-Pass" | "Total Data"
+  validity   String                 // "1-Day", "7-Days", etc.
+  volume     String                 // "1 GB", "10GB", etc.
+  sortOrder  Int                    @default(0)
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+  template   ShopifyProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, sku])
+  @@index([templateId])
+  @@index([sku])
+}

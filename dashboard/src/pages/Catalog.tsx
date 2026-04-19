@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useCatalog, useSyncCatalog, useBulkCreateProducts } from '@/hooks/useCatalog';
+import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { Pagination } from '@/components/Pagination';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { RefreshCw, Cpu, Plus } from 'lucide-react';
+import { RefreshCw, Cpu } from 'lucide-react';
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -52,42 +52,6 @@ function SyncButton({ provider }: { provider: string }) {
   );
 }
 
-function CreateProductsButton() {
-  const mutation = useBulkCreateProducts();
-  const [lastResult, setLastResult] = useState<string | null>(null);
-
-  function handleCreate() {
-    mutation.mutate(
-      {},
-      {
-        onSuccess: (data) => {
-          if (data.background) {
-            setLastResult(`Creating ${data.total ?? 0} products in background (${data.skipped ?? 0} skipped). Check logs for progress.`);
-          } else if (data.dryRun) {
-            setLastResult(`Dry run: ${data.toCreate?.length ?? 0} to create`);
-          }
-        },
-        onError: (err) => {
-          setLastResult(`Failed: ${(err as Error).message}`);
-        },
-      },
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-3">
-      <button
-        onClick={handleCreate}
-        disabled={mutation.isPending}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
-      >
-        <Plus className={`h-4 w-4 ${mutation.isPending ? 'animate-pulse' : ''}`} />
-        {mutation.isPending ? 'Creating...' : 'Create Shopify Products'}
-      </button>
-      {lastResult && <span className="text-sm text-muted-foreground">{lastResult}</span>}
-    </div>
-  );
-}
 
 function EmbedBackfillButton({ provider }: { provider: string }) {
   const mutation = useMutation({
@@ -199,7 +163,7 @@ function CatalogTab({ provider }: { provider: string }) {
         <SyncButton provider={provider} />
         <EmbedBackfillButton provider={provider} />
         <ParseAllButton provider={provider} />
-        <CreateProductsButton />
+
         {data && (
           <span className="text-sm text-muted-foreground">
             {data.total} items
