@@ -87,6 +87,7 @@ export function ProductTemplates() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [overwrite, setOverwrite] = useState(false);
+  const [forceSeo, setForceSeo] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   const templates = data?.templates ?? [];
@@ -161,7 +162,9 @@ export function ProductTemplates() {
   }
 
   function handleGenerateSeo() {
-    const input = selectedCodes.length > 0 ? { countries: selectedCodes } : {};
+    const input: { countries?: string[]; force?: boolean } = {};
+    if (selectedCodes.length > 0) input.countries = selectedCodes;
+    if (forceSeo) input.force = true;
     seoMutation.mutate(input, {
       onSuccess: (data) => {
         if (data.queued > 0) {
@@ -288,6 +291,15 @@ export function ProductTemplates() {
               className="rounded"
             />
             Overwrite existing
+          </label>
+          <label className="flex items-center gap-1.5 text-sm text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={forceSeo}
+              onChange={(e) => setForceSeo(e.target.checked)}
+              className="rounded"
+            />
+            Force regenerate SEO
           </label>
         </div>
       </div>
