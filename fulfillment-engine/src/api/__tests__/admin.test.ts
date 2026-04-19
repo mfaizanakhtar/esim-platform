@@ -122,6 +122,7 @@ vi.mock('~/shopify/client', () => ({
     deleteProduct: adminMocks.mockDeleteProduct,
     deleteVariants: adminMocks.mockDeleteVariants,
     cancelShopifyOrder: adminMocks.mockCancelShopifyOrder,
+    createProduct: vi.fn().mockResolvedValue({ productId: 'gid://shopify/Product/1' }),
   })),
 }));
 
@@ -2170,6 +2171,83 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().skipped).toBe(1);
       expect(res.json().updated).toBe(0);
+    });
+  });
+
+  // ── POST /shopify-products/bulk-create ──────────────────────────────────
+
+  describe('POST /shopify-products/bulk-create', () => {
+    it('creates products for specified country codes', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([]);
+      vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-products/bulk-create',
+        headers: JSON_HEADERS,
+        payload: { countries: ['AF'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { ok: boolean; created: number };
+      expect(body.ok).toBe(true);
+      expect(body.created).toBe(1);
+    });
+
+    it('skips countries that already have products', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([
+        { sku: 'AF-1GB-7D-FIXED', variantId: '1', productTitle: 'Afghanistan', variantTitle: '' },
+      ]);
+      vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-products/bulk-create',
+        headers: JSON_HEADERS,
+        payload: { countries: ['AF', 'AL'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { created: number; skipped: number };
+      expect(body.created).toBe(1); // AL created
+      expect(body.skipped).toBe(1); // AF skipped
+    });
+
+    it('returns dry run preview without creating', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([]);
+      vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-products/bulk-create',
+        headers: JSON_HEADERS,
+        payload: { countries: ['AF'], dryRun: true },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { dryRun: boolean; toCreate: unknown[] };
+      expect(body.dryRun).toBe(true);
+      expect(body.toCreate).toHaveLength(1);
+    });
+
+    it('auto-discovers countries from catalog when none specified', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([]);
+      vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([
+        { countryCodes: ['AF'], region: null },
+        { countryCodes: ['Albania'], region: null },
+      ] as never);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-products/bulk-create',
+        headers: JSON_HEADERS,
+        payload: { dryRun: true },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { toCreate: Array<{ code: string }> };
+      // AF is ISO code, Albania is FiRoam name → AL
+      expect(body.toCreate.map((c) => c.code).sort()).toEqual(['AF', 'AL']);
     });
   });
 

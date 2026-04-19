@@ -19,6 +19,15 @@ function makeClient(): ShopifyClient {
   });
 }
 
+function makeStaticClient(): ShopifyClient {
+  return new ShopifyClient({
+    shopDomain: SHOP_DOMAIN,
+    clientId: '',
+    clientSecret: '',
+    staticAccessToken: ACCESS_TOKEN,
+  });
+}
+
 function mockTokenRefresh(expiresIn = 3600): nock.Scope {
   return nock(BASE_URL).post('/admin/oauth/access_token').reply(200, {
     access_token: ACCESS_TOKEN,
@@ -1042,5 +1051,123 @@ describe('deleteVariants', () => {
     await expect(
       client.deleteVariants('gid://shopify/Product/999', ['gid://shopify/ProductVariant/999']),
     ).rejects.toThrow('Access denied');
+  });
+});
+
+describe('createProduct', () => {
+  const GQL_URL = '/admin/api/2026-04/graphql.json';
+
+  it('creates a product with variants and deletes placeholder', async () => {
+    const client = makeStaticClient();
+
+    // 1. productCreate
+    nock(BASE_URL)
+      .post(GQL_URL, /productCreate/)
+      .reply(200, {
+        data: {
+          productCreate: {
+            product: { id: 'gid://shopify/Product/1' },
+            userErrors: [],
+          },
+        },
+      });
+
+    // 2. productVariantsBulkCreate
+    nock(BASE_URL)
+      .post(GQL_URL, /productVariantsBulkCreate/)
+      .reply(200, {
+        data: {
+          productVariantsBulkCreate: {
+            productVariants: [{ id: 'gid://shopify/ProductVariant/100' }],
+            userErrors: [],
+          },
+        },
+      });
+
+    // 3. getPlaceholderVariant query
+    nock(BASE_URL)
+      .post(GQL_URL, /getPlaceholderVariant/)
+      .reply(200, {
+        data: {
+          product: {
+            variants: {
+              nodes: [{ id: 'gid://shopify/ProductVariant/placeholder', sku: '' }],
+            },
+          },
+        },
+      });
+
+    // 4. deleteVariants (to remove placeholder)
+    nock(BASE_URL)
+      .post(GQL_URL, /productVariantsBulkDelete/)
+      .reply(200, {
+        data: { productVariantsBulkDelete: { userErrors: [] } },
+      });
+
+    const result = await client.createProduct({
+      title: 'Afghanistan',
+      handle: 'afghanistan',
+      bodyHtml: '<p>eSIM</p>',
+      status: 'ACTIVE',
+      options: ['Plan Type', 'Validity', 'Volume'],
+      variants: [
+        { sku: 'AF-1GB-7D-FIXED', price: '5.00', optionValues: ['Total Data', '7-Days', '1GB'] },
+      ],
+      imageUrl: 'https://flagcdn.com/w640/af.png',
+    });
+
+    expect(result.productId).toBe('gid://shopify/Product/1');
+  });
+
+  it('throws on productCreate userErrors', async () => {
+    const client = makeStaticClient();
+
+    nock(BASE_URL)
+      .post(GQL_URL, /productCreate/)
+      .reply(200, {
+        data: {
+          productCreate: {
+            product: null,
+            userErrors: [{ field: ['title'], message: 'Title taken' }],
+          },
+        },
+      });
+
+    await expect(
+      client.createProduct({
+        title: 'Test',
+        handle: 'test',
+        bodyHtml: '',
+        status: 'DRAFT',
+        options: ['Plan Type'],
+        variants: [],
+      }),
+    ).rejects.toThrow('productCreate error: Title taken');
+  });
+
+  it('creates product without variants (no placeholder deletion)', async () => {
+    const client = makeStaticClient();
+
+    nock(BASE_URL)
+      .post(GQL_URL, /productCreate/)
+      .reply(200, {
+        data: {
+          productCreate: {
+            product: { id: 'gid://shopify/Product/2' },
+            userErrors: [],
+          },
+        },
+      });
+
+    const result = await client.createProduct({
+      title: 'Empty',
+      handle: 'empty',
+      bodyHtml: '',
+      status: 'DRAFT',
+      options: ['Type'],
+      variants: [],
+    });
+
+    expect(result.productId).toBe('gid://shopify/Product/2');
   });
 });
