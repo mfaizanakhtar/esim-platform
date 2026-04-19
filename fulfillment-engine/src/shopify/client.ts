@@ -1029,6 +1029,153 @@ export class ShopifyClient {
 
     return results;
   }
+
+  /**
+   * Create a Shopify product with variants using productCreate + productVariantsBulkCreate.
+   * Returns the product GID.
+   */
+  async createProduct(params: {
+    title: string;
+    handle: string;
+    bodyHtml: string;
+    status: 'ACTIVE' | 'DRAFT';
+    productType?: string;
+    tags?: string[];
+    options: string[];
+    variants: Array<{
+      sku: string;
+      price: string;
+      optionValues: string[];
+    }>;
+    imageUrl?: string;
+  }): Promise<{ productId: string }> {
+    const accessToken = await this.getAccessToken();
+
+    // Step 1: Create product with first batch of variants (max 250)
+    const mutation = `
+      mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
+        productCreate(product: $product, media: $media) {
+          product { id }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const productInput: Record<string, unknown> = {
+      title: params.title,
+      handle: params.handle,
+      descriptionHtml: params.bodyHtml,
+      status: params.status,
+      productType: params.productType ?? 'eSIM',
+      tags: params.tags ?? [],
+      productOptions: params.options.map((name) => ({ name, values: [{ name: '_placeholder' }] })),
+    };
+
+    const media = params.imageUrl
+      ? [{ originalSource: params.imageUrl, mediaContentType: 'IMAGE' }]
+      : undefined;
+
+    const createResponse = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+      { query: mutation, variables: { product: productInput, media } },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': accessToken,
+        },
+      },
+    );
+
+    const createData = createResponse.data?.data?.productCreate;
+    if (createData?.userErrors?.length > 0) {
+      throw new Error(
+        `productCreate error: ${createData.userErrors.map((e: { message: string }) => e.message).join(', ')}`,
+      );
+    }
+
+    const productId = createData?.product?.id;
+    if (!productId) {
+      throw new Error('productCreate returned no product ID');
+    }
+
+    // Step 2: Create variants in bulk
+    if (params.variants.length > 0) {
+      const variantMutation = `
+        mutation productVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkCreate(productId: $productId, variants: $variants) {
+            productVariants { id }
+            userErrors { field message }
+          }
+        }
+      `;
+
+      const BATCH_SIZE = 250;
+      for (let i = 0; i < params.variants.length; i += BATCH_SIZE) {
+        const batch = params.variants.slice(i, i + BATCH_SIZE);
+        const variantInputs = batch.map((v) => ({
+          sku: v.sku,
+          price: v.price,
+          optionValues: v.optionValues.map((val, idx) => ({
+            optionName: params.options[idx],
+            name: val,
+          })),
+        }));
+
+        const variantResponse = await axios.post(
+          `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+          {
+            query: variantMutation,
+            variables: { productId, variants: variantInputs },
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Shopify-Access-Token': accessToken,
+            },
+          },
+        );
+
+        const variantData = variantResponse.data?.data?.productVariantsBulkCreate;
+        if (variantData?.userErrors?.length > 0) {
+          logger.warn(
+            { productId, errors: variantData.userErrors, batch: i },
+            'Some variants failed to create',
+          );
+        }
+      }
+
+      // Step 3: Delete the placeholder variant (created with the product)
+      const placeholderQuery = `
+        query getPlaceholderVariant($productId: ID!) {
+          product(id: $productId) {
+            variants(first: 1, query: "sku:''") {
+              nodes { id sku }
+            }
+          }
+        }
+      `;
+      const phResp = await axios.post(
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+        { query: placeholderQuery, variables: { productId } },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': accessToken,
+          },
+        },
+      );
+      const placeholders =
+        phResp.data?.data?.product?.variants?.nodes?.filter((v: { sku: string }) => !v.sku) ?? [];
+      if (placeholders.length > 0) {
+        await this.deleteVariants(
+          productId,
+          placeholders.map((v: { id: string }) => v.id),
+        );
+      }
+    }
+
+    return { productId };
+  }
 }
 
 // Singleton instance

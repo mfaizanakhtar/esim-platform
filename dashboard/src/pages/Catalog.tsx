@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useCatalog, useSyncCatalog } from '@/hooks/useCatalog';
+import { useCatalog, useSyncCatalog, useBulkCreateProducts } from '@/hooks/useCatalog';
 import { useProviders, providerLabel } from '@/hooks/useProviders';
 import { Pagination } from '@/components/Pagination';
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api';
-import { RefreshCw, Cpu } from 'lucide-react';
+import { RefreshCw, Cpu, Plus } from 'lucide-react';
 
 const DEFAULT_PAGE_SIZE = 25;
 
@@ -46,6 +46,41 @@ function SyncButton({ provider }: { provider: string }) {
       >
         <RefreshCw className={`h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
         {syncMutation.isPending ? 'Syncing...' : 'Sync'}
+      </button>
+      {lastResult && <span className="text-sm text-muted-foreground">{lastResult}</span>}
+    </div>
+  );
+}
+
+function CreateProductsButton() {
+  const mutation = useBulkCreateProducts();
+  const [lastResult, setLastResult] = useState<string | null>(null);
+
+  function handleCreate() {
+    mutation.mutate(
+      {},
+      {
+        onSuccess: (data) => {
+          if (data.created !== undefined) {
+            setLastResult(`Created ${data.created} products (${data.skipped ?? 0} skipped)`);
+          }
+        },
+        onError: (err) => {
+          setLastResult(`Failed: ${(err as Error).message}`);
+        },
+      },
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        onClick={handleCreate}
+        disabled={mutation.isPending}
+        className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
+      >
+        <Plus className={`h-4 w-4 ${mutation.isPending ? 'animate-pulse' : ''}`} />
+        {mutation.isPending ? 'Creating...' : 'Create Shopify Products'}
       </button>
       {lastResult && <span className="text-sm text-muted-foreground">{lastResult}</span>}
     </div>
@@ -162,6 +197,7 @@ function CatalogTab({ provider }: { provider: string }) {
         <SyncButton provider={provider} />
         <EmbedBackfillButton provider={provider} />
         <ParseAllButton provider={provider} />
+        <CreateProductsButton />
         {data && (
           <span className="text-sm text-muted-foreground">
             {data.total} items

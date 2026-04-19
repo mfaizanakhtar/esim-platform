@@ -21,6 +21,7 @@ import {
   type ParsedCatalogAttributes,
 } from '~/services/embeddingService';
 import { parseShopifySku } from '~/utils/parseShopifySku';
+import { getCountryByCode, firoamNameToCode } from '~/utils/countryCodes';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
@@ -1033,6 +1034,163 @@ export default function adminRoutes(
 
     return reply.send({ skus, total });
   });
+
+  /**
+   * POST /admin/shopify-products/bulk-create
+   * Create Shopify products for countries found in the provider catalog.
+   * Body: { countries?: string[], dryRun?: boolean }
+   * If countries omitted, auto-discovers all single-country codes from catalog.
+   * Skips countries that already have Shopify products (by SKU prefix match).
+   */
+  app.post(
+    '/shopify-products/bulk-create',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const body = (request.body || {}) as {
+        countries?: string[];
+        dryRun?: boolean;
+      };
+
+      const shopify = getShopifyClient();
+
+      // 1. Determine which countries to create
+      let countryCodes: string[];
+      if (body.countries && body.countries.length > 0) {
+        countryCodes = body.countries.map((c) => c.toUpperCase());
+      } else {
+        // Auto-discover from catalog: collect all ISO-2 codes from countryCodes arrays
+        const catalogRows = (await providerSkuCatalog.findMany({
+          where: { isActive: true },
+          select: { countryCodes: true, region: true },
+        })) as Array<{ countryCodes: unknown; region: string | null }>;
+
+        const codeSet = new Set<string>();
+        for (const row of catalogRows) {
+          const cc = row.countryCodes as string[] | null;
+          if (!Array.isArray(cc)) continue;
+          for (const c of cc) {
+            if (typeof c === 'string' && c.length === 2) {
+              // TGT: already ISO codes
+              codeSet.add(c.toUpperCase());
+            } else if (typeof c === 'string') {
+              // FiRoam: country display names
+              const code = firoamNameToCode(c);
+              if (code) codeSet.add(code);
+            }
+          }
+        }
+        countryCodes = [...codeSet].sort();
+      }
+
+      // 2. Filter out countries that already have products (by SKU prefix)
+      const existingVariants = await shopify.getAllVariants();
+      const existingPrefixes = new Set<string>();
+      for (const v of existingVariants) {
+        const prefix = v.sku.split('-')[0];
+        if (prefix && prefix.length >= 2) existingPrefixes.add(prefix);
+      }
+
+      const toCreate = countryCodes.filter(
+        (code) => getCountryByCode(code) && !existingPrefixes.has(code),
+      );
+      const skipped = countryCodes.filter(
+        (code) => !getCountryByCode(code) || existingPrefixes.has(code),
+      );
+
+      if (body.dryRun) {
+        return reply.send({
+          dryRun: true,
+          toCreate: toCreate.map((c) => ({ code: c, name: getCountryByCode(c)?.name })),
+          skipped: skipped.map((c) => ({
+            code: c,
+            reason: existingPrefixes.has(c) ? 'already_exists' : 'unknown_code',
+          })),
+        });
+      }
+
+      // 3. Build standardized variant set
+      const DAYPASS_VALIDITIES = [1, 2, 3, 5, 7, 10, 15, 30];
+      const DAYPASS_VOLUMES = ['1GB', '2GB', '3GB', '5GB', '10GB'];
+      const FIXED_VALIDITIES = [1, 3, 7, 15, 30];
+      const FIXED_VOLUMES = ['1GB', '2GB', '3GB', '5GB', '10GB', '20GB'];
+
+      function buildVariants(cc: string) {
+        const variants: Array<{
+          sku: string;
+          price: string;
+          optionValues: string[];
+        }> = [];
+
+        for (const validity of DAYPASS_VALIDITIES) {
+          for (const vol of DAYPASS_VOLUMES) {
+            variants.push({
+              sku: `${cc}-${vol}-${validity}D-DAYPASS`,
+              price: '5.00',
+              optionValues: ['Day-Pass', validity === 1 ? '1-Day' : `${validity}-Days`, vol],
+            });
+          }
+        }
+
+        for (const validity of FIXED_VALIDITIES) {
+          for (const vol of FIXED_VOLUMES) {
+            variants.push({
+              sku: `${cc}-${vol}-${validity}D-FIXED`,
+              price: '5.00',
+              optionValues: ['Total Data', validity === 1 ? '1-Day' : `${validity}-Days`, vol],
+            });
+          }
+        }
+
+        return variants;
+      }
+
+      // 4. Create products
+      let created = 0;
+      const errors: string[] = [];
+
+      for (const code of toCreate) {
+        const country = getCountryByCode(code)!;
+        const variants = buildVariants(code);
+
+        try {
+          await shopify.createProduct({
+            title: country.name,
+            handle: country.slug,
+            bodyHtml: '<p>Instant digital eSIM. Activate in minutes. No physical SIM required.</p>',
+            status: 'ACTIVE',
+            productType: 'eSIM',
+            tags: ['esim', code.toLowerCase()],
+            options: ['Plan Type', 'Validity', 'Volume'],
+            variants,
+            imageUrl: `https://flagcdn.com/w640/${code.toLowerCase()}.png`,
+          });
+          created++;
+          logger.info(
+            { code, name: country.name, variants: variants.length },
+            'Created Shopify product',
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          errors.push(`${code} (${country.name}): ${msg}`);
+          logger.error({ code, err }, 'Failed to create Shopify product');
+        }
+
+        // Rate limit: ~1 product/sec to stay under Shopify API limits
+        if (created < toCreate.length) {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+
+      return reply.send({
+        ok: true,
+        created,
+        skipped: skipped.length,
+        errors,
+        total: toCreate.length,
+      });
+    },
+  );
 
   /**
    * POST /admin/shopify-skus/sync

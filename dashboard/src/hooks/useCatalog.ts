@@ -53,3 +53,29 @@ export function useSyncCatalog() {
     },
   });
 }
+
+interface BulkCreateInput {
+  countries?: string[];
+  dryRun?: boolean;
+}
+
+interface BulkCreateResult {
+  ok?: boolean;
+  dryRun?: boolean;
+  created?: number;
+  skipped?: number;
+  total?: number;
+  errors?: string[];
+  toCreate?: Array<{ code: string; name: string }>;
+}
+
+export function useBulkCreateProducts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BulkCreateInput) =>
+      apiClient.post<BulkCreateResult>('/shopify-products/bulk-create', input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['shopify-skus'] });
+    },
+  });
+}
