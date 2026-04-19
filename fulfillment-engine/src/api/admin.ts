@@ -1186,6 +1186,67 @@ export default function adminRoutes(
   const FIXED_VALIDITIES = [1, 3, 7, 15, 30];
   const FIXED_VOLUMES_GB = [1, 2, 3, 5, 10, 15, 20, 30];
 
+  // Retail price matrix: PRICE_MAP[dataGB][validityDays] = price string
+  const PRICE_MAP: Record<number, Record<number, string>> = {
+    1: {
+      1: '4.99',
+      2: '5.99',
+      3: '6.99',
+      5: '8.99',
+      7: '9.99',
+      10: '11.99',
+      15: '13.99',
+      30: '16.99',
+    },
+    2: {
+      1: '6.99',
+      2: '8.99',
+      3: '9.99',
+      5: '12.99',
+      7: '14.99',
+      10: '17.99',
+      15: '19.99',
+      30: '24.99',
+    },
+    3: {
+      1: '8.99',
+      2: '10.99',
+      3: '12.99',
+      5: '15.99',
+      7: '18.99',
+      10: '22.99',
+      15: '26.99',
+      30: '32.99',
+    },
+    5: {
+      1: '12.99',
+      2: '15.99',
+      3: '17.99',
+      5: '22.99',
+      7: '26.99',
+      10: '32.99',
+      15: '38.99',
+      30: '46.99',
+    },
+    10: {
+      1: '19.99',
+      2: '24.99',
+      3: '27.99',
+      5: '34.99',
+      7: '39.99',
+      10: '49.99',
+      15: '59.99',
+      30: '74.99',
+    },
+    15: { 1: '29.99', 3: '39.99', 7: '54.99', 15: '79.99', 30: '99.99' },
+    20: { 1: '37.99', 3: '49.99', 7: '69.99', 15: '99.99', 30: '124.99' },
+    30: { 1: '49.99', 3: '69.99', 7: '94.99', 15: '139.99', 30: '179.99' },
+  };
+
+  function getPrice(gb: number, days: number): string {
+    return PRICE_MAP[gb]?.[days] ?? '5.00';
+  }
+
   function formatVolume(gb: number): string {
     return gb <= 5 ? `${gb} GB` : `${gb}GB`;
   }
@@ -1210,7 +1271,7 @@ export default function adminRoutes(
         const vol = formatVolume(gb);
         variants.push({
           sku: `${cc}-${vol.replace(' ', '')}-${days}D-DAYPASS`,
-          price: '5.00',
+          price: getPrice(gb, days),
           planType: 'Day-Pass',
           validity: formatValidity(days),
           volume: vol,
@@ -1224,7 +1285,7 @@ export default function adminRoutes(
         const vol = formatVolume(gb);
         variants.push({
           sku: `${cc}-${vol.replace(' ', '')}-${days}D-FIXED`,
-          price: '5.00',
+          price: getPrice(gb, days),
           planType: 'Total Data',
           validity: formatValidity(days),
           volume: vol,
