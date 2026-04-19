@@ -1143,7 +1143,8 @@ export class ShopifyClient {
       for (let i = 0; i < params.variants.length; i += BATCH_SIZE) {
         const batch = params.variants.slice(i, i + BATCH_SIZE);
         const variantInputs = batch.map((v) => ({
-          inventoryItem: { sku: v.sku },
+          inventoryItem: { sku: v.sku, tracked: false },
+          inventoryPolicy: 'CONTINUE',
           price: v.price,
           optionValues: v.optionValues.map((val, idx) => ({
             optionName: params.options[idx],
