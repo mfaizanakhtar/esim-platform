@@ -2260,12 +2260,18 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       const reasons: string[] = ['region'];
 
       if (isDaypass) {
-        // Daypass: validity is irrelevant — catalog entries are "daily" plans (validityDays=1).
-        // The "3D" in SA-1GB-3D-DAYPASS means "3 days of the pass", not the plan period.
-        // Only match region + data.
+        // FiRoam daypass: catalog validityDays=1 (single-day plan), SKU validity is the
+        // subscription length (e.g. 3D = buy 3 days) — skip validity check.
+        // TGT daily packs: catalog validityDays reflects the full period (e.g. 30),
+        // so validity MUST match to avoid 2-day SKU matching a 30-day pack.
+        const singleDayPlan = p.validityDays === 1;
+        const validityMatch = singleDayPlan || p.validityDays === validityDays;
         if (!relaxOptions.relaxData && !dataMatch) continue;
-        confidence = dataMatch ? 1.0 : 0.6;
+        if (!singleDayPlan && !relaxOptions.relaxValidity && !validityMatch) continue;
+        const matchCount = 1 + (dataMatch ? 1 : 0) + (validityMatch ? 1 : 0);
+        confidence = matchCount === 3 ? 1.0 : matchCount === 2 ? 0.8 : 0.6;
         if (dataMatch) reasons.push('data');
+        if (validityMatch) reasons.push('validity');
       } else {
         const validityMatch = p.validityDays === validityDays;
         // Apply relaxation: if not relaxed, field must match

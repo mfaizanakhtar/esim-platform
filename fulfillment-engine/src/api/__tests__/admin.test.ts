@@ -4617,7 +4617,7 @@ describe('Admin Routes', () => {
       expect(body.drafts[0].reason).toContain('data');
     });
 
-    it('returns 0.6 confidence for DAYPASS when data does not match', async () => {
+    it('returns 0.8 confidence for DAYPASS when data does not match (single-day plan auto-matches validity)', async () => {
       vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
         {
           id: 'cat-daypass-2',
@@ -4642,7 +4642,7 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body) as { drafts: Array<{ confidence: number }> };
       expect(body.drafts).toHaveLength(1);
-      expect(body.drafts[0].confidence).toBe(0.6); // region only
+      expect(body.drafts[0].confidence).toBe(0.8); // region + validity (single-day plan auto-matches)
     });
 
     it('returns empty drafts for DAYPASS when data mismatch and relaxData=false', async () => {
