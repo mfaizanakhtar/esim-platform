@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   useProductTemplates,
   useGenerateTemplates,
@@ -173,16 +173,31 @@ interface TemplateDetail {
   variants: Array<{ sku: string; price: string; planType: string; validity: string; volume: string }>;
 }
 
+function sanitizeHtml(html: string): string {
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/\son\w+\s*=/gi, ' data-removed=');
+}
+
 function DetailModal({ countryCode, onClose }: { countryCode: string; onClose: () => void }) {
   const [data, setData] = useState<TemplateDetail | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useState(() => {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     apiClient
       .get<TemplateDetail>(`/product-templates/${countryCode}`)
-      .then(setData)
-      .finally(() => setLoading(false));
-  });
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [countryCode]);
 
   const daypassCount = data?.variants.filter((v) => v.planType === 'Day-Pass').length ?? 0;
   const fixedCount = data?.variants.filter((v) => v.planType === 'Total Data').length ?? 0;
@@ -260,7 +275,7 @@ function DetailModal({ countryCode, onClose }: { countryCode: string; onClose: (
               <h4 className="font-medium text-muted-foreground">Product Description</h4>
               <div
                 className="prose prose-sm max-w-none border rounded-md p-3 bg-muted/30"
-                dangerouslySetInnerHTML={{ __html: data.descriptionHtml }}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(data.descriptionHtml) }}
               />
             </div>
 
