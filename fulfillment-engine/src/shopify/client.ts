@@ -1051,6 +1051,33 @@ export class ShopifyClient {
   }): Promise<{ productId: string }> {
     const accessToken = await this.getAccessToken();
 
+    // Step 0: If a product with this handle already exists, delete it (cleanup broken placeholders)
+    const existingQuery = `
+      query findByHandle($query: String!) {
+        products(first: 1, query: $query) {
+          nodes { id }
+        }
+      }
+    `;
+    const existingResp = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+      {
+        query: existingQuery,
+        variables: { query: `handle:${params.handle}` },
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': accessToken,
+        },
+      },
+    );
+    const existingProduct = existingResp.data?.data?.products?.nodes?.[0];
+    if (existingProduct?.id) {
+      logger.info({ handle: params.handle, id: existingProduct.id }, 'Deleting existing product before recreate');
+      await this.deleteProduct(existingProduct.id);
+    }
+
     // Step 1: Create product with first batch of variants (max 250)
     const mutation = `
       mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {

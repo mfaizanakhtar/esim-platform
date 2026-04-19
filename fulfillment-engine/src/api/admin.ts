@@ -1083,29 +1083,15 @@ export default function adminRoutes(
         countryCodes = [...codeSet].sort();
       }
 
-      // 2. Filter out countries that already have products (by SKU prefix)
-      const existingVariants = await shopify.getAllVariants();
-      const existingPrefixes = new Set<string>();
-      for (const v of existingVariants) {
-        const prefix = v.sku.split('-')[0];
-        if (prefix && prefix.length >= 2) existingPrefixes.add(prefix);
-      }
-
-      const toCreate = countryCodes.filter(
-        (code) => getCountryByCode(code) && !existingPrefixes.has(code),
-      );
-      const skipped = countryCodes.filter(
-        (code) => !getCountryByCode(code) || existingPrefixes.has(code),
-      );
+      // 2. Filter to valid country codes only
+      const toCreate = countryCodes.filter((code) => getCountryByCode(code));
+      const skipped = countryCodes.filter((code) => !getCountryByCode(code));
 
       if (body.dryRun) {
         return reply.send({
           dryRun: true,
           toCreate: toCreate.map((c) => ({ code: c, name: getCountryByCode(c)?.name })),
-          skipped: skipped.map((c) => ({
-            code: c,
-            reason: existingPrefixes.has(c) ? 'already_exists' : 'unknown_code',
-          })),
+          skipped: skipped.map((c) => ({ code: c, reason: 'unknown_code' })),
         });
       }
 
