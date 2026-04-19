@@ -9,6 +9,8 @@ export interface ProductTemplateSummary {
   vendor: string;
   tags: string[];
   hasSeo: boolean;
+  seoTitle: string | null;
+  seoDescription: string | null;
   shopifyProductId: string | null;
   shopifyPushedAt: string | null;
   variantCount: number;
