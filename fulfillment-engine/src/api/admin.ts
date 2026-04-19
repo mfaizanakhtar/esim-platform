@@ -909,11 +909,15 @@ export default function adminRoutes(
         continue; // nothing to reorder
       }
 
-      // Sort unlocked by netPrice ascending
+      // Sort unlocked by effective price ascending.
+      // FiRoam daypass: netPrice is per-day, multiply by daysCount for total cost.
+      // TGT / fixed plans: netPrice is already the total.
       unlocked.sort((a, b) => {
         const pa = Number(a.catalogEntry!.netPrice!);
         const pb = Number(b.catalogEntry!.netPrice!);
-        return pa - pb;
+        const ea = a.packageType === 'daypass' && a.daysCount ? pa * a.daysCount : pa;
+        const eb = b.packageType === 'daypass' && b.daysCount ? pb * b.daysCount : pb;
+        return ea - eb;
       });
 
       // Assign new priorities: unlocked get 1..N, locked keep their current priority (interleaved later if needed)
