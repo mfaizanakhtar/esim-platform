@@ -4672,6 +4672,35 @@ describe('Admin Routes', () => {
       expect(body.drafts).toHaveLength(0);
     });
 
+    it('rejects TGT daily pack when validity does not match DAYPASS SKU', async () => {
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-tgt-daily-30',
+          provider: 'tgt',
+          productName: 'SA 30 days 1GB/day',
+          region: 'SA',
+          dataAmount: '1GB',
+          validity: '30 days',
+          netPrice: '10.00',
+          productCode: 'A-001-SA-C4-D-30D',
+          productType: 'DAILY_PACK',
+          parsedJson: { regionCodes: ['SA'], dataMb: 1024, validityDays: 30 },
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'SA-1GB-2D-DAYPASS' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body2 = JSON.parse(res.body) as { drafts: unknown[] };
+      // 2-day DAYPASS should NOT match 30-day daily pack
+      expect(body2.drafts).toHaveLength(0);
+    });
+
     it('FIXED SKU with validity mismatch still returns 0.8 (unchanged behaviour)', async () => {
       vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
         {
