@@ -1040,6 +1040,7 @@ export class ShopifyClient {
     bodyHtml: string;
     status: 'ACTIVE' | 'DRAFT';
     productType?: string;
+    vendor?: string;
     tags?: string[];
     options: string[];
     variants: Array<{
@@ -1048,6 +1049,7 @@ export class ShopifyClient {
       optionValues: string[];
     }>;
     imageUrl?: string;
+    seo?: { title: string; description: string };
   }): Promise<{ productId: string }> {
     const accessToken = await this.getAccessToken();
 
@@ -1097,12 +1099,16 @@ export class ShopifyClient {
       descriptionHtml: params.bodyHtml,
       status: params.status,
       productType: params.productType ?? 'eSIM',
+      vendor: params.vendor,
       tags: params.tags ?? [],
       productOptions: params.options.map((name, idx) => ({
         name,
         values: [{ name: params.variants[0]?.optionValues[idx] ?? 'Default' }],
       })),
     };
+    if (params.seo) {
+      productInput.seo = { title: params.seo.title, description: params.seo.description };
+    }
 
     const media = params.imageUrl
       ? [{ originalSource: params.imageUrl, mediaContentType: 'IMAGE' }]
@@ -1146,8 +1152,7 @@ export class ShopifyClient {
       for (let i = 0; i < params.variants.length; i += BATCH_SIZE) {
         const batch = params.variants.slice(i, i + BATCH_SIZE);
         const variantInputs = batch.map((v) => ({
-          inventoryItem: { sku: v.sku, tracked: false },
-          inventoryPolicy: 'CONTINUE',
+          inventoryItem: { sku: v.sku },
           price: v.price,
           optionValues: v.optionValues.map((val, idx) => ({
             optionName: params.options[idx],
@@ -1171,10 +1176,11 @@ export class ShopifyClient {
 
         const variantData = variantResponse.data?.data?.productVariantsBulkCreate;
         if (variantData?.userErrors?.length > 0) {
-          logger.warn(
+          logger.error(
             { productId, errors: variantData.userErrors, batch: i },
-            'Some variants failed to create',
+            'Variant creation failed',
           );
+          throw new Error(`Variant creation failed: ${JSON.stringify(variantData.userErrors)}`);
         }
       }
 
@@ -1209,6 +1215,57 @@ export class ShopifyClient {
     }
 
     return { productId };
+  }
+
+  async updateProduct(params: {
+    productId: string;
+    title?: string;
+    descriptionHtml?: string;
+    status?: 'ACTIVE' | 'DRAFT';
+    tags?: string[];
+    vendor?: string;
+    seo?: { title: string; description: string };
+  }): Promise<void> {
+    const accessToken = await this.getAccessToken();
+
+    const mutation = `
+      mutation productUpdate($input: ProductInput!) {
+        productUpdate(input: $input) {
+          product { id }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const input: Record<string, unknown> = { id: params.productId };
+    if (params.title !== undefined) input.title = params.title;
+    if (params.descriptionHtml !== undefined) input.descriptionHtml = params.descriptionHtml;
+    if (params.status !== undefined) input.status = params.status;
+    if (params.tags !== undefined) input.tags = params.tags;
+    if (params.vendor !== undefined) input.vendor = params.vendor;
+    if (params.seo) input.seo = { title: params.seo.title, description: params.seo.description };
+
+    const response = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+      { query: mutation, variables: { input } },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': accessToken,
+        },
+      },
+    );
+
+    if (response.data?.errors) {
+      throw new Error(`productUpdate GraphQL error: ${JSON.stringify(response.data.errors)}`);
+    }
+
+    const data = response.data?.data?.productUpdate;
+    if (data?.userErrors?.length > 0) {
+      throw new Error(
+        `productUpdate error: ${data.userErrors.map((e: { message: string }) => e.message).join(', ')}`,
+      );
+    }
   }
 }
 

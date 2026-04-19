@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Map as MapIcon,
   Package,
+  ShoppingBag,
   LogOut,
   Menu,
   X,
@@ -16,6 +17,7 @@ const navItems = [
   { to: '/deliveries', label: 'Deliveries', icon: LayoutDashboard },
   { to: '/sku-mappings', label: 'SKU Mappings', icon: MapIcon },
   { to: '/catalog', label: 'Catalog', icon: Package },
+  { to: '/product-templates', label: 'Products', icon: ShoppingBag },
 ];
 
 function TopProgressBar() {

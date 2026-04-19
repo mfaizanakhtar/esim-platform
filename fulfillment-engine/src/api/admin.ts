@@ -1179,6 +1179,545 @@ export default function adminRoutes(
     },
   );
 
+  // ─── Product Templates ───────────────────────────────────────────────
+
+  const DAYPASS_VALIDITIES = [1, 2, 3, 5, 7, 10, 15, 30];
+  const DAYPASS_VOLUMES_GB = [1, 2, 3, 5, 10];
+  const FIXED_VALIDITIES = [1, 3, 7, 15, 30];
+  const FIXED_VOLUMES_GB = [1, 2, 3, 5, 10, 15, 20, 30];
+
+  function formatVolume(gb: number): string {
+    return gb <= 5 ? `${gb} GB` : `${gb}GB`;
+  }
+
+  function formatValidity(days: number): string {
+    return days === 1 ? '1-Day' : `${days}-Days`;
+  }
+
+  function buildTemplateVariants(cc: string) {
+    const variants: Array<{
+      sku: string;
+      price: string;
+      planType: string;
+      validity: string;
+      volume: string;
+      sortOrder: number;
+    }> = [];
+    let sortOrder = 0;
+
+    for (const days of DAYPASS_VALIDITIES) {
+      for (const gb of DAYPASS_VOLUMES_GB) {
+        const vol = formatVolume(gb);
+        variants.push({
+          sku: `${cc}-${vol.replace(' ', '')}-${days}D-DAYPASS`,
+          price: '5.00',
+          planType: 'Day-Pass',
+          validity: formatValidity(days),
+          volume: vol,
+          sortOrder: sortOrder++,
+        });
+      }
+    }
+
+    for (const days of FIXED_VALIDITIES) {
+      for (const gb of FIXED_VOLUMES_GB) {
+        const vol = formatVolume(gb);
+        variants.push({
+          sku: `${cc}-${vol.replace(' ', '')}-${days}D-FIXED`,
+          price: '5.00',
+          planType: 'Total Data',
+          validity: formatValidity(days),
+          volume: vol,
+          sortOrder: sortOrder++,
+        });
+      }
+    }
+
+    return variants;
+  }
+
+  /**
+   * POST /admin/product-templates/generate
+   * Generate product template records in DB for given countries.
+   */
+  app.post('/product-templates/generate', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = (request.body || {}) as {
+      countries?: string[];
+      overwrite?: boolean;
+      dryRun?: boolean;
+    };
+
+    // Discover countries (same logic as bulk-create)
+    let codes: string[];
+    if (body.countries && body.countries.length > 0) {
+      codes = body.countries.map((c) => c.toUpperCase());
+    } else {
+      const catalogRows = (await providerSkuCatalog.findMany({
+        where: { isActive: true },
+        select: { countryCodes: true, region: true },
+      })) as Array<{ countryCodes: unknown; region: string | null }>;
+      const codeSet = new Set<string>();
+      for (const row of catalogRows) {
+        const cc = row.countryCodes as string[] | null;
+        if (!Array.isArray(cc)) continue;
+        for (const c of cc) {
+          if (typeof c === 'string' && c.length === 2) {
+            codeSet.add(c.toUpperCase());
+          } else if (typeof c === 'string') {
+            const code = firoamNameToCode(c);
+            if (code) codeSet.add(code);
+          }
+        }
+      }
+      codes = [...codeSet].sort();
+    }
+
+    const valid = codes.filter((c) => getCountryByCode(c));
+    const skipped = codes.filter((c) => !getCountryByCode(c));
+
+    if (body.dryRun) {
+      return reply.send({
+        dryRun: true,
+        toGenerate: valid.map((c) => ({ code: c, name: getCountryByCode(c)?.name })),
+        skipped: skipped.map((c) => ({ code: c, reason: 'unknown_code' })),
+      });
+    }
+
+    let generated = 0;
+    let skippedExisting = 0;
+    const errors: string[] = [];
+
+    for (const code of valid) {
+      const country = getCountryByCode(code)!;
+
+      // Check if template already exists
+      const existing = await prisma.shopifyProductTemplate.findUnique({
+        where: { countryCode: code },
+      });
+      if (existing && !body.overwrite) {
+        skippedExisting++;
+        continue;
+      }
+
+      const variants = buildTemplateVariants(code);
+      const ccLower = code.toLowerCase();
+
+      try {
+        await prisma.shopifyProductTemplate.upsert({
+          where: { countryCode: code },
+          update: {
+            title: country.name,
+            handle: country.slug,
+            descriptionHtml: `<p><img src="https://flagcdn.com/w80/${ccLower}.png" alt="${country.name} flag" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
+            status: 'ACTIVE',
+            vendor: 'SAILeSIM',
+            tags: ['esim', ccLower, country.region],
+            imageUrl: `https://flagcdn.com/w640/${ccLower}.png`,
+            variants: {
+              deleteMany: {},
+              create: variants.map((v) => ({
+                sku: v.sku,
+                price: v.price,
+                planType: v.planType,
+                validity: v.validity,
+                volume: v.volume,
+                sortOrder: v.sortOrder,
+              })),
+            },
+          },
+          create: {
+            countryCode: code,
+            title: country.name,
+            handle: country.slug,
+            descriptionHtml: `<p><img src="https://flagcdn.com/w80/${ccLower}.png" alt="${country.name} flag" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
+            status: 'ACTIVE',
+            vendor: 'SAILeSIM',
+            tags: ['esim', ccLower, country.region],
+            imageUrl: `https://flagcdn.com/w640/${ccLower}.png`,
+            variants: {
+              create: variants.map((v) => ({
+                sku: v.sku,
+                price: v.price,
+                planType: v.planType,
+                validity: v.validity,
+                volume: v.volume,
+                sortOrder: v.sortOrder,
+              })),
+            },
+          },
+        });
+        generated++;
+      } catch (err) {
+        errors.push(`${code}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    return reply.send({
+      ok: true,
+      generated,
+      skippedExisting,
+      skippedInvalid: skipped.length,
+      errors,
+    });
+  });
+
+  /**
+   * POST /admin/product-templates/generate-seo
+   * AI SEO generation via OpenAI for templates missing SEO content.
+   */
+  app.post(
+    '/product-templates/generate-seo',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const body = (request.body || {}) as {
+        countries?: string[];
+        force?: boolean;
+      };
+
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey) {
+        return reply.status(500).send({ error: 'OPENAI_API_KEY not set' });
+      }
+      const openai = new OpenAI({ apiKey: openaiKey });
+
+      // Find templates that need SEO
+      const where: Record<string, unknown> = {};
+      if (body.countries && body.countries.length > 0) {
+        where.countryCode = { in: body.countries.map((c) => c.toUpperCase()) };
+      }
+      if (!body.force) {
+        where.seoTitle = null;
+      }
+
+      const templates = await prisma.shopifyProductTemplate.findMany({
+        where,
+        select: { id: true, countryCode: true, title: true },
+      });
+
+      if (templates.length === 0) {
+        return reply.send({ ok: true, queued: 0, message: 'All templates already have SEO' });
+      }
+
+      // Fire-and-forget background task
+      void (async () => {
+        const BATCH_SIZE = 10;
+        let updated = 0;
+
+        for (let i = 0; i < templates.length; i += BATCH_SIZE) {
+          const batch = templates.slice(i, i + BATCH_SIZE);
+          const countryList = batch.map((t) => `${t.title} (${t.countryCode})`).join(', ');
+
+          try {
+            const response = await openai.chat.completions.create({
+              model: 'gpt-4o-mini',
+              temperature: 0.7,
+              response_format: { type: 'json_object' },
+              messages: [
+                {
+                  role: 'system',
+                  content:
+                    'You generate SEO content for eSIM product pages. Respond with JSON: { "results": [{ "countryCode": "XX", "seoTitle": "...", "seoDescription": "...", "descriptionHtml": "..." }] }',
+                },
+                {
+                  role: 'user',
+                  content: `Generate SEO content for these eSIM country products. Brand: SAILeSIM.
+
+For each country provide:
+1. seoTitle (max 60 chars): e.g. "Saudi Arabia eSIM | Instant 4G/5G Data Plans | SAILeSIM"
+2. seoDescription (max 155 chars): e.g. "Buy Saudi Arabia eSIM. Instant activation, no physical SIM needed. Day passes & data plans with fast 4G/5G coverage."
+3. descriptionHtml: Rich HTML product description (2-3 paragraphs) mentioning the country, coverage, activation process, and why SAILeSIM.
+
+Countries: ${countryList}`,
+                },
+              ],
+            });
+
+            const content = response.choices[0]?.message?.content;
+            if (!content) continue;
+
+            const parsed = JSON.parse(content) as {
+              results: Array<{
+                countryCode: string;
+                seoTitle: string;
+                seoDescription: string;
+                descriptionHtml: string;
+              }>;
+            };
+
+            for (const result of parsed.results) {
+              const template = batch.find((t) => t.countryCode === result.countryCode);
+              if (!template) continue;
+
+              await prisma.shopifyProductTemplate.update({
+                where: { id: template.id },
+                data: {
+                  seoTitle: result.seoTitle,
+                  seoDescription: result.seoDescription,
+                  descriptionHtml: result.descriptionHtml,
+                },
+              });
+              updated++;
+            }
+          } catch (err) {
+            logger.error(
+              { err, batch: batch.map((t) => t.countryCode) },
+              'SEO generation failed for batch',
+            );
+          }
+
+          // Rate limit OpenAI
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+
+        logger.info({ updated, total: templates.length }, 'SEO generation complete');
+      })();
+
+      return reply.send({
+        ok: true,
+        queued: templates.length,
+        background: 'seo_generation_started',
+      });
+    },
+  );
+
+  /**
+   * GET /admin/product-templates
+   * List all product templates with summary info.
+   */
+  app.get('/product-templates', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const query = (request.query || {}) as {
+      status?: string;
+      country?: string;
+      pushed?: string;
+    };
+
+    const where: Record<string, unknown> = {};
+    if (query.status) where.status = query.status;
+    if (query.country) where.countryCode = query.country.toUpperCase();
+    if (query.pushed === 'true') where.shopifyProductId = { not: null };
+    if (query.pushed === 'false') where.shopifyProductId = null;
+
+    const templates = await prisma.shopifyProductTemplate.findMany({
+      where,
+      include: { _count: { select: { variants: true } } },
+      orderBy: { title: 'asc' },
+    });
+
+    return reply.send({
+      total: templates.length,
+      templates: templates.map((t) => ({
+        countryCode: t.countryCode,
+        title: t.title,
+        handle: t.handle,
+        status: t.status,
+        vendor: t.vendor,
+        tags: t.tags,
+        hasSeo: !!t.seoTitle,
+        shopifyProductId: t.shopifyProductId,
+        shopifyPushedAt: t.shopifyPushedAt,
+        variantCount: (t as unknown as { _count: { variants: number } })._count.variants,
+        updatedAt: t.updatedAt,
+      })),
+    });
+  });
+
+  /**
+   * GET /admin/product-templates/:countryCode
+   * Get a single template with all its variants.
+   */
+  app.get(
+    '/product-templates/:countryCode',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const { countryCode } = request.params as { countryCode: string };
+      const template = await prisma.shopifyProductTemplate.findUnique({
+        where: { countryCode: countryCode.toUpperCase() },
+        include: { variants: { orderBy: { sortOrder: 'asc' } } },
+      });
+
+      if (!template) {
+        return reply.status(404).send({ error: 'Template not found' });
+      }
+
+      return reply.send(template);
+    },
+  );
+
+  /**
+   * PATCH /admin/product-templates/:countryCode
+   * Update template fields (not variants).
+   */
+  app.patch(
+    '/product-templates/:countryCode',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const { countryCode } = request.params as { countryCode: string };
+      const body = (request.body || {}) as {
+        title?: string;
+        descriptionHtml?: string;
+        status?: string;
+        vendor?: string;
+        tags?: string[];
+        seoTitle?: string;
+        seoDescription?: string;
+      };
+
+      const data: Record<string, unknown> = {};
+      if (body.title !== undefined) data.title = body.title;
+      if (body.descriptionHtml !== undefined) data.descriptionHtml = body.descriptionHtml;
+      if (body.status !== undefined) data.status = body.status;
+      if (body.vendor !== undefined) data.vendor = body.vendor;
+      if (body.tags !== undefined) data.tags = body.tags;
+      if (body.seoTitle !== undefined) data.seoTitle = body.seoTitle;
+      if (body.seoDescription !== undefined) data.seoDescription = body.seoDescription;
+
+      try {
+        const updated = await prisma.shopifyProductTemplate.update({
+          where: { countryCode: countryCode.toUpperCase() },
+          data,
+        });
+        return reply.send(updated);
+      } catch {
+        return reply.status(404).send({ error: 'Template not found' });
+      }
+    },
+  );
+
+  /**
+   * DELETE /admin/product-templates/:countryCode
+   * Delete a template and its variants from DB. Does NOT delete from Shopify.
+   */
+  app.delete(
+    '/product-templates/:countryCode',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const { countryCode } = request.params as { countryCode: string };
+
+      try {
+        await prisma.shopifyProductTemplate.delete({
+          where: { countryCode: countryCode.toUpperCase() },
+        });
+        return reply.send({ ok: true, deleted: countryCode.toUpperCase() });
+      } catch {
+        return reply.status(404).send({ error: 'Template not found' });
+      }
+    },
+  );
+
+  /**
+   * POST /admin/product-templates/push-to-shopify
+   * Push templates to Shopify — reads from DB, creates products.
+   */
+  app.post(
+    '/product-templates/push-to-shopify',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const body = (request.body || {}) as {
+        countries?: string[];
+        force?: boolean;
+        dryRun?: boolean;
+      };
+
+      const where: Record<string, unknown> = {};
+      if (body.countries && body.countries.length > 0) {
+        where.countryCode = { in: body.countries.map((c) => c.toUpperCase()) };
+      }
+      if (!body.force) {
+        where.shopifyProductId = null;
+      }
+
+      const templates = await prisma.shopifyProductTemplate.findMany({
+        where,
+        include: { variants: { orderBy: { sortOrder: 'asc' } } },
+      });
+
+      if (templates.length === 0) {
+        return reply.send({ ok: true, total: 0, message: 'No templates to push' });
+      }
+
+      if (body.dryRun) {
+        return reply.send({
+          dryRun: true,
+          toPush: templates.map((t) => ({
+            countryCode: t.countryCode,
+            title: t.title,
+            variantCount: t.variants.length,
+            alreadyPushed: !!t.shopifyProductId,
+          })),
+        });
+      }
+
+      const shopify = getShopifyClient();
+
+      // Fire-and-forget background push
+      void (async () => {
+        let pushed = 0;
+        let errors = 0;
+
+        for (const template of templates) {
+          try {
+            const { productId } = await shopify.createProduct({
+              title: template.title,
+              handle: template.handle,
+              bodyHtml: template.descriptionHtml,
+              status: template.status as 'ACTIVE' | 'DRAFT',
+              productType: template.productType,
+              vendor: template.vendor,
+              tags: template.tags as string[],
+              options: ['Plan Type', 'Validity', 'Volume'],
+              variants: template.variants.map((v) => ({
+                sku: v.sku,
+                price: v.price.toString(),
+                optionValues: [v.planType, v.validity, v.volume],
+              })),
+              imageUrl: template.imageUrl ?? undefined,
+              seo: template.seoTitle
+                ? { title: template.seoTitle, description: template.seoDescription ?? '' }
+                : undefined,
+            });
+
+            await prisma.shopifyProductTemplate.update({
+              where: { id: template.id },
+              data: { shopifyProductId: productId, shopifyPushedAt: new Date() },
+            });
+
+            pushed++;
+            logger.info(
+              { code: template.countryCode, productId, variants: template.variants.length },
+              'Pushed product template to Shopify',
+            );
+          } catch (err) {
+            errors++;
+            logger.error({ code: template.countryCode, err }, 'Failed to push template to Shopify');
+          }
+
+          // Rate limit
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+
+        logger.info(
+          { pushed, errors, total: templates.length },
+          'Template push to Shopify complete',
+        );
+      })();
+
+      return reply.send({
+        ok: true,
+        total: templates.length,
+        background: 'push_started',
+      });
+    },
+  );
+
   /**
    * POST /admin/shopify-skus/sync
    * Fetch all Shopify variants and upsert into ShopifyVariant table.

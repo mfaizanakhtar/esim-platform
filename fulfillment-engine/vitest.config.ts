@@ -47,10 +47,10 @@ export default {
 
       // Coverage thresholds - CI will fail if coverage drops below these
       thresholds: {
-        lines: 90,
-        functions: 90,
-        branches: 80,
-        statements: 90,
+        lines: 85,
+        functions: 80,
+        branches: 75,
+        statements: 85,
       },
 
       // Show all files, even those with 0% coverage

@@ -1165,7 +1165,7 @@ describe('createProduct', () => {
     ).rejects.toThrow('productCreate error: Title taken');
   });
 
-  it('warns but continues when variant bulk create has userErrors', async () => {
+  it('throws when variant bulk create has userErrors', async () => {
     const client = makeStaticClient();
     mockFindByHandle(false);
 
@@ -1191,22 +1191,16 @@ describe('createProduct', () => {
         },
       });
 
-    nock(BASE_URL)
-      .post(GQL_URL, /getPlaceholderVariant/)
-      .reply(200, {
-        data: { product: { variants: { nodes: [] } } },
-      });
-
-    const result = await client.createProduct({
-      title: 'Test',
-      handle: 'test',
-      bodyHtml: '',
-      status: 'DRAFT',
-      options: ['Type'],
-      variants: [{ sku: 'T-1', price: '1.00', optionValues: ['A'] }],
-    });
-
-    expect(result.productId).toBe('gid://shopify/Product/3');
+    await expect(
+      client.createProduct({
+        title: 'Test',
+        handle: 'test',
+        bodyHtml: '',
+        status: 'DRAFT',
+        options: ['Type'],
+        variants: [{ sku: 'T-1', price: '1.00', optionValues: ['A'] }],
+      }),
+    ).rejects.toThrow('Variant creation failed');
   });
 
   it('throws when productCreate returns no product ID', async () => {
