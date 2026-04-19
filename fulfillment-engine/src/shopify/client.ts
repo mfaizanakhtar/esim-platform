@@ -1256,6 +1256,10 @@ export class ShopifyClient {
       },
     );
 
+    if (response.data?.errors) {
+      throw new Error(`productUpdate GraphQL error: ${JSON.stringify(response.data.errors)}`);
+    }
+
     const data = response.data?.data?.productUpdate;
     if (data?.userErrors?.length > 0) {
       throw new Error(

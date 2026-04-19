@@ -87,14 +87,20 @@ export function useGenerateTemplates() {
   });
 }
 
+function delayedRefetch(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['product-templates'] });
+  // Background tasks finish after the HTTP response — refetch periodically to pick up changes
+  setTimeout(() => void qc.invalidateQueries({ queryKey: ['product-templates'] }), 10_000);
+  setTimeout(() => void qc.invalidateQueries({ queryKey: ['product-templates'] }), 30_000);
+  setTimeout(() => void qc.invalidateQueries({ queryKey: ['product-templates'] }), 60_000);
+}
+
 export function useGenerateSeo() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: GenerateSeoInput) =>
       apiClient.post<GenerateSeoResult>('/product-templates/generate-seo', input),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['product-templates'] });
-    },
+    onSuccess: () => delayedRefetch(qc),
   });
 }
 
@@ -103,9 +109,7 @@ export function usePushToShopify() {
   return useMutation({
     mutationFn: (input: PushInput) =>
       apiClient.post<PushResult>('/product-templates/push-to-shopify', input),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['product-templates'] });
-    },
+    onSuccess: () => delayedRefetch(qc),
   });
 }
 

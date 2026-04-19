@@ -9,6 +9,7 @@ Bulk product creation has two issues: (1) variants aren't being created (only th
 `productVariantsBulkCreate` fails silently. Need to debug — likely the `inventoryPolicy: 'CONTINUE'` field isn't valid in `ProductVariantsBulkInput` for API 2026-04, or `tracked: false` isn't accepted in `InventoryItemInput`. Will test locally and fix.
 
 ### P2: Match Saudi Arabia product format
+
 | Field | Saudi Arabia | Ours (current) | Fix |
 |-------|-------------|----------------|-----|
 | Volumes | 1GB-30GB with spaces ("2 GB") | "1GB" no spaces, max 20GB | Add 25GB, 30GB; use "X GB" format for <10 |
