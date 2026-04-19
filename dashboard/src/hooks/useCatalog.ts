@@ -66,6 +66,7 @@ interface BulkCreateResult {
   skipped?: number;
   total?: number;
   errors?: string[];
+  background?: string;
   toCreate?: Array<{ code: string; name: string }>;
 }
 
