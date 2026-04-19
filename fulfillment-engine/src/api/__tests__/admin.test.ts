@@ -2188,9 +2188,10 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json() as { ok: boolean; created: number };
+      const body = res.json() as { ok: boolean; total: number; background: string };
       expect(body.ok).toBe(true);
-      expect(body.created).toBe(1);
+      expect(body.total).toBe(1);
+      expect(body.background).toBe('product_creation_started');
     });
 
     it('creates both countries (replaces existing broken products)', async () => {
@@ -2204,8 +2205,8 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json() as { created: number; skipped: number };
-      expect(body.created).toBe(2);
+      const body = res.json() as { total: number; skipped: number };
+      expect(body.total).toBe(2);
       expect(body.skipped).toBe(0);
     });
 
@@ -2255,8 +2256,8 @@ describe('Admin Routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      const body = res.json() as { created: number; skipped: number };
-      expect(body.created).toBe(0);
+      const body = res.json() as { total: number; skipped: number };
+      expect(body.total).toBe(0);
       expect(body.skipped).toBe(2);
     });
   });
