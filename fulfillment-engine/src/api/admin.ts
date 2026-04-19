@@ -915,8 +915,14 @@ export default function adminRoutes(
       unlocked.sort((a, b) => {
         const pa = Number(a.catalogEntry!.netPrice!);
         const pb = Number(b.catalogEntry!.netPrice!);
-        const ea = a.packageType === 'daypass' && a.daysCount ? pa * a.daysCount : pa;
-        const eb = b.packageType === 'daypass' && b.daysCount ? pb * b.daysCount : pb;
+        const ea =
+          a.packageType === 'daypass' && a.daysCount && a.provider === 'firoam'
+            ? pa * a.daysCount
+            : pa;
+        const eb =
+          b.packageType === 'daypass' && b.daysCount && b.provider === 'firoam'
+            ? pb * b.daysCount
+            : pb;
         return ea - eb;
       });
 
