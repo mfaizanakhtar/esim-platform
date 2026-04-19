@@ -172,6 +172,8 @@ function TemplateTable({
   search: string;
 }) {
   const deleteMutation = useDeleteTemplate();
+  const pushMutation = usePushToShopify();
+  const [pushingCode, setPushingCode] = useState<string | null>(null);
 
   const filtered = search
     ? templates.filter(
@@ -238,18 +240,38 @@ function TemplateTable({
                 {new Date(t.updatedAt).toLocaleDateString()}
               </td>
               <td className="px-4 py-2 text-right">
-                <button
-                  onClick={() => {
-                    if (confirm(`Delete template for ${t.title}?`)) {
-                      deleteMutation.mutate(t.countryCode);
-                    }
-                  }}
-                  disabled={deleteMutation.isPending}
-                  className="p-1 text-muted-foreground hover:text-destructive transition-colors"
-                  title="Delete template"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <div className="flex items-center justify-end gap-1">
+                  <button
+                    onClick={() => {
+                      setPushingCode(t.countryCode);
+                      pushMutation.mutate(
+                        { countries: [t.countryCode], force: true },
+                        {
+                          onSettled: () => setPushingCode(null),
+                        },
+                      );
+                    }}
+                    disabled={pushMutation.isPending}
+                    className="p-1 text-muted-foreground hover:text-primary transition-colors"
+                    title={`Push ${t.title} to Shopify`}
+                  >
+                    <Upload
+                      className={`h-4 w-4 ${pushingCode === t.countryCode ? 'animate-pulse' : ''}`}
+                    />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete template for ${t.title}?`)) {
+                        deleteMutation.mutate(t.countryCode);
+                      }
+                    }}
+                    disabled={deleteMutation.isPending}
+                    className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                    title="Delete template"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
               </td>
             </tr>
           ))}
