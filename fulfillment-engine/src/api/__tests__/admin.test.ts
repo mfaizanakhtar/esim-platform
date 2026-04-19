@@ -2249,6 +2249,23 @@ describe('Admin Routes', () => {
       // AF is ISO code, Albania is FiRoam name → AL
       expect(body.toCreate.map((c) => c.code).sort()).toEqual(['AF', 'AL']);
     });
+
+    it('skips unknown country codes', async () => {
+      adminMocks.mockGetAllVariants.mockResolvedValue([]);
+      vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/shopify-products/bulk-create',
+        headers: JSON_HEADERS,
+        payload: { countries: ['XX', 'ZZ'] },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { created: number; skipped: number };
+      expect(body.created).toBe(0);
+      expect(body.skipped).toBe(2);
+    });
   });
 
   // ── GET /shopify-skus ────────────────────────────────────────────────────
