@@ -1781,6 +1781,375 @@ Countries: ${countryList}`,
     },
   );
 
+  // ─── Pricing Engine ──────────────────────────────────────────────────
+
+  app.post('/pricing/scrape-competitors', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    const body = (request.body || {}) as { countries?: string[] };
+    const { scrapeCompetitors } = await import('~/services/competitorScraper');
+
+    void (async () => {
+      const run = await prisma.pricingRun.create({
+        data: { type: 'competitor_scrape', scope: body.countries?.join(',') ?? null },
+      });
+      try {
+        const result = await scrapeCompetitors(body.countries?.map((c) => c.toUpperCase()));
+        await prisma.pricingRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'done',
+            totalProcessed: result.totalCountries,
+            totalUpdated: result.totalPlans,
+            totalSkipped: result.skippedCached,
+            totalErrors: result.errors,
+            completedAt: new Date(),
+          },
+        });
+      } catch (err) {
+        await prisma.pricingRun.update({
+          where: { id: run.id },
+          data: {
+            status: 'error',
+            error: err instanceof Error ? err.message : String(err),
+            completedAt: new Date(),
+          },
+        });
+      }
+    })();
+
+    return reply.send({ ok: true, background: 'scrape_started' });
+  });
+
+  app.get('/pricing/competitor-prices', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    const query = (request.query || {}) as {
+      countryCode?: string;
+      dataMb?: string;
+      validityDays?: string;
+      limit?: string;
+    };
+
+    const where: Record<string, unknown> = {};
+    if (query.countryCode) where.countryCode = query.countryCode.toUpperCase();
+    if (query.dataMb) where.dataMb = { gte: parseInt(query.dataMb, 10) };
+    if (query.validityDays) where.validityDays = { gte: parseInt(query.validityDays, 10) };
+
+    const prices = await prisma.competitorPrice.findMany({
+      where,
+      orderBy: { price: 'asc' },
+      take: parseInt(query.limit ?? '100', 10),
+    });
+
+    return reply.send({ total: prices.length, prices });
+  });
+
+  app.post(
+    '/pricing/calculate-cost-floors',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+      const body = (request.body || {}) as { countries?: string[] };
+      const { calculateCostFloors } = await import('~/services/pricingEngine');
+
+      void (async () => {
+        const run = await prisma.pricingRun.create({
+          data: { type: 'cost_floor', scope: body.countries?.join(',') ?? null },
+        });
+        try {
+          const result = await calculateCostFloors(body.countries?.map((c) => c.toUpperCase()));
+          await prisma.pricingRun.update({
+            where: { id: run.id },
+            data: { status: 'done', ...result, completedAt: new Date() },
+          });
+        } catch (err) {
+          await prisma.pricingRun.update({
+            where: { id: run.id },
+            data: {
+              status: 'error',
+              error: err instanceof Error ? err.message : String(err),
+              completedAt: new Date(),
+            },
+          });
+        }
+      })();
+
+      return reply.send({ ok: true, background: 'cost_floor_started' });
+    },
+  );
+
+  app.post(
+    '/pricing/generate-suggestions',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+      const body = (request.body || {}) as {
+        countries?: string[];
+        params?: Partial<import('~/services/pricingEngine').PricingParams>;
+      };
+      const { generateSuggestions, DEFAULT_PRICING_PARAMS } =
+        await import('~/services/pricingEngine');
+
+      const params = { ...DEFAULT_PRICING_PARAMS, ...body.params };
+
+      void (async () => {
+        const run = await prisma.pricingRun.create({
+          data: {
+            type: 'smart_pricing',
+            scope: body.countries?.join(',') ?? null,
+            params: JSON.parse(JSON.stringify(params)),
+          },
+        });
+        try {
+          const result = await generateSuggestions(
+            params,
+            body.countries?.map((c) => c.toUpperCase()),
+          );
+          await prisma.pricingRun.update({
+            where: { id: run.id },
+            data: { status: 'done', ...result, completedAt: new Date() },
+          });
+        } catch (err) {
+          await prisma.pricingRun.update({
+            where: { id: run.id },
+            data: {
+              status: 'error',
+              error: err instanceof Error ? err.message : String(err),
+              completedAt: new Date(),
+            },
+          });
+        }
+      })();
+
+      return reply.send({ ok: true, background: 'suggestions_started', params });
+    },
+  );
+
+  app.post('/pricing/approve', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    const body = (request.body || {}) as { countryCodes: string[] };
+
+    if (!body.countryCodes?.length) {
+      return reply.status(400).send({ error: 'countryCodes required' });
+    }
+
+    // Use raw SQL to set price = proposedPrice (Prisma updateMany can't reference another field)
+    const updated = await prisma.$executeRaw`
+      UPDATE "ShopifyProductTemplateVariant" v
+      SET "price" = v."proposedPrice", "updatedAt" = NOW()
+      FROM "ShopifyProductTemplate" t
+      WHERE v."templateId" = t."id"
+        AND t."countryCode" = ANY(${body.countryCodes.map((c) => c.toUpperCase())}::text[])
+        AND v."proposedPrice" IS NOT NULL
+        AND v."priceLocked" = false
+    `;
+
+    return reply.send({ ok: true, updated });
+  });
+
+  app.post('/pricing/approve-and-push', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    const body = (request.body || {}) as { countryCodes: string[] };
+
+    if (!body.countryCodes?.length) {
+      return reply.status(400).send({ error: 'countryCodes required' });
+    }
+
+    const codes = body.countryCodes.map((c) => c.toUpperCase());
+
+    // Approve prices
+    const updated = await prisma.$executeRaw`
+      UPDATE "ShopifyProductTemplateVariant" v
+      SET "price" = v."proposedPrice", "updatedAt" = NOW()
+      FROM "ShopifyProductTemplate" t
+      WHERE v."templateId" = t."id"
+        AND t."countryCode" = ANY(${codes}::text[])
+        AND v."proposedPrice" IS NOT NULL
+        AND v."priceLocked" = false
+    `;
+
+    // Push to Shopify in background
+    const shopify = getShopifyClient();
+    void (async () => {
+      const templates = await prisma.shopifyProductTemplate.findMany({
+        where: { countryCode: { in: codes }, shopifyProductId: { not: null } },
+        include: { variants: { orderBy: { sortOrder: 'asc' } } },
+      });
+
+      for (const template of templates) {
+        try {
+          await shopify.createProduct({
+            title: template.title,
+            handle: template.handle,
+            bodyHtml: template.descriptionHtml,
+            status: template.status as 'ACTIVE' | 'DRAFT',
+            productType: template.productType,
+            vendor: template.vendor,
+            tags: template.tags as string[],
+            options: ['Plan Type', 'Validity', 'Volume'],
+            variants: template.variants.map((v) => ({
+              sku: v.sku,
+              price: v.price.toString(),
+              optionValues: [v.planType, v.validity, v.volume],
+            })),
+            imageUrl: template.imageUrl ?? undefined,
+            seo: template.seoTitle
+              ? { title: template.seoTitle, description: template.seoDescription ?? '' }
+              : undefined,
+          });
+          logger.info({ code: template.countryCode }, 'Pushed pricing update to Shopify');
+        } catch (err) {
+          logger.error({ code: template.countryCode, err }, 'Failed to push pricing to Shopify');
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    })();
+
+    return reply.send({ ok: true, updated, background: 'push_started' });
+  });
+
+  app.patch('/pricing/variants/bulk-lock', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    const body = (request.body || {}) as { variantIds: string[]; priceLocked: boolean };
+
+    const result = await prisma.shopifyProductTemplateVariant.updateMany({
+      where: { id: { in: body.variantIds } },
+      data: {
+        priceLocked: body.priceLocked,
+        priceSource: body.priceLocked ? 'manual' : undefined,
+      },
+    });
+
+    return reply.send({ ok: true, updated: result.count });
+  });
+
+  app.get('/pricing/overview', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    const query = (request.query || {}) as { countryCode?: string };
+
+    const where: Record<string, unknown> = {};
+    if (query.countryCode) where.countryCode = query.countryCode.toUpperCase();
+
+    const templates = await prisma.shopifyProductTemplate.findMany({
+      where,
+      include: {
+        variants: {
+          select: {
+            id: true,
+            price: true,
+            proposedPrice: true,
+            costFloor: true,
+            providerCost: true,
+            competitorPrice: true,
+            priceLocked: true,
+            marketPosition: true,
+            lastPricedAt: true,
+          },
+        },
+      },
+      orderBy: { title: 'asc' },
+    });
+
+    // Get latest scrape time per country
+    const lastScrapes = await prisma.competitorPrice.groupBy({
+      by: ['countryCode'],
+      _max: { scrapedAt: true },
+    });
+    const scrapeMap = new Map(lastScrapes.map((s) => [s.countryCode, s._max.scrapedAt]));
+
+    const countries = templates.map((t) => {
+      const variants = t.variants;
+      const pending = variants.filter((v) => v.proposedPrice != null && !v.priceLocked).length;
+      const locked = variants.filter((v) => v.priceLocked).length;
+      const withCost = variants.filter((v) => v.providerCost != null);
+      const avgCost =
+        withCost.length > 0
+          ? withCost.reduce((sum, v) => sum + Number(v.providerCost), 0) / withCost.length
+          : null;
+      const withProposed = variants.filter((v) => v.proposedPrice != null);
+      const avgProposed =
+        withProposed.length > 0
+          ? withProposed.reduce((sum, v) => sum + Number(v.proposedPrice), 0) / withProposed.length
+          : null;
+
+      // Market position summary
+      const positions = variants.map((v) => v.marketPosition).filter(Boolean);
+      const aboveMarket = positions.filter((p) => p === 'above_market').length;
+      const competitive = positions.filter((p) => p === 'competitive').length;
+      let overallPosition = 'no_data';
+      if (competitive > aboveMarket) overallPosition = 'competitive';
+      else if (aboveMarket > 0) overallPosition = 'above_market';
+
+      return {
+        countryCode: t.countryCode,
+        title: t.title,
+        variantCount: variants.length,
+        pendingChanges: pending,
+        lockedCount: locked,
+        avgCost: avgCost ? parseFloat(avgCost.toFixed(2)) : null,
+        avgProposed: avgProposed ? parseFloat(avgProposed.toFixed(2)) : null,
+        marketPosition: overallPosition,
+        lastPricedAt: variants.reduce((latest: Date | null, v) => {
+          if (!v.lastPricedAt) return latest;
+          return !latest || v.lastPricedAt > latest ? v.lastPricedAt : latest;
+        }, null),
+        lastScrapedAt: scrapeMap.get(t.countryCode) ?? null,
+      };
+    });
+
+    const totalPending = countries.reduce((sum, c) => sum + c.pendingChanges, 0);
+    const totalLocked = countries.reduce((sum, c) => sum + c.lockedCount, 0);
+
+    return reply.send({ totalCountries: countries.length, totalPending, totalLocked, countries });
+  });
+
+  app.get('/pricing/country/:code', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    const { code } = request.params as { code: string };
+
+    const template = await prisma.shopifyProductTemplate.findUnique({
+      where: { countryCode: code.toUpperCase() },
+      include: { variants: { orderBy: { sortOrder: 'asc' } } },
+    });
+
+    if (!template) return reply.status(404).send({ error: 'Template not found' });
+
+    return reply.send({
+      countryCode: template.countryCode,
+      title: template.title,
+      variants: template.variants.map((v) => ({
+        id: v.id,
+        sku: v.sku,
+        planType: v.planType,
+        validity: v.validity,
+        volume: v.volume,
+        price: v.price,
+        priceLocked: v.priceLocked,
+        providerCost: v.providerCost,
+        costFloor: v.costFloor,
+        competitorPrice: v.competitorPrice,
+        competitorBrand: v.competitorBrand,
+        proposedPrice: v.proposedPrice,
+        priceSource: v.priceSource,
+        marketPosition: v.marketPosition,
+        lastPricedAt: v.lastPricedAt,
+      })),
+    });
+  });
+
+  app.get('/pricing/runs', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+    const query = (request.query || {}) as { type?: string; limit?: string };
+
+    const where: Record<string, unknown> = {};
+    if (query.type) where.type = query.type;
+
+    const runs = await prisma.pricingRun.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(query.limit ?? '20', 10),
+    });
+
+    return reply.send({ runs });
+  });
+
   /**
    * POST /admin/shopify-skus/sync
    * Fetch all Shopify variants and upsert into ShopifyVariant table.

@@ -6,6 +6,7 @@ import {
   Map as MapIcon,
   Package,
   ShoppingBag,
+  DollarSign,
   LogOut,
   Menu,
   X,
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/sku-mappings', label: 'SKU Mappings', icon: MapIcon },
   { to: '/catalog', label: 'Catalog', icon: Package },
   { to: '/product-templates', label: 'Products', icon: ShoppingBag },
+  { to: '/pricing', label: 'Pricing', icon: DollarSign },
 ];
 
 function TopProgressBar() {

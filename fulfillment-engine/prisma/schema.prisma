@@ -168,19 +168,65 @@ model ShopifyProductTemplate {
 }
 
 model ShopifyProductTemplateVariant {
-  id         String                 @id @default(cuid())
-  templateId String
-  sku        String
-  price      Decimal                @db.Decimal(10, 2)
-  planType   String                 // "Day-Pass" | "Total Data"
-  validity   String                 // "1-Day", "7-Days", etc.
-  volume     String                 // "1 GB", "10GB", etc.
-  sortOrder  Int                    @default(0)
-  createdAt  DateTime               @default(now())
-  updatedAt  DateTime               @updatedAt
-  template   ShopifyProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  id              String                 @id @default(cuid())
+  templateId      String
+  sku             String
+  price           Decimal                @db.Decimal(10, 2)
+  planType        String                 // "Day-Pass" | "Total Data"
+  validity        String                 // "1-Day", "7-Days", etc.
+  volume          String                 // "1 GB", "10GB", etc.
+  sortOrder       Int                    @default(0)
+  priceLocked     Boolean                @default(false)
+  providerCost    Decimal?               @db.Decimal(10, 2)
+  costFloor       Decimal?               @db.Decimal(10, 2)
+  competitorPrice Decimal?               @db.Decimal(10, 2)
+  competitorBrand String?
+  proposedPrice   Decimal?               @db.Decimal(10, 2)
+  priceSource     String?                // "cost_floor" | "competitor" | "manual" | "default"
+  marketPosition  String?                // "competitive" | "above_market" | "no_data"
+  lastPricedAt    DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  template        ShopifyProductTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, sku])
   @@index([templateId])
   @@index([sku])
+}
+
+model CompetitorPrice {
+  id           String   @id @default(cuid())
+  countryCode  String
+  countrySlug  String
+  brand        String
+  planName     String?
+  price        Decimal  @db.Decimal(10, 2)
+  dataMb       Int
+  validityDays Int
+  coverageType String?
+  promoCode    String?
+  originalPrice Decimal? @db.Decimal(10, 2)
+  rawPayload   Json?
+  scrapedAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([countryCode, brand, dataMb, validityDays])
+  @@index([countryCode, dataMb, validityDays])
+  @@index([scrapedAt])
+}
+
+model PricingRun {
+  id             String    @id @default(cuid())
+  type           String    // "cost_floor" | "competitor_scrape" | "smart_pricing" | "shopify_push"
+  status         String    @default("running")
+  scope          String?
+  params         Json?
+  totalProcessed Int       @default(0)
+  totalUpdated   Int       @default(0)
+  totalSkipped   Int       @default(0)
+  totalErrors    Int       @default(0)
+  error          String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
 }
