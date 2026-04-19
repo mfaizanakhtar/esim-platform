@@ -1057,8 +1057,27 @@ describe('deleteVariants', () => {
 describe('createProduct', () => {
   const GQL_URL = '/admin/api/2026-04/graphql.json';
 
+  function mockFindByHandle(exists = false) {
+    nock(BASE_URL)
+      .post(GQL_URL, /findByHandle/)
+      .reply(200, {
+        data: {
+          products: {
+            nodes: exists ? [{ id: 'gid://shopify/Product/old' }] : [],
+          },
+        },
+      });
+    if (exists) {
+      // Also mock deleteProduct
+      nock(BASE_URL)
+        .post(GQL_URL, /productDelete/)
+        .reply(200, { data: { productDelete: { userErrors: [] } } });
+    }
+  }
+
   it('creates a product with variants and deletes placeholder', async () => {
     const client = makeStaticClient();
+    mockFindByHandle(false);
 
     // 1. productCreate
     nock(BASE_URL)
@@ -1121,6 +1140,7 @@ describe('createProduct', () => {
 
   it('throws on productCreate userErrors', async () => {
     const client = makeStaticClient();
+    mockFindByHandle(false);
 
     nock(BASE_URL)
       .post(GQL_URL, /productCreate/)
@@ -1147,6 +1167,7 @@ describe('createProduct', () => {
 
   it('warns but continues when variant bulk create has userErrors', async () => {
     const client = makeStaticClient();
+    mockFindByHandle(false);
 
     nock(BASE_URL)
       .post(GQL_URL, /productCreate/)
@@ -1190,6 +1211,7 @@ describe('createProduct', () => {
 
   it('throws when productCreate returns no product ID', async () => {
     const client = makeStaticClient();
+    mockFindByHandle(false);
 
     nock(BASE_URL)
       .post(GQL_URL, /productCreate/)
@@ -1211,6 +1233,7 @@ describe('createProduct', () => {
 
   it('creates product without variants (no placeholder deletion)', async () => {
     const client = makeStaticClient();
+    mockFindByHandle(false);
 
     nock(BASE_URL)
       .post(GQL_URL, /productCreate/)

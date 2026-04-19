@@ -2178,7 +2178,6 @@ describe('Admin Routes', () => {
 
   describe('POST /shopify-products/bulk-create', () => {
     it('creates products for specified country codes', async () => {
-      adminMocks.mockGetAllVariants.mockResolvedValue([]);
       vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([]);
 
       const res = await app.inject({
@@ -2194,10 +2193,7 @@ describe('Admin Routes', () => {
       expect(body.created).toBe(1);
     });
 
-    it('skips countries that already have products', async () => {
-      adminMocks.mockGetAllVariants.mockResolvedValue([
-        { sku: 'AF-1GB-7D-FIXED', variantId: '1', productTitle: 'Afghanistan', variantTitle: '' },
-      ]);
+    it('creates both countries (replaces existing broken products)', async () => {
       vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([]);
 
       const res = await app.inject({
@@ -2209,12 +2205,11 @@ describe('Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json() as { created: number; skipped: number };
-      expect(body.created).toBe(1); // AL created
-      expect(body.skipped).toBe(1); // AF skipped
+      expect(body.created).toBe(2);
+      expect(body.skipped).toBe(0);
     });
 
     it('returns dry run preview without creating', async () => {
-      adminMocks.mockGetAllVariants.mockResolvedValue([]);
       vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([]);
 
       const res = await app.inject({
@@ -2231,7 +2226,6 @@ describe('Admin Routes', () => {
     });
 
     it('auto-discovers countries from catalog when none specified', async () => {
-      adminMocks.mockGetAllVariants.mockResolvedValue([]);
       vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([
         { countryCodes: ['AF'], region: null },
         { countryCodes: ['Albania'], region: null },
@@ -2251,7 +2245,6 @@ describe('Admin Routes', () => {
     });
 
     it('skips unknown country codes', async () => {
-      adminMocks.mockGetAllVariants.mockResolvedValue([]);
       vi.mocked(prisma.providerSkuCatalog.findMany).mockResolvedValue([]);
 
       const res = await app.inject({
