@@ -590,11 +590,17 @@ export function SkuMappings() {
                                   Catalog inactive
                                 </span>
                               )}
-                              {m.catalogEntry?.netPrice && (
-                                <span className="text-xs text-muted-foreground font-mono">
-                                  {m.catalogEntry.netPrice}{m.catalogEntry.currency ? ` ${m.catalogEntry.currency}` : ''}
-                                </span>
-                              )}
+                              {m.catalogEntry?.netPrice && (() => {
+                                const raw = Number(m.catalogEntry.netPrice);
+                                const isDaypass = m.packageType === 'daypass' && m.daysCount && m.daysCount > 1;
+                                const effective = isDaypass ? raw * m.daysCount! : raw;
+                                const cur = m.catalogEntry.currency ? ` ${m.catalogEntry.currency}` : '';
+                                return (
+                                  <span className="text-xs text-muted-foreground font-mono" title={isDaypass ? `${m.catalogEntry.netPrice}${cur}/day × ${m.daysCount}d` : undefined}>
+                                    {effective.toFixed(2)}{cur}
+                                  </span>
+                                );
+                              })()}
                             </div>
                             {m.catalogEntry && (
                               <p
