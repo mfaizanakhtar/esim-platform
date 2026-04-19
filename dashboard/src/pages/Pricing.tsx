@@ -29,6 +29,19 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
+// ─── Helpers ──────────────────────────────────────────────────────────
+
+function formatTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 // ─── Toast ────────────────────────────────────────────────────────────
 
 type ToastType = 'success' | 'error' | 'info';
@@ -373,6 +386,12 @@ export function Pricing() {
     approveMutation.isPending ||
     approveAndPushMutation.isPending;
 
+  // Find last run of each type for pipeline status
+  const runs = runsData?.runs ?? [];
+  const lastScrapeRun = runs.find((r) => r.type === 'competitor_scrape');
+  const lastCostFloorRun = runs.find((r) => r.type === 'cost_floor');
+  const lastSmartRun = runs.find((r) => r.type === 'smart_pricing');
+
   // ─── Handlers ─────────────────────────────────────────────────
 
   function handleScrape() {
@@ -575,34 +594,94 @@ export function Pricing() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {confirm && <ConfirmDialog {...confirm} onClose={() => setConfirm(null)} />}
 
-      {/* Zone 1: Data Collection */}
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={handleScrape}
-          disabled={anyPending}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
-        >
-          <TrendingDown className={`h-4 w-4 ${scrapeMutation.isPending ? 'animate-pulse' : ''}`} />
-          {scrapeMutation.isPending ? 'Scraping...' : 'Scrape Competitors'}
-        </button>
+      {/* Zone 1: Pipeline Steps */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* Step 1 */}
+        <div className="border rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-xs font-bold">1</span>
+            <h3 className="font-medium text-sm">Scrape Competitors</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Fetch retail prices from 26+ competitors via esims.io. Cached for 24h.
+          </p>
+          {lastScrapeRun && (
+            <p className="text-xs text-muted-foreground">
+              Last run:{' '}
+              <span className={`font-medium ${lastScrapeRun.status === 'done' ? 'text-green-600' : lastScrapeRun.status === 'error' ? 'text-red-600' : 'text-yellow-600'}`}>
+                {lastScrapeRun.status}
+              </span>{' '}
+              · {formatTimeAgo(lastScrapeRun.createdAt)}
+              {lastScrapeRun.status === 'done' && ` · ${lastScrapeRun.totalUpdated} plans`}
+            </p>
+          )}
+          <button
+            onClick={handleScrape}
+            disabled={anyPending}
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
+          >
+            <TrendingDown className={`h-4 w-4 ${scrapeMutation.isPending ? 'animate-pulse' : ''}`} />
+            {scrapeMutation.isPending ? 'Scraping...' : 'Run'}
+          </button>
+        </div>
 
-        <button
-          onClick={handleCostFloors}
-          disabled={anyPending}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50"
-        >
-          <BarChart3 className={`h-4 w-4 ${costFloorMutation.isPending ? 'animate-pulse' : ''}`} />
-          {costFloorMutation.isPending ? 'Calculating...' : 'Calculate Cost Floors'}
-        </button>
+        {/* Step 2 */}
+        <div className="border rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center h-6 w-6 rounded-full bg-muted text-xs font-bold">2</span>
+            <h3 className="font-medium text-sm">Calculate Cost Floors</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Find cheapest provider costs and calculate minimum prices with margin.
+          </p>
+          {lastCostFloorRun && (
+            <p className="text-xs text-muted-foreground">
+              Last run:{' '}
+              <span className={`font-medium ${lastCostFloorRun.status === 'done' ? 'text-green-600' : lastCostFloorRun.status === 'error' ? 'text-red-600' : 'text-yellow-600'}`}>
+                {lastCostFloorRun.status}
+              </span>{' '}
+              · {formatTimeAgo(lastCostFloorRun.createdAt)}
+              {lastCostFloorRun.status === 'done' && ` · ${lastCostFloorRun.totalUpdated} updated`}
+            </p>
+          )}
+          <button
+            onClick={handleCostFloors}
+            disabled={anyPending}
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
+          >
+            <BarChart3 className={`h-4 w-4 ${costFloorMutation.isPending ? 'animate-pulse' : ''}`} />
+            {costFloorMutation.isPending ? 'Calculating...' : 'Run'}
+          </button>
+        </div>
 
-        <button
-          onClick={handleGenerateSuggestions}
-          disabled={anyPending}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
-        >
-          <Zap className={`h-4 w-4 ${suggestMutation.isPending ? 'animate-pulse' : ''}`} />
-          {suggestMutation.isPending ? 'Generating...' : 'Generate Suggested Prices'}
-        </button>
+        {/* Step 3 */}
+        <div className="border rounded-lg p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold">3</span>
+            <h3 className="font-medium text-sm">Generate Suggestions</h3>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Combine cost floors + competitors to propose optimal prices. Review below before applying.
+          </p>
+          {lastSmartRun && (
+            <p className="text-xs text-muted-foreground">
+              Last run:{' '}
+              <span className={`font-medium ${lastSmartRun.status === 'done' ? 'text-green-600' : lastSmartRun.status === 'error' ? 'text-red-600' : 'text-yellow-600'}`}>
+                {lastSmartRun.status}
+              </span>{' '}
+              · {formatTimeAgo(lastSmartRun.createdAt)}
+              {lastSmartRun.status === 'done' && ` · ${lastSmartRun.totalUpdated} priced`}
+            </p>
+          )}
+          <button
+            onClick={handleGenerateSuggestions}
+            disabled={anyPending}
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            <Zap className={`h-4 w-4 ${suggestMutation.isPending ? 'animate-pulse' : ''}`} />
+            {suggestMutation.isPending ? 'Generating...' : 'Configure & Run'}
+          </button>
+        </div>
       </div>
 
       {/* Zone 2: Stats + Search */}
