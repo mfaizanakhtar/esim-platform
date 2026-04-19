@@ -1172,7 +1172,8 @@ export class ShopifyClient {
               variants: [
                 {
                   id: defaultVariantId,
-                  inventoryItem: { sku: firstVariant.sku },
+                  inventoryItem: { sku: firstVariant.sku, tracked: false },
+                  inventoryPolicy: 'CONTINUE',
                   price: firstVariant.price,
                 },
               ],
@@ -1202,7 +1203,8 @@ export class ShopifyClient {
       for (let i = 0; i < remainingVariants.length; i += BATCH_SIZE) {
         const batch = remainingVariants.slice(i, i + BATCH_SIZE);
         const variantInputs = batch.map((v) => ({
-          inventoryItem: { sku: v.sku },
+          inventoryItem: { sku: v.sku, tracked: false },
+          inventoryPolicy: 'CONTINUE',
           price: v.price,
           optionValues: v.optionValues.map((val, idx) => ({
             optionName: params.options[idx],
@@ -1235,56 +1237,7 @@ export class ShopifyClient {
       }
     }
 
-    // Step 4: Disable inventory tracking on all variants (digital product)
-    const inventoryQuery = `
-      query getVariantInventory($productId: ID!) {
-        product(id: $productId) {
-          variants(first: 100) {
-            nodes { inventoryItem { id } }
-          }
-        }
-      }
-    `;
-    const invResp = await axios.post(
-      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
-      { query: inventoryQuery, variables: { productId } },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': accessToken,
-        },
-      },
-    );
-    const inventoryItems =
-      invResp.data?.data?.product?.variants?.nodes?.map(
-        (v: { inventoryItem: { id: string } }) => v.inventoryItem.id,
-      ) ?? [];
-
-    const inventoryMutation = `
-      mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
-        inventoryItemUpdate(id: $id, input: $input) {
-          inventoryItem { id tracked }
-          userErrors { field message }
-        }
-      }
-    `;
-    for (const invId of inventoryItems) {
-      await axios.post(
-        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
-        {
-          query: inventoryMutation,
-          variables: { id: invId, input: { tracked: false } },
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Shopify-Access-Token': accessToken,
-          },
-        },
-      );
-    }
-
-    // Step 5: Apply SEO via productUpdate (productCreate doesn't reliably support seo)
+    // Step 4: Apply SEO via productUpdate (productCreate doesn't reliably support seo)
     if (params.seo) {
       await this.updateProduct({ productId, seo: params.seo });
     }

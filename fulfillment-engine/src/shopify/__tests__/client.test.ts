@@ -1116,31 +1116,6 @@ describe('createProduct', () => {
         },
       });
 
-    // 4. getVariantInventory query
-    nock(BASE_URL)
-      .post(GQL_URL, /getVariantInventory/)
-      .reply(200, {
-        data: {
-          product: {
-            variants: {
-              nodes: [{ inventoryItem: { id: 'gid://shopify/InventoryItem/1' } }],
-            },
-          },
-        },
-      });
-
-    // 5. inventoryItemUpdate (disable tracking)
-    nock(BASE_URL)
-      .post(GQL_URL, /inventoryItemUpdate/)
-      .reply(200, {
-        data: {
-          inventoryItemUpdate: {
-            inventoryItem: { id: 'gid://shopify/InventoryItem/1', tracked: false },
-            userErrors: [],
-          },
-        },
-      });
-
     const result = await client.createProduct({
       title: 'Afghanistan',
       handle: 'afghanistan',
@@ -1278,31 +1253,6 @@ describe('createProduct', () => {
         data: {
           productCreate: {
             product: { id: 'gid://shopify/Product/2' },
-            userErrors: [],
-          },
-        },
-      });
-
-    // getVariantInventory
-    nock(BASE_URL)
-      .post(GQL_URL, /getVariantInventory/)
-      .reply(200, {
-        data: {
-          product: {
-            variants: {
-              nodes: [{ inventoryItem: { id: 'gid://shopify/InventoryItem/2' } }],
-            },
-          },
-        },
-      });
-
-    // inventoryItemUpdate
-    nock(BASE_URL)
-      .post(GQL_URL, /inventoryItemUpdate/)
-      .reply(200, {
-        data: {
-          inventoryItemUpdate: {
-            inventoryItem: { id: 'gid://shopify/InventoryItem/2', tracked: false },
             userErrors: [],
           },
         },
