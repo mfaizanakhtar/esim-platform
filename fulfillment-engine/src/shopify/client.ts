@@ -1106,10 +1106,6 @@ export class ShopifyClient {
         values: [{ name: params.variants[0]?.optionValues[idx] ?? 'Default' }],
       })),
     };
-    if (params.seo) {
-      productInput.seo = { title: params.seo.title, description: params.seo.description };
-    }
-
     const media = params.imageUrl
       ? [{ originalSource: params.imageUrl, mediaContentType: 'IMAGE' }]
       : undefined;
@@ -1237,6 +1233,60 @@ export class ShopifyClient {
           throw new Error(`Variant creation failed: ${JSON.stringify(variantData.userErrors)}`);
         }
       }
+    }
+
+    // Step 4: Disable inventory tracking on all variants (digital product)
+    const inventoryQuery = `
+      query getVariantInventory($productId: ID!) {
+        product(id: $productId) {
+          variants(first: 100) {
+            nodes { inventoryItem { id } }
+          }
+        }
+      }
+    `;
+    const invResp = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+      { query: inventoryQuery, variables: { productId } },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': accessToken,
+        },
+      },
+    );
+    const inventoryItems =
+      invResp.data?.data?.product?.variants?.nodes?.map(
+        (v: { inventoryItem: { id: string } }) => v.inventoryItem.id,
+      ) ?? [];
+
+    const inventoryMutation = `
+      mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
+        inventoryItemUpdate(id: $id, input: $input) {
+          inventoryItem { id tracked }
+          userErrors { field message }
+        }
+      }
+    `;
+    for (const invId of inventoryItems) {
+      await axios.post(
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+        {
+          query: inventoryMutation,
+          variables: { id: invId, input: { tracked: false } },
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': accessToken,
+          },
+        },
+      );
+    }
+
+    // Step 5: Apply SEO via productUpdate (productCreate doesn't reliably support seo)
+    if (params.seo) {
+      await this.updateProduct({ productId, seo: params.seo });
     }
 
     return { productId };
