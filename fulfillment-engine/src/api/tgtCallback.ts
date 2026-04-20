@@ -48,6 +48,11 @@ export default function tgtCallbackRoutes(
         continue;
       }
 
+      if (delivery.status === 'delivered') {
+        app.log.info({ orderNo }, 'TGT callback for already-delivered order, skipping');
+        continue;
+      }
+
       if (!orderInfo.qrCode || !orderInfo.qrCode.startsWith('LPA:')) {
         app.log.info({ orderNo }, 'TGT callback received without credentials yet');
         continue;
