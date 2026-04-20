@@ -125,19 +125,19 @@ export async function findCheapestProviderCost(
     }>
   >`
     SELECT "netPrice", "provider", "productCode",
-           ("parsedJson"->>'dataMb')::int as "dataMb",
-           ("parsedJson"->>'validityDays')::int as "validityDays"
+           ROUND(("parsedJson"->>'dataMb')::numeric)::int as "dataMb",
+           ROUND(("parsedJson"->>'validityDays')::numeric)::int as "validityDays"
     FROM "ProviderSkuCatalog"
     WHERE "isActive" = true
       AND "netPrice" IS NOT NULL
       AND "parsedJson" IS NOT NULL
-      AND ("parsedJson"->>'dataMb')::int BETWEEN ${dataMin} AND ${dataMax}
-      AND ("parsedJson"->>'validityDays')::int BETWEEN ${validMin} AND ${validMax}
+      AND ROUND(("parsedJson"->>'dataMb')::numeric) BETWEEN ${dataMin} AND ${dataMax}
+      AND ROUND(("parsedJson"->>'validityDays')::numeric) BETWEEN ${validMin} AND ${validMax}
       AND (
         "parsedJson"->'regionCodes' @> ${JSON.stringify([countryCode])}::jsonb
       )
-    ORDER BY ABS(("parsedJson"->>'dataMb')::int - ${dataMb}) ASC,
-             ABS(("parsedJson"->>'validityDays')::int - ${validityDays}) ASC,
+    ORDER BY ABS(ROUND(("parsedJson"->>'dataMb')::numeric) - ${dataMb}) ASC,
+             ABS(ROUND(("parsedJson"->>'validityDays')::numeric) - ${validityDays}) ASC,
              "netPrice" ASC
     LIMIT 10
   `;
