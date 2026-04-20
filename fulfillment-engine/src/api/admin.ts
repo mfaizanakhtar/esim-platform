@@ -1784,6 +1784,12 @@ Countries: ${countryList}`,
   // ─── Pricing Engine ──────────────────────────────────────────────────
 
   async function checkRunningJob(type: string): Promise<boolean> {
+    // Auto-timeout stale runs older than 30 minutes
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    await prisma.pricingRun.updateMany({
+      where: { type, status: 'running', createdAt: { lt: thirtyMinAgo } },
+      data: { status: 'error', error: 'Timed out (>30 min)', completedAt: new Date() },
+    });
     const running = await prisma.pricingRun.findFirst({
       where: { type, status: 'running' },
     });
