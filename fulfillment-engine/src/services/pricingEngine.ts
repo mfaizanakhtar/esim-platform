@@ -1,6 +1,5 @@
 import prisma from '~/db/prisma';
 import { parseShopifySku } from '~/utils/parseShopifySku';
-import { codeToFiroamNames } from '~/utils/countryCodes';
 import { logger } from '~/utils/logger';
 
 export interface PricingParams {
@@ -106,19 +105,16 @@ export async function findCheapestProviderCost(
   dataMb: number,
   validityDays: number,
 ): Promise<{ netPrice: number; provider: string } | null> {
-  // Find catalog entries that closely match the requested data+validity for this country.
-  // Use a range: data between 80% and 150% of requested, validity between 80% and 200%.
-  // This prevents a 10GB plan from matching a 1GB request.
+  // Find catalog entries that closely match the requested data+validity.
+  // Data range: 80%-150% of requested (prevents 10GB matching 1GB).
+  // Validity range: wider for short durations since providers may not have exact matches.
   const dataMin = Math.floor(dataMb * 0.8);
   const dataMax = Math.ceil(dataMb * 1.5);
-  const validMin = Math.max(1, Math.floor(validityDays * 0.8));
-  const validMax = Math.ceil(validityDays * 2);
+  const validMin = Math.max(1, validityDays <= 3 ? 1 : Math.floor(validityDays * 0.7));
+  const validMax = validityDays <= 3 ? 7 : Math.ceil(validityDays * 2.5);
 
-  // FiRoam stores country display names (e.g., "United Kingdom"), TGT stores ISO codes ("GB").
-  // Build a list of all possible names to match against.
-  const firoamNames = codeToFiroamNames(countryCode);
-  const countryMatches = [countryCode, ...firoamNames];
-
+  // Search by parsedJson.regionCodes (always ISO codes like ['AF']) for reliable matching.
+  // countryCodes is unreliable — FiRoam stores display names, TGT stores ISO codes.
   const rows = await prisma.$queryRaw<
     Array<{
       netPrice: string;
@@ -138,9 +134,11 @@ export async function findCheapestProviderCost(
       AND ("parsedJson"->>'dataMb')::int BETWEEN ${dataMin} AND ${dataMax}
       AND ("parsedJson"->>'validityDays')::int BETWEEN ${validMin} AND ${validMax}
       AND (
-        "countryCodes"::jsonb ?| ${countryMatches}::text[]
+        "parsedJson"->'regionCodes' @> ${JSON.stringify([countryCode])}::jsonb
       )
-    ORDER BY ABS(("parsedJson"->>'dataMb')::int - ${dataMb}) ASC, "netPrice" ASC
+    ORDER BY ABS(("parsedJson"->>'dataMb')::int - ${dataMb}) ASC,
+             ABS(("parsedJson"->>'validityDays')::int - ${validityDays}) ASC,
+             "netPrice" ASC
     LIMIT 10
   `;
 
@@ -167,11 +165,11 @@ export async function findCheapestCompetitor(
   dataMb: number,
   validityDays: number,
 ): Promise<{ price: number; brand: string } | null> {
-  // Find competitor plans that closely match (80%-150% of data, 80%-200% of validity)
+  // Find competitor plans that closely match
   const dataMin = Math.floor(dataMb * 0.8);
   const dataMax = Math.ceil(dataMb * 1.5);
-  const validMin = Math.max(1, Math.floor(validityDays * 0.8));
-  const validMax = Math.ceil(validityDays * 2);
+  const validMin = Math.max(1, validityDays <= 3 ? 1 : Math.floor(validityDays * 0.7));
+  const validMax = validityDays <= 3 ? 7 : Math.ceil(validityDays * 2.5);
 
   const result = await prisma.competitorPrice.findFirst({
     where: {
@@ -225,6 +223,11 @@ export async function calculateCostFloors(countryCodes?: string[]): Promise<Cost
       );
 
       if (!cheapest) {
+        // Clear stale cost data if no current match exists
+        await prisma.shopifyProductTemplateVariant.update({
+          where: { id: variant.id },
+          data: { providerCost: null, costFloor: null },
+        });
         skipped++;
         continue;
       }
