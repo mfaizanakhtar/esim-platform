@@ -194,23 +194,12 @@ export async function scrapeCompetitors(countryCodes?: string[]): Promise<Scrape
   }
 
   let totalPlans = 0;
-  let skippedCached = 0;
+  const skippedCached = 0;
   let errors = 0;
-
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24h ago
 
   for (const code of codes) {
     const country = getCountryByCode(code);
     if (!country) continue;
-
-    // Check cache
-    const cached = await prisma.competitorPrice.findFirst({
-      where: { countryCode: code, scrapedAt: { gt: cutoff } },
-    });
-    if (cached) {
-      skippedCached++;
-      continue;
-    }
 
     try {
       const plans = await scrapeCountry(code, country.slug);
