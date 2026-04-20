@@ -1783,9 +1783,21 @@ Countries: ${countryList}`,
 
   // ─── Pricing Engine ──────────────────────────────────────────────────
 
+  async function checkRunningJob(type: string): Promise<boolean> {
+    const running = await prisma.pricingRun.findFirst({
+      where: { type, status: 'running' },
+    });
+    return !!running;
+  }
+
   app.post('/pricing/scrape-competitors', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
     const body = (request.body || {}) as { countries?: string[] };
+
+    if (await checkRunningJob('competitor_scrape')) {
+      return reply.status(409).send({ error: 'A competitor scrape is already running' });
+    }
+
     const { scrapeCompetitors } = await import('~/services/competitorScraper');
 
     void (async () => {
@@ -1847,6 +1859,9 @@ Countries: ${countryList}`,
     '/pricing/calculate-cost-floors',
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!requireAdminKey(request, reply)) return;
+      if (await checkRunningJob('cost_floor')) {
+        return reply.status(409).send({ error: 'Cost floor calculation is already running' });
+      }
       const body = (request.body || {}) as { countries?: string[] };
       const { calculateCostFloors } = await import('~/services/pricingEngine');
 
@@ -1880,6 +1895,9 @@ Countries: ${countryList}`,
     '/pricing/generate-suggestions',
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!requireAdminKey(request, reply)) return;
+      if (await checkRunningJob('smart_pricing')) {
+        return reply.status(409).send({ error: 'Smart pricing is already running' });
+      }
       const body = (request.body || {}) as {
         countries?: string[];
         params?: Partial<import('~/services/pricingEngine').PricingParams>;
