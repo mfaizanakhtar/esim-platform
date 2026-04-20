@@ -1,5 +1,6 @@
 import prisma from '~/db/prisma';
 import { parseShopifySku } from '~/utils/parseShopifySku';
+import { codeToFiroamNames } from '~/utils/countryCodes';
 import { logger } from '~/utils/logger';
 
 export interface PricingParams {
@@ -113,6 +114,11 @@ export async function findCheapestProviderCost(
   const validMin = Math.max(1, Math.floor(validityDays * 0.8));
   const validMax = Math.ceil(validityDays * 2);
 
+  // FiRoam stores country display names (e.g., "United Kingdom"), TGT stores ISO codes ("GB").
+  // Build a list of all possible names to match against.
+  const firoamNames = codeToFiroamNames(countryCode);
+  const countryMatches = [countryCode, ...firoamNames];
+
   const rows = await prisma.$queryRaw<
     Array<{
       netPrice: string;
@@ -131,7 +137,9 @@ export async function findCheapestProviderCost(
       AND "parsedJson" IS NOT NULL
       AND ("parsedJson"->>'dataMb')::int BETWEEN ${dataMin} AND ${dataMax}
       AND ("parsedJson"->>'validityDays')::int BETWEEN ${validMin} AND ${validMax}
-      AND "countryCodes"::jsonb @> ${JSON.stringify([countryCode])}::jsonb
+      AND (
+        "countryCodes"::jsonb ?| ${countryMatches}::text[]
+      )
     ORDER BY ABS(("parsedJson"->>'dataMb')::int - ${dataMb}) ASC, "netPrice" ASC
     LIMIT 10
   `;

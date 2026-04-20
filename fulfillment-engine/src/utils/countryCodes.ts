@@ -401,3 +401,15 @@ export function getCountryByCode(code: string): CountryInfo | undefined {
 export function firoamNameToCode(name: string): string | undefined {
   return FIROAM_NAME_TO_CODE[name];
 }
+
+// Reverse lookup: ISO code → FiRoam display names (a code can have multiple names)
+const CODE_TO_FIROAM_NAMES: Record<string, string[]> = {};
+for (const [name, code] of Object.entries(FIROAM_NAME_TO_CODE)) {
+  if (!CODE_TO_FIROAM_NAMES[code]) CODE_TO_FIROAM_NAMES[code] = [];
+  CODE_TO_FIROAM_NAMES[code].push(name);
+}
+
+/** Get FiRoam display names for an ISO code. Used for catalog lookup. */
+export function codeToFiroamNames(code: string): string[] {
+  return CODE_TO_FIROAM_NAMES[code.toUpperCase()] ?? [];
+}
