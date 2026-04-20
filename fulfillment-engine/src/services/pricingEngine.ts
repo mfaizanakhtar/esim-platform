@@ -197,12 +197,6 @@ export async function calculateCostFloors(countryCodes?: string[]): Promise<Cost
     where.template = { countryCode: { in: countryCodes } };
   }
 
-  // Clear stale cost data before recalculating
-  await prisma.shopifyProductTemplateVariant.updateMany({
-    where,
-    data: { providerCost: null, costFloor: null },
-  });
-
   const variants = await prisma.shopifyProductTemplateVariant.findMany({
     where,
     include: { template: { select: { countryCode: true } } },
@@ -229,6 +223,11 @@ export async function calculateCostFloors(countryCodes?: string[]): Promise<Cost
       );
 
       if (!cheapest) {
+        // Clear stale cost data if no current match exists
+        await prisma.shopifyProductTemplateVariant.update({
+          where: { id: variant.id },
+          data: { providerCost: null, costFloor: null },
+        });
         skipped++;
         continue;
       }
