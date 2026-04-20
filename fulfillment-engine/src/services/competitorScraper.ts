@@ -14,80 +14,143 @@ export interface CompetitorPlan {
   originalPrice: number | null;
 }
 
-const JSON_LD_REGEX = /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractPlanFromProduct(product: any): CompetitorPlan | null {
+  // Handle both JSON-LD format and Nuxt props format
+  const price =
+    typeof product.price === 'object'
+      ? parseFloat(product.price?.value ?? product.price?.amount)
+      : product.offers?.price
+        ? parseFloat(product.offers.price)
+        : NaN;
+  if (isNaN(price) || price <= 0) return null;
 
-function parseJsonLdPlans(html: string): CompetitorPlan[] {
+  const brand =
+    typeof product.providerName === 'object'
+      ? product.providerName?.displayName
+      : typeof product.brand === 'string'
+        ? product.brand
+        : (product.brand?.name ?? 'Unknown');
+  if (!brand) return null;
+
+  // Data capacity in MB
+  let dataMb = 0;
+  if (product.capacity) {
+    dataMb =
+      typeof product.capacity === 'number' ? product.capacity : parseInt(product.capacity, 10);
+  }
+  if (!dataMb) {
+    const text = product.description || product.displayName || product.name || '';
+    const gbMatch = text.match(/(\d+)\s*GB/i);
+    const mbMatch = text.match(/(\d+)\s*MB/i);
+    if (gbMatch) dataMb = parseInt(gbMatch[1], 10) * 1024;
+    else if (mbMatch) dataMb = parseInt(mbMatch[1], 10);
+  }
+
+  // Validity in days
+  let validityDays = 0;
+  if (product.duration) {
+    validityDays =
+      typeof product.duration === 'number' ? product.duration : parseInt(product.duration, 10);
+  }
+  if (!validityDays) {
+    const text = product.description || product.displayName || product.name || '';
+    const dayMatch = text.match(/(\d+)\s*day/i);
+    if (dayMatch) validityDays = parseInt(dayMatch[1], 10);
+  }
+
+  if (!dataMb || !validityDays) return null;
+
+  let promoCode: string | null = null;
+  let originalPrice: number | null = null;
+  if (product.promoCode?.code) promoCode = product.promoCode.code;
+  const op = product.originalPrice;
+  if (op) {
+    originalPrice = typeof op === 'object' ? parseFloat(op.value ?? op.amount) : parseFloat(op);
+    if (isNaN(originalPrice!)) originalPrice = null;
+  }
+
+  return {
+    brand,
+    planName: product.displayName ?? product.name ?? null,
+    price,
+    dataMb,
+    validityDays,
+    coverageType: product.coverageType ?? null,
+    promoCode,
+    originalPrice,
+  };
+}
+
+function parsePlansFromHtml(html: string): CompetitorPlan[] {
   const plans: CompetitorPlan[] = [];
-  let match;
+  const seen = new Set<string>();
 
-  JSON_LD_REGEX.lastIndex = 0;
-  while ((match = JSON_LD_REGEX.exec(html)) !== null) {
+  function addPlan(plan: CompetitorPlan) {
+    const key = `${plan.brand}:${plan.dataMb}:${plan.validityDays}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    plans.push(plan);
+  }
+
+  // Strategy 1: Parse JSON-LD (gives ~10 featured plans)
+  const jsonLdRegex = /<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = jsonLdRegex.exec(html)) !== null) {
     try {
       const data = JSON.parse(match[1]);
       if (data['@type'] !== 'ItemList' || !Array.isArray(data.itemListElement)) continue;
-
       for (const item of data.itemListElement) {
         const product = item.item ?? item;
-        if (!product || product['@type'] !== 'Product') continue;
-
-        const offers = product.offers;
-        if (!offers?.price) continue;
-
-        const brand =
-          typeof product.brand === 'string' ? product.brand : (product.brand?.name ?? 'Unknown');
-
-        const price = parseFloat(offers.price);
-        if (isNaN(price) || price <= 0) continue;
-
-        // Parse data amount from capacity or description
-        let dataMb = 0;
-        if (product.capacity) {
-          dataMb =
-            typeof product.capacity === 'number'
-              ? product.capacity
-              : parseInt(product.capacity, 10);
-        }
-        if (!dataMb && product.description) {
-          const gbMatch = product.description.match(/(\d+)\s*GB/i);
-          const mbMatch = product.description.match(/(\d+)\s*MB/i);
-          if (gbMatch) dataMb = parseInt(gbMatch[1], 10) * 1024;
-          else if (mbMatch) dataMb = parseInt(mbMatch[1], 10);
-        }
-
-        // Parse validity from duration or description
-        let validityDays = 0;
-        if (product.duration) {
-          validityDays =
-            typeof product.duration === 'number'
-              ? product.duration
-              : parseInt(product.duration, 10);
-        }
-        if (!validityDays && product.description) {
-          const dayMatch = product.description.match(/(\d+)\s*day/i);
-          if (dayMatch) validityDays = parseInt(dayMatch[1], 10);
-        }
-
-        if (!dataMb || !validityDays) continue;
-
-        // Extract promo info
-        let promoCode: string | null = null;
-        let originalPrice: number | null = null;
-        if (product.promoCode?.code) promoCode = product.promoCode.code;
-        if (product.originalPrice) originalPrice = parseFloat(product.originalPrice);
-
-        plans.push({
-          brand,
-          planName: product.name ?? null,
-          price,
-          dataMb,
-          validityDays,
-          coverageType: product.coverageType ?? null,
-          promoCode,
-          originalPrice: isNaN(originalPrice ?? NaN) ? null : originalPrice,
-        });
+        const plan = extractPlanFromProduct(product);
+        if (plan) addPlan(plan);
       }
     } catch {
-      // Skip unparseable JSON-LD blocks
+      // skip
+    }
+  }
+
+  // Strategy 2: Parse Nuxt/props payload (gives ~60 plans with full data)
+  // Look for initialFilteredProducts or products arrays in embedded JSON
+  const propsPatterns = [
+    /"initialFilteredProducts"\s*:\s*\{[^}]*"products"\s*:\s*\[/,
+    /"products"\s*:\s*\[/,
+  ];
+
+  for (const pattern of propsPatterns) {
+    const idx = html.search(pattern);
+    if (idx === -1) continue;
+
+    // Find the start of the products array
+    const arrStart = html.indexOf('[', idx + html.substring(idx).search(/\[/));
+    if (arrStart === -1) continue;
+
+    // Extract the array by counting brackets
+    let depth = 0;
+    let arrEnd = arrStart;
+    for (let i = arrStart; i < html.length && i < arrStart + 500000; i++) {
+      if (html[i] === '[') depth++;
+      else if (html[i] === ']') {
+        depth--;
+        if (depth === 0) {
+          arrEnd = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (arrEnd <= arrStart) continue;
+
+    try {
+      const products = JSON.parse(html.substring(arrStart, arrEnd));
+      if (!Array.isArray(products)) continue;
+      for (const product of products) {
+        const plan = extractPlanFromProduct(product);
+        if (plan) addPlan(plan);
+      }
+      if (plans.length > 10) break; // Got good data from props, stop looking
+    } catch {
+      // skip malformed JSON
     }
   }
 
@@ -106,7 +169,7 @@ export async function scrapeCountry(
       Accept: 'text/html',
     },
   });
-  return parseJsonLdPlans(response.data);
+  return parsePlansFromHtml(response.data);
 }
 
 export interface ScrapeResult {
