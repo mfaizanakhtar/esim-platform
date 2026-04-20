@@ -105,20 +105,35 @@ export async function findCheapestProviderCost(
   dataMb: number,
   validityDays: number,
 ): Promise<{ netPrice: number; provider: string } | null> {
-  // Query catalog entries matching this country + data + validity
+  // Find catalog entries that closely match the requested data+validity for this country.
+  // Use a range: data between 80% and 150% of requested, validity between 80% and 200%.
+  // This prevents a 10GB plan from matching a 1GB request.
+  const dataMin = Math.floor(dataMb * 0.8);
+  const dataMax = Math.ceil(dataMb * 1.5);
+  const validMin = Math.max(1, Math.floor(validityDays * 0.8));
+  const validMax = Math.ceil(validityDays * 2);
+
   const rows = await prisma.$queryRaw<
-    Array<{ netPrice: string; provider: string; productCode: string; parsedJson: unknown }>
+    Array<{
+      netPrice: string;
+      provider: string;
+      productCode: string;
+      dataMb: number;
+      validityDays: number;
+    }>
   >`
-    SELECT "netPrice", "provider", "productCode", "parsedJson"
+    SELECT "netPrice", "provider", "productCode",
+           ("parsedJson"->>'dataMb')::int as "dataMb",
+           ("parsedJson"->>'validityDays')::int as "validityDays"
     FROM "ProviderSkuCatalog"
     WHERE "isActive" = true
       AND "netPrice" IS NOT NULL
       AND "parsedJson" IS NOT NULL
-      AND ("parsedJson"->>'dataMb')::int >= ${dataMb}
-      AND ("parsedJson"->>'validityDays')::int >= ${validityDays}
+      AND ("parsedJson"->>'dataMb')::int BETWEEN ${dataMin} AND ${dataMax}
+      AND ("parsedJson"->>'validityDays')::int BETWEEN ${validMin} AND ${validMax}
       AND "countryCodes"::jsonb @> ${JSON.stringify([countryCode])}::jsonb
-    ORDER BY "netPrice" ASC
-    LIMIT 5
+    ORDER BY ABS(("parsedJson"->>'dataMb')::int - ${dataMb}) ASC, "netPrice" ASC
+    LIMIT 10
   `;
 
   if (rows.length === 0) return null;
@@ -144,11 +159,17 @@ export async function findCheapestCompetitor(
   dataMb: number,
   validityDays: number,
 ): Promise<{ price: number; brand: string } | null> {
+  // Find competitor plans that closely match (80%-150% of data, 80%-200% of validity)
+  const dataMin = Math.floor(dataMb * 0.8);
+  const dataMax = Math.ceil(dataMb * 1.5);
+  const validMin = Math.max(1, Math.floor(validityDays * 0.8));
+  const validMax = Math.ceil(validityDays * 2);
+
   const result = await prisma.competitorPrice.findFirst({
     where: {
       countryCode,
-      dataMb: { gte: dataMb },
-      validityDays: { gte: validityDays },
+      dataMb: { gte: dataMin, lte: dataMax },
+      validityDays: { gte: validMin, lte: validMax },
     },
     orderBy: { price: 'asc' },
     select: { price: true, brand: true },
