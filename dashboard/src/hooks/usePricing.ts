@@ -103,6 +103,7 @@ export interface PricingParams {
   undercutPercent: number;
   minimumPrice: number;
   monotonicStep: number;
+  noDataBuffer: number;
 }
 
 export const DEFAULT_PRICING_PARAMS: PricingParams = {
@@ -110,6 +111,7 @@ export const DEFAULT_PRICING_PARAMS: PricingParams = {
   undercutPercent: 0.1,
   minimumPrice: 2.99,
   monotonicStep: 1.0,
+  noDataBuffer: 1.0,
 };
 
 // ─── Delayed refetch for background tasks ────────────────────────────

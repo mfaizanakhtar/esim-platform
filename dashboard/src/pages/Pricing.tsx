@@ -335,6 +335,21 @@ function SmartPricingDialog({
               className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
             />
           </div>
+          <div>
+            <label className="text-xs text-muted-foreground">No Data Buffer (x)</label>
+            <input
+              type="number"
+              step="0.05"
+              value={local.noDataBuffer}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, noDataBuffer: parseFloat(e.target.value) || 1 }))
+              }
+              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
+            />
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Multiplier on floor when no competitor data (1.0 = use floor as-is)
+            </p>
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground italic">

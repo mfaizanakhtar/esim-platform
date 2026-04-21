@@ -32,6 +32,7 @@ export interface PricingParams {
   undercutPercent: number; // default 0.10 (10%)
   minimumPrice: number; // default 2.99
   monotonicStep: number; // default 1.00
+  noDataBuffer: number; // default 1.0 (multiplier on floor when no competitor data)
 }
 
 export const DEFAULT_PRICING_PARAMS: PricingParams = {
@@ -39,6 +40,7 @@ export const DEFAULT_PRICING_PARAMS: PricingParams = {
   undercutPercent: 0.1,
   minimumPrice: 2.99,
   monotonicStep: 1.0,
+  noDataBuffer: 1.0,
 };
 
 function getMultiplier(cost: number, tiers: MarginTier[]): number {
@@ -69,7 +71,7 @@ export function calculateSuggestedPrice(
 ): { price: number; source: string; position: string } {
   if (cheapestCompetitor == null) {
     return {
-      price: standardFloor * 1.2,
+      price: standardFloor * (params.noDataBuffer || 1.0),
       source: 'cost_floor',
       position: 'no_data',
     };
