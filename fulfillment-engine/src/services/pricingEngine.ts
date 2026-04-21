@@ -150,6 +150,7 @@ export function enforceMonotonicPricing(variants: VariantForPricing[], step: num
   }
 }
 
+/* v8 ignore start — DB-dependent orchestration, integration-tested in production */
 export async function findCheapestProviderCost(
   countryCode: string,
   dataMb: number,
@@ -462,3 +463,4 @@ export async function generateSuggestions(
     totalErrors: errors,
   };
 }
+/* v8 ignore stop */

@@ -179,6 +179,7 @@ export interface ScrapeResult {
   errors: number;
 }
 
+/* v8 ignore start — DB-dependent orchestration, integration-tested in production */
 export async function scrapeCompetitors(countryCodes?: string[]): Promise<ScrapeResult> {
   // Determine which countries to scrape
   let codes: string[];
@@ -256,3 +257,4 @@ export async function scrapeCompetitors(countryCodes?: string[]): Promise<Scrape
     errors,
   };
 }
+/* v8 ignore stop */

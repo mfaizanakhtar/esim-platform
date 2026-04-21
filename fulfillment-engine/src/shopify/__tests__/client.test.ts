@@ -1270,3 +1270,63 @@ describe('createProduct', () => {
     expect(result.productId).toBe('gid://shopify/Product/2');
   });
 });
+
+describe('updateVariantPrices', () => {
+  const GQL_URL = '/admin/api/2026-04/graphql.json';
+
+  it('updates variant prices via productVariantsBulkUpdate', async () => {
+    const client = makeStaticClient();
+
+    nock(BASE_URL)
+      .post(GQL_URL, /productVariantsBulkUpdate/)
+      .reply(200, {
+        data: {
+          productVariantsBulkUpdate: {
+            productVariants: [{ id: 'gid://shopify/ProductVariant/1' }],
+            userErrors: [],
+          },
+        },
+      });
+
+    await client.updateVariantPrices('gid://shopify/Product/1', [
+      { variantId: 'gid://shopify/ProductVariant/1', price: '9.99' },
+    ]);
+  });
+
+  it('throws on userErrors', async () => {
+    const client = makeStaticClient();
+
+    nock(BASE_URL)
+      .post(GQL_URL, /productVariantsBulkUpdate/)
+      .reply(200, {
+        data: {
+          productVariantsBulkUpdate: {
+            productVariants: [],
+            userErrors: [{ field: ['price'], message: 'Invalid price' }],
+          },
+        },
+      });
+
+    await expect(
+      client.updateVariantPrices('gid://shopify/Product/1', [
+        { variantId: 'gid://shopify/ProductVariant/1', price: '-1' },
+      ]),
+    ).rejects.toThrow('updateVariantPrices error');
+  });
+
+  it('throws on GraphQL-level errors', async () => {
+    const client = makeStaticClient();
+
+    nock(BASE_URL)
+      .post(GQL_URL, /productVariantsBulkUpdate/)
+      .reply(200, {
+        errors: [{ message: 'Product not found' }],
+      });
+
+    await expect(
+      client.updateVariantPrices('gid://shopify/Product/999', [
+        { variantId: 'gid://shopify/ProductVariant/1', price: '5.00' },
+      ]),
+    ).rejects.toThrow('updateVariantPrices GraphQL error');
+  });
+});
