@@ -2,6 +2,31 @@ import prisma from '~/db/prisma';
 import { parseShopifySku } from '~/utils/parseShopifySku';
 import { logger } from '~/utils/logger';
 
+export interface MarginTier {
+  maxCost: number; // upper bound (Infinity for the last tier)
+  multiplier: number;
+}
+
+export const DEFAULT_MARGIN_TIERS: MarginTier[] = [
+  { maxCost: 1, multiplier: 3.0 },
+  { maxCost: 3, multiplier: 2.5 },
+  { maxCost: 5, multiplier: 2.0 },
+  { maxCost: 10, multiplier: 1.8 },
+  { maxCost: 20, multiplier: 1.5 },
+  { maxCost: 40, multiplier: 1.35 },
+  { maxCost: Infinity, multiplier: 1.25 },
+];
+
+export interface CostFloorParams {
+  minimumPrice: number; // default 2.99
+  marginTiers: MarginTier[];
+}
+
+export const DEFAULT_COST_FLOOR_PARAMS: CostFloorParams = {
+  minimumPrice: 2.99,
+  marginTiers: DEFAULT_MARGIN_TIERS,
+};
+
 export interface PricingParams {
   survivalMargin: number; // default 0.15 (15%)
   undercutPercent: number; // default 0.10 (10%)
@@ -16,23 +41,23 @@ export const DEFAULT_PRICING_PARAMS: PricingParams = {
   monotonicStep: 1.0,
 };
 
-function getMultiplier(cost: number): number {
-  if (cost < 1) return 3.0;
-  if (cost < 3) return 2.5;
-  if (cost < 5) return 2.0;
-  if (cost < 10) return 1.8;
-  if (cost < 20) return 1.5;
-  if (cost < 40) return 1.35;
-  return 1.25;
+function getMultiplier(cost: number, tiers: MarginTier[]): number {
+  for (const tier of tiers) {
+    if (cost < tier.maxCost) return tier.multiplier;
+  }
+  return tiers[tiers.length - 1]?.multiplier ?? 1.25;
 }
 
 export function calculateFloors(
   cost: number,
   params: PricingParams,
+  costFloorParams?: CostFloorParams,
 ): { standardFloor: number; survivalFloor: number } {
+  const cfp = costFloorParams ?? DEFAULT_COST_FLOOR_PARAMS;
+  const minPrice = cfp.minimumPrice;
   return {
-    standardFloor: Math.max(params.minimumPrice, cost * getMultiplier(cost)),
-    survivalFloor: Math.max(params.minimumPrice, cost * (1 + params.survivalMargin)),
+    standardFloor: Math.max(minPrice, cost * getMultiplier(cost, cfp.marginTiers)),
+    survivalFloor: Math.max(minPrice, cost * (1 + params.survivalMargin)),
   };
 }
 
@@ -191,7 +216,11 @@ export interface CostFloorResult {
   totalErrors: number;
 }
 
-export async function calculateCostFloors(countryCodes?: string[]): Promise<CostFloorResult> {
+export async function calculateCostFloors(
+  countryCodes?: string[],
+  costFloorParams?: CostFloorParams,
+): Promise<CostFloorResult> {
+  const cfp = costFloorParams ?? DEFAULT_COST_FLOOR_PARAMS;
   const where: Record<string, unknown> = {};
   if (countryCodes && countryCodes.length > 0) {
     where.template = { countryCode: { in: countryCodes } };
@@ -232,7 +261,7 @@ export async function calculateCostFloors(countryCodes?: string[]): Promise<Cost
         continue;
       }
 
-      const { standardFloor } = calculateFloors(cheapest.netPrice, DEFAULT_PRICING_PARAMS);
+      const { standardFloor } = calculateFloors(cheapest.netPrice, DEFAULT_PRICING_PARAMS, cfp);
 
       await prisma.shopifyProductTemplateVariant.update({
         where: { id: variant.id },

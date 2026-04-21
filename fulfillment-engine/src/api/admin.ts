@@ -1868,15 +1868,32 @@ Countries: ${countryList}`,
       if (await checkRunningJob('cost_floor')) {
         return reply.status(409).send({ error: 'Cost floor calculation is already running' });
       }
-      const body = (request.body || {}) as { countries?: string[] };
-      const { calculateCostFloors } = await import('~/services/pricingEngine');
+      const body = (request.body || {}) as {
+        countries?: string[];
+        costFloorParams?: Partial<import('~/services/pricingEngine').CostFloorParams>;
+      };
+      const { calculateCostFloors, DEFAULT_COST_FLOOR_PARAMS } =
+        await import('~/services/pricingEngine');
+
+      const cfp = {
+        ...DEFAULT_COST_FLOOR_PARAMS,
+        ...body.costFloorParams,
+        marginTiers: body.costFloorParams?.marginTiers ?? DEFAULT_COST_FLOOR_PARAMS.marginTiers,
+      };
 
       void (async () => {
         const run = await prisma.pricingRun.create({
-          data: { type: 'cost_floor', scope: body.countries?.join(',') ?? null },
+          data: {
+            type: 'cost_floor',
+            scope: body.countries?.join(',') ?? null,
+            params: JSON.parse(JSON.stringify(cfp)),
+          },
         });
         try {
-          const result = await calculateCostFloors(body.countries?.map((c) => c.toUpperCase()));
+          const result = await calculateCostFloors(
+            body.countries?.map((c) => c.toUpperCase()),
+            cfp,
+          );
           await prisma.pricingRun.update({
             where: { id: run.id },
             data: { status: 'done', ...result, completedAt: new Date() },
