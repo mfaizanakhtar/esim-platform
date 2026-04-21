@@ -35,6 +35,68 @@ import {
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
+function NumericInput({
+  value,
+  onChange,
+  className,
+  prefix,
+  suffix,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  className?: string;
+  prefix?: string;
+  suffix?: string;
+}) {
+  const [text, setText] = useState(String(value));
+  const [focused, setFocused] = useState(false);
+
+  // Sync external value changes when not focused
+  if (!focused && String(value) !== text && text !== '') {
+    // Only sync if the parsed text doesn't match
+    const parsed = parseFloat(text);
+    if (isNaN(parsed) || parsed !== value) {
+      setText(String(value));
+    }
+  }
+
+  return (
+    <div className={`flex items-center gap-1 ${className ?? ''}`}>
+      {prefix && <span className="text-sm text-muted-foreground shrink-0">{prefix}</span>}
+      <input
+        type="text"
+        inputMode="decimal"
+        value={focused ? text : String(value)}
+        onFocus={() => {
+          setFocused(true);
+          setText(String(value));
+        }}
+        onChange={(e) => {
+          const raw = e.target.value;
+          // Allow empty, digits, dots, minus
+          if (/^-?\d*\.?\d*$/.test(raw)) {
+            setText(raw);
+            const n = parseFloat(raw);
+            if (!isNaN(n)) onChange(n);
+          }
+        }}
+        onBlur={() => {
+          setFocused(false);
+          const n = parseFloat(text);
+          if (!isNaN(n)) {
+            onChange(n);
+            setText(String(n));
+          } else {
+            setText(String(value));
+          }
+        }}
+        className="w-full px-2 py-1.5 text-sm border rounded-md"
+      />
+      {suffix && <span className="text-sm text-muted-foreground shrink-0">{suffix}</span>}
+    </div>
+  );
+}
+
 function formatTimeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
@@ -174,16 +236,14 @@ function CostFloorDialog({
         </p>
 
         <div>
-          <label className="text-xs text-muted-foreground">Minimum Retail Price ($)</label>
-          <input
-            type="number"
-            step="0.01"
-            value={localParams.minimumPrice}
-            onChange={(e) =>
-              setLocalParams((p) => ({ ...p, minimumPrice: parseFloat(e.target.value) || 0 }))
-            }
-            className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
-          />
+          <label className="text-xs text-muted-foreground">Minimum Retail Price</label>
+          <div className="mt-1">
+            <NumericInput
+              value={localParams.minimumPrice}
+              onChange={(v) => setLocalParams((p) => ({ ...p, minimumPrice: v }))}
+              prefix="$"
+            />
+          </div>
         </div>
 
         <div>
@@ -200,27 +260,19 @@ function CostFloorDialog({
                   {isLast ? (
                     <span className="w-28 text-sm text-muted-foreground italic">Above</span>
                   ) : (
-                    <div className="flex items-center gap-1 w-28">
-                      <span className="text-sm text-muted-foreground">$</span>
-                      <input
-                        type="number"
-                        step="1"
-                        value={tier.maxCost}
-                        onChange={(e) => updateTier(idx, 'maxCost', parseFloat(e.target.value) || 0)}
-                        className="w-full px-2 py-1 text-sm border rounded-md"
-                      />
-                    </div>
-                  )}
-                  <div className="flex items-center gap-1 w-24">
-                    <input
-                      type="number"
-                      step="0.05"
-                      value={tier.multiplier}
-                      onChange={(e) => updateTier(idx, 'multiplier', parseFloat(e.target.value) || 1)}
-                      className="w-full px-2 py-1 text-sm border rounded-md"
+                    <NumericInput
+                      value={tier.maxCost}
+                      onChange={(v) => updateTier(idx, 'maxCost', v)}
+                      prefix="$"
+                      className="w-28"
                     />
-                    <span className="text-sm text-muted-foreground shrink-0">x</span>
-                  </div>
+                  )}
+                  <NumericInput
+                    value={tier.multiplier}
+                    onChange={(v) => updateTier(idx, 'multiplier', v)}
+                    suffix="x"
+                    className="w-24"
+                  />
                   <div className="w-6">
                     {!isLast && (
                       <button
@@ -287,65 +339,54 @@ function SmartPricingDialog({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground">Survival Margin (%)</label>
-            <input
-              type="number"
-              value={Math.round(local.survivalMargin * 100)}
-              onChange={(e) =>
-                setLocal((p) => ({ ...p, survivalMargin: (parseFloat(e.target.value) || 0) / 100 }))
-              }
-              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
-            />
+            <label className="text-xs text-muted-foreground">Survival Margin</label>
+            <div className="mt-1">
+              <NumericInput
+                value={Math.round(local.survivalMargin * 100)}
+                onChange={(v) => setLocal((p) => ({ ...p, survivalMargin: v / 100 }))}
+                suffix="%"
+              />
+            </div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Undercut (%)</label>
-            <input
-              type="number"
-              value={Math.round(local.undercutPercent * 100)}
-              onChange={(e) =>
-                setLocal((p) => ({
-                  ...p,
-                  undercutPercent: (parseFloat(e.target.value) || 0) / 100,
-                }))
-              }
-              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
-            />
+            <label className="text-xs text-muted-foreground">Undercut</label>
+            <div className="mt-1">
+              <NumericInput
+                value={Math.round(local.undercutPercent * 100)}
+                onChange={(v) => setLocal((p) => ({ ...p, undercutPercent: v / 100 }))}
+                suffix="%"
+              />
+            </div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Min Price ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={local.minimumPrice}
-              onChange={(e) =>
-                setLocal((p) => ({ ...p, minimumPrice: parseFloat(e.target.value) || 0 }))
-              }
-              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
-            />
+            <label className="text-xs text-muted-foreground">Min Price</label>
+            <div className="mt-1">
+              <NumericInput
+                value={local.minimumPrice}
+                onChange={(v) => setLocal((p) => ({ ...p, minimumPrice: v }))}
+                prefix="$"
+              />
+            </div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Monotonic Step ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={local.monotonicStep}
-              onChange={(e) =>
-                setLocal((p) => ({ ...p, monotonicStep: parseFloat(e.target.value) || 0 }))
-              }
-              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
-            />
+            <label className="text-xs text-muted-foreground">Monotonic Step</label>
+            <div className="mt-1">
+              <NumericInput
+                value={local.monotonicStep}
+                onChange={(v) => setLocal((p) => ({ ...p, monotonicStep: v }))}
+                prefix="$"
+              />
+            </div>
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground">No Data Buffer (x)</label>
-            <input
-              type="number"
-              step="0.05"
-              value={local.noDataBuffer}
-              onChange={(e) =>
-                setLocal((p) => ({ ...p, noDataBuffer: parseFloat(e.target.value) || 1 }))
-              }
-              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
-            />
+          <div className="col-span-2">
+            <label className="text-xs text-muted-foreground">No Data Buffer</label>
+            <div className="mt-1">
+              <NumericInput
+                value={local.noDataBuffer}
+                onChange={(v) => setLocal((p) => ({ ...p, noDataBuffer: v }))}
+                suffix="x"
+              />
+            </div>
             <p className="text-xs text-muted-foreground mt-0.5">
               Multiplier on floor when no competitor data (1.0 = use floor as-is)
             </p>
