@@ -115,12 +115,35 @@ interface VariantForPricing {
 }
 
 export function enforceMonotonicPricing(variants: VariantForPricing[], step: number): void {
-  variants.sort((a, b) => a.validityDays - b.validityDays || a.dataMb - b.dataMb);
-  for (let i = 1; i < variants.length; i++) {
-    if (variants[i].priceLocked) continue; // locked is a fixed point
-    const prev = variants[i - 1].price;
-    if (variants[i].price <= prev) {
-      variants[i].price = prev + step;
+  // Pass 1: Within each validity, more data = more expensive
+  const byValidity = new Map<number, VariantForPricing[]>();
+  for (const v of variants) {
+    if (!byValidity.has(v.validityDays)) byValidity.set(v.validityDays, []);
+    byValidity.get(v.validityDays)!.push(v);
+  }
+  for (const group of byValidity.values()) {
+    group.sort((a, b) => a.dataMb - b.dataMb);
+    for (let i = 1; i < group.length; i++) {
+      if (group[i].priceLocked) continue;
+      if (group[i].price <= group[i - 1].price) {
+        group[i].price = group[i - 1].price + step;
+      }
+    }
+  }
+
+  // Pass 2: Within each data amount, more validity = more expensive
+  const byData = new Map<number, VariantForPricing[]>();
+  for (const v of variants) {
+    if (!byData.has(v.dataMb)) byData.set(v.dataMb, []);
+    byData.get(v.dataMb)!.push(v);
+  }
+  for (const group of byData.values()) {
+    group.sort((a, b) => a.validityDays - b.validityDays);
+    for (let i = 1; i < group.length; i++) {
+      if (group[i].priceLocked) continue;
+      if (group[i].price <= group[i - 1].price) {
+        group[i].price = group[i - 1].price + step;
+      }
     }
   }
 }
