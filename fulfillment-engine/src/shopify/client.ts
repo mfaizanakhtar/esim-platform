@@ -1295,6 +1295,48 @@ export class ShopifyClient {
       );
     }
   }
+  async updateVariantPrices(
+    productId: string,
+    variants: Array<{ variantId: string; price: string }>,
+  ): Promise<void> {
+    const accessToken = await this.getAccessToken();
+
+    const mutation = `
+      mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+          productVariants { id }
+          userErrors { field message }
+        }
+      }
+    `;
+
+    const variantInputs = variants.map((v) => ({
+      id: v.variantId,
+      price: v.price,
+    }));
+
+    const response = await axios.post(
+      `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+      { query: mutation, variables: { productId, variants: variantInputs } },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': accessToken,
+        },
+      },
+    );
+
+    if (response.data?.errors) {
+      throw new Error(`updateVariantPrices GraphQL error: ${JSON.stringify(response.data.errors)}`);
+    }
+
+    const data = response.data?.data?.productVariantsBulkUpdate;
+    if (data?.userErrors?.length > 0) {
+      throw new Error(
+        `updateVariantPrices error: ${data.userErrors.map((e: { message: string }) => e.message).join(', ')}`,
+      );
+    }
+  }
 }
 
 // Singleton instance

@@ -2006,38 +2006,40 @@ Countries: ${countryList}`,
         AND v."priceLocked" = false
     `;
 
-    // Push to Shopify in background
+    // Push price-only updates to Shopify (no product recreation)
     const shopify = getShopifyClient();
     void (async () => {
       const templates = await prisma.shopifyProductTemplate.findMany({
         where: { countryCode: { in: codes }, shopifyProductId: { not: null } },
-        include: { variants: { orderBy: { sortOrder: 'asc' } } },
+        include: { variants: true },
       });
 
       for (const template of templates) {
         try {
-          await shopify.createProduct({
-            title: template.title,
-            handle: template.handle,
-            bodyHtml: template.descriptionHtml,
-            status: template.status as 'ACTIVE' | 'DRAFT',
-            productType: template.productType,
-            vendor: template.vendor,
-            tags: template.tags as string[],
-            options: ['Plan Type', 'Validity', 'Volume'],
-            variants: template.variants.map((v) => ({
-              sku: v.sku,
-              price: v.price.toString(),
-              optionValues: [v.planType, v.validity, v.volume],
-            })),
-            imageUrl: template.imageUrl ?? undefined,
-            seo: template.seoTitle
-              ? { title: template.seoTitle, description: template.seoDescription ?? '' }
-              : undefined,
+          // Look up Shopify variant GIDs by SKU from the ShopifyVariant table
+          const skus = template.variants.map((v) => v.sku);
+          const shopifyVariants = await prisma.shopifyVariant.findMany({
+            where: { sku: { in: skus } },
           });
-          logger.info({ code: template.countryCode }, 'Pushed pricing update to Shopify');
+          const skuToGid = new Map(shopifyVariants.map((sv) => [sv.sku, sv.variantId]));
+
+          const priceUpdates: Array<{ variantId: string; price: string }> = [];
+          for (const v of template.variants) {
+            const gid = skuToGid.get(v.sku);
+            if (gid) {
+              priceUpdates.push({ variantId: gid, price: v.price.toString() });
+            }
+          }
+
+          if (priceUpdates.length > 0) {
+            await shopify.updateVariantPrices(template.shopifyProductId!, priceUpdates);
+            logger.info(
+              { code: template.countryCode, updated: priceUpdates.length },
+              'Pushed price updates to Shopify',
+            );
+          }
         } catch (err) {
-          logger.error({ code: template.countryCode, err }, 'Failed to push pricing to Shopify');
+          logger.error({ code: template.countryCode, err }, 'Failed to push prices to Shopify');
         }
         await new Promise((r) => setTimeout(r, 1000));
       }
