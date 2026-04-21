@@ -385,7 +385,17 @@ export async function generateSuggestions(
         continue;
       }
 
-      const { standardFloor, survivalFloor } = calculateFloors(providerCost, params);
+      // Use existing costFloor from Step 2 if available, otherwise calculate
+      const existingFloor = variant.costFloor ? Number(variant.costFloor) : null;
+      const { standardFloor, survivalFloor } = existingFloor
+        ? {
+            standardFloor: existingFloor,
+            survivalFloor: Math.max(
+              params.minimumPrice,
+              providerCost * (1 + params.survivalMargin),
+            ),
+          }
+        : calculateFloors(providerCost, params);
 
       // Find competitor
       const competitor = await findCheapestCompetitor(
@@ -416,7 +426,7 @@ export async function generateSuggestions(
         where: { id: variant.id },
         data: {
           providerCost: providerCost,
-          costFloor: standardFloor,
+          // Don't overwrite costFloor — it's set by Step 2 with its own params
           competitorPrice: competitor?.price ?? null,
           competitorBrand: competitor?.brand ?? null,
           proposedPrice: suggestion.price, // will be refined by monotonic step
