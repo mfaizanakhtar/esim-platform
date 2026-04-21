@@ -17,7 +17,6 @@ import {
   type PricingVariant,
   type PricingParams,
   type CostFloorParams,
-  type MarginTier,
 } from '@/hooks/usePricing';
 import {
   Search,
