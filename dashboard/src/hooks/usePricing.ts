@@ -73,6 +73,31 @@ export interface PricingRunEntry {
   completedAt: string | null;
 }
 
+export interface MarginTier {
+  maxCost: number;
+  multiplier: number;
+}
+
+export const DEFAULT_MARGIN_TIERS: MarginTier[] = [
+  { maxCost: 1, multiplier: 3.0 },
+  { maxCost: 3, multiplier: 2.5 },
+  { maxCost: 5, multiplier: 2.0 },
+  { maxCost: 10, multiplier: 1.8 },
+  { maxCost: 20, multiplier: 1.5 },
+  { maxCost: 40, multiplier: 1.35 },
+  { maxCost: Infinity, multiplier: 1.25 },
+];
+
+export interface CostFloorParams {
+  minimumPrice: number;
+  marginTiers: MarginTier[];
+}
+
+export const DEFAULT_COST_FLOOR_PARAMS: CostFloorParams = {
+  minimumPrice: 2.99,
+  marginTiers: DEFAULT_MARGIN_TIERS,
+};
+
 export interface PricingParams {
   survivalMargin: number;
   undercutPercent: number;
@@ -149,7 +174,7 @@ export function useScrapeCompetitors() {
 export function useCalculateCostFloors() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { countries?: string[] }) =>
+    mutationFn: (input: { countries?: string[]; costFloorParams?: Partial<CostFloorParams> }) =>
       apiClient.post<{ ok: boolean; background: string }>('/pricing/calculate-cost-floors', input),
     onSuccess: () => delayedRefetch(qc),
   });

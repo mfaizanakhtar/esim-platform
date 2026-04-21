@@ -11,9 +11,13 @@ import {
   useApproveAndPush,
   useBulkLockVariants,
   DEFAULT_PRICING_PARAMS,
+  DEFAULT_COST_FLOOR_PARAMS,
+  DEFAULT_MARGIN_TIERS,
   type PricingCountryOverview,
   type PricingVariant,
   type PricingParams,
+  type CostFloorParams,
+  type MarginTier,
 } from '@/hooks/usePricing';
 import {
   Search,
@@ -359,6 +363,10 @@ export function Pricing() {
   const [selectedCountries, setSelectedCountries] = useState<Set<string>>(() => new Set());
   const [showRuns, setShowRuns] = useState(false);
   const [pricingParams, setPricingParams] = useState<PricingParams>(DEFAULT_PRICING_PARAMS);
+  const [costFloorParams, setCostFloorParams] = useState<CostFloorParams>({
+    ...DEFAULT_COST_FLOOR_PARAMS,
+    marginTiers: DEFAULT_MARGIN_TIERS.map((t) => ({ ...t })),
+  });
 
   const countries = overview?.countries ?? [];
   const filtered = search
@@ -419,15 +427,105 @@ export function Pricing() {
   function handleCostFloors() {
     setConfirm({
       title: 'Calculate Cost Floors',
-      message:
-        'Calculate minimum prices for all variants based on provider catalog costs? This runs in the background.',
+      message: 'Calculate minimum prices based on provider costs and margin tiers.',
+      children: (
+        <div className="space-y-3 pt-2">
+          <div>
+            <label className="text-xs text-muted-foreground">Minimum Retail Price ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={costFloorParams.minimumPrice}
+              onChange={(e) =>
+                setCostFloorParams((p) => ({ ...p, minimumPrice: parseFloat(e.target.value) || 0 }))
+              }
+              className="w-full mt-1 px-2 py-1 text-sm border rounded-md"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground font-medium">Margin Tiers</label>
+            <div className="mt-1 space-y-1.5">
+              {costFloorParams.marginTiers.map((tier, idx) => {
+                const isLast = idx === costFloorParams.marginTiers.length - 1;
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    {isLast ? (
+                      <span className="w-24 text-xs text-muted-foreground">Above</span>
+                    ) : (
+                      <div className="flex items-center gap-1 w-24">
+                        <span className="text-xs text-muted-foreground">$</span>
+                        <input
+                          type="number"
+                          step="0.5"
+                          value={tier.maxCost}
+                          onChange={(e) =>
+                            setCostFloorParams((p) => {
+                              const tiers = [...p.marginTiers];
+                              tiers[idx] = { ...tiers[idx], maxCost: parseFloat(e.target.value) || 0 };
+                              return { ...p, marginTiers: tiers };
+                            })
+                          }
+                          className="w-full px-1.5 py-0.5 text-xs border rounded"
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1 w-20">
+                      <input
+                        type="number"
+                        step="0.05"
+                        value={tier.multiplier}
+                        onChange={(e) =>
+                          setCostFloorParams((p) => {
+                            const tiers = [...p.marginTiers];
+                            tiers[idx] = { ...tiers[idx], multiplier: parseFloat(e.target.value) || 1 };
+                            return { ...p, marginTiers: tiers };
+                          })
+                        }
+                        className="w-full px-1.5 py-0.5 text-xs border rounded"
+                      />
+                      <span className="text-xs text-muted-foreground">x</span>
+                    </div>
+                    {!isLast && (
+                      <button
+                        onClick={() =>
+                          setCostFloorParams((p) => ({
+                            ...p,
+                            marginTiers: p.marginTiers.filter((_, i) => i !== idx),
+                          }))
+                        }
+                        className="p-0.5 text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              onClick={() =>
+                setCostFloorParams((p) => {
+                  const tiers = [...p.marginTiers];
+                  const lastIdx = tiers.length - 1;
+                  const newMaxCost = lastIdx > 0 ? (tiers[lastIdx - 1].maxCost + 10) : 10;
+                  tiers.splice(lastIdx, 0, { maxCost: newMaxCost, multiplier: 1.5 });
+                  return { ...p, marginTiers: tiers };
+                })
+              }
+              className="mt-2 text-xs text-primary hover:underline"
+            >
+              + Add Tier
+            </button>
+          </div>
+        </div>
+      ),
       actions: [
         {
           label: 'Calculate',
           variant: 'primary',
           onClick: () =>
             costFloorMutation.mutate(
-              {},
+              { costFloorParams },
               {
                 onSuccess: () => showToast('Calculating cost floors in background', 'info'),
                 onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
