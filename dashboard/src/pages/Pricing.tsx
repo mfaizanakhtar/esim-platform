@@ -257,6 +257,106 @@ function CostFloorDialog({
   );
 }
 
+// ─── Smart Pricing Config Dialog ──────────────────────────────────
+
+function SmartPricingDialog({
+  params,
+  onRun,
+  onClose,
+}: {
+  params: PricingParams;
+  onRun: (params: PricingParams) => void;
+  onClose: () => void;
+}) {
+  const [local, setLocal] = useState<PricingParams>({ ...params });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-lg shadow-lg max-w-md w-full mx-4 p-6 space-y-4">
+        <div className="flex items-start justify-between">
+          <h3 className="text-lg font-semibold">Generate Suggested Prices</h3>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Generate proposed prices based on cost floors and competitor data. Locked variants will be
+          skipped.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-xs text-muted-foreground">Survival Margin (%)</label>
+            <input
+              type="number"
+              value={Math.round(local.survivalMargin * 100)}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, survivalMargin: (parseFloat(e.target.value) || 0) / 100 }))
+              }
+              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Undercut (%)</label>
+            <input
+              type="number"
+              value={Math.round(local.undercutPercent * 100)}
+              onChange={(e) =>
+                setLocal((p) => ({
+                  ...p,
+                  undercutPercent: (parseFloat(e.target.value) || 0) / 100,
+                }))
+              }
+              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Min Price ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={local.minimumPrice}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, minimumPrice: parseFloat(e.target.value) || 0 }))
+              }
+              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Monotonic Step ($)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={local.monotonicStep}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, monotonicStep: parseFloat(e.target.value) || 0 }))
+              }
+              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
+            />
+          </div>
+        </div>
+
+        <p className="text-xs text-muted-foreground italic">
+          This generates PROPOSED prices only. Review and approve before applying.
+        </p>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded-md hover:bg-muted">
+            Cancel
+          </button>
+          <button
+            onClick={() => onRun(local)}
+            className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Generate
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Market Position Indicator ─────────────────────────────────────
 
 function MarketBadge({ position }: { position: string }) {
@@ -503,7 +603,8 @@ export function Pricing() {
   const [selectedCountries, setSelectedCountries] = useState<Set<string>>(() => new Set());
   const [showRuns, setShowRuns] = useState(false);
   const [showCostFloorDialog, setShowCostFloorDialog] = useState(false);
-  const [pricingParams, setPricingParams] = useState<PricingParams>(DEFAULT_PRICING_PARAMS);
+  const [showSmartPricingDialog, setShowSmartPricingDialog] = useState(false);
+  const [pricingParams] = useState<PricingParams>(DEFAULT_PRICING_PARAMS);
   const [costFloorParams] = useState<CostFloorParams>({
     ...DEFAULT_COST_FLOOR_PARAMS,
     marginTiers: DEFAULT_MARGIN_TIERS.map((t) => ({ ...t })),
@@ -570,80 +671,7 @@ export function Pricing() {
   }
 
   function handleGenerateSuggestions() {
-    setConfirm({
-      title: 'Generate Suggested Prices',
-      message:
-        'Generate proposed prices based on cost floors and competitor data. Locked variants will be skipped.',
-      children: (
-        <div className="space-y-3 pt-2">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Survival Margin (%)</label>
-              <input
-                type="number"
-                value={pricingParams.survivalMargin * 100}
-                onChange={(e) =>
-                  setPricingParams((p) => ({ ...p, survivalMargin: parseFloat(e.target.value) / 100 }))
-                }
-                className="w-full mt-1 px-2 py-1 text-sm border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Undercut (%)</label>
-              <input
-                type="number"
-                value={pricingParams.undercutPercent * 100}
-                onChange={(e) =>
-                  setPricingParams((p) => ({ ...p, undercutPercent: parseFloat(e.target.value) / 100 }))
-                }
-                className="w-full mt-1 px-2 py-1 text-sm border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Min Price ($)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={pricingParams.minimumPrice}
-                onChange={(e) =>
-                  setPricingParams((p) => ({ ...p, minimumPrice: parseFloat(e.target.value) }))
-                }
-                className="w-full mt-1 px-2 py-1 text-sm border rounded-md"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Monotonic Step ($)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={pricingParams.monotonicStep}
-                onChange={(e) =>
-                  setPricingParams((p) => ({ ...p, monotonicStep: parseFloat(e.target.value) }))
-                }
-                className="w-full mt-1 px-2 py-1 text-sm border rounded-md"
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground italic">
-            This generates PROPOSED prices only. Review and approve before applying.
-          </p>
-        </div>
-      ),
-      actions: [
-        {
-          label: 'Generate',
-          variant: 'primary',
-          onClick: () =>
-            suggestMutation.mutate(
-              { params: pricingParams },
-              {
-                onSuccess: () => showToast('Generating suggested prices in background', 'info'),
-                onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
-              },
-            ),
-        },
-      ],
-    });
+    setShowSmartPricingDialog(true);
   }
 
   function handleApproveCountry(code: string) {
@@ -724,6 +752,22 @@ export function Pricing() {
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {confirm && <ConfirmDialog {...confirm} onClose={() => setConfirm(null)} />}
+      {showSmartPricingDialog && (
+        <SmartPricingDialog
+          params={pricingParams}
+          onRun={(p) => {
+            setShowSmartPricingDialog(false);
+            suggestMutation.mutate(
+              { params: p },
+              {
+                onSuccess: () => showToast('Generating suggested prices in background', 'info'),
+                onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
+              },
+            );
+          }}
+          onClose={() => setShowSmartPricingDialog(false)}
+        />
+      )}
       {showCostFloorDialog && (
         <CostFloorDialog
           params={costFloorParams}
