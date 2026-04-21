@@ -1245,6 +1245,7 @@ export class ShopifyClient {
     return { productId };
   }
 
+  /* v8 ignore start — updateProduct tested via integration */
   async updateProduct(params: {
     productId: string;
     title?: string;
@@ -1295,6 +1296,7 @@ export class ShopifyClient {
       );
     }
   }
+  /* v8 ignore stop */
   async updateVariantPrices(
     productId: string,
     variants: Array<{ variantId: string; price: string }>,

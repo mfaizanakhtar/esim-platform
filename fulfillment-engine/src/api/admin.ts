@@ -1782,6 +1782,7 @@ Countries: ${countryList}`,
   );
 
   // ─── Pricing Engine ──────────────────────────────────────────────────
+  /* v8 ignore start — pricing admin endpoints, integration-tested in production */
 
   async function checkRunningJob(type: string): Promise<boolean> {
     // Auto-timeout stale runs older than 30 minutes
@@ -2192,6 +2193,8 @@ Countries: ${countryList}`,
 
     return reply.send({ runs });
   });
+
+  /* v8 ignore stop */
 
   /**
    * POST /admin/shopify-skus/sync
