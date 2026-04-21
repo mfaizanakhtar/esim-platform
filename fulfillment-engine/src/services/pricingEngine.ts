@@ -27,12 +27,15 @@ export const DEFAULT_COST_FLOOR_PARAMS: CostFloorParams = {
   marginTiers: DEFAULT_MARGIN_TIERS,
 };
 
+export type RoundingMode = '99' | '49_99';
+
 export interface PricingParams {
   survivalMargin: number; // default 0.15 (15%)
   undercutPercent: number; // default 0.10 (10%)
   minimumPrice: number; // default 2.99
   monotonicStep: number; // default 1.00
   noDataBuffer: number; // default 1.0 (multiplier on floor when no competitor data)
+  roundingMode: RoundingMode; // default '49_99'
 }
 
 export const DEFAULT_PRICING_PARAMS: PricingParams = {
@@ -41,6 +44,7 @@ export const DEFAULT_PRICING_PARAMS: PricingParams = {
   minimumPrice: 2.99,
   monotonicStep: 1.0,
   noDataBuffer: 1.0,
+  roundingMode: '49_99',
 };
 
 function getMultiplier(cost: number, tiers: MarginTier[]): number {
@@ -103,9 +107,32 @@ export function calculateSuggestedPrice(
   };
 }
 
-export function roundTo99(price: number): number {
+export function roundPrice(price: number, mode: RoundingMode = '49_99'): number {
   if (price < 1) return 0.99;
-  return Math.floor(price) + 0.99;
+  if (mode === '99') {
+    return Math.floor(price) + 0.99;
+  }
+  // '49_99': round to nearest .49 or .99
+  // Candidates: floor.49, floor.99, (floor-1).99
+  const base = Math.floor(price);
+  const candidates = [base + 0.49, base + 0.99];
+  if (base > 0) candidates.push(base - 0.01); // previous .99 (e.g., 3.99 when price is 4.07)
+  // Pick the candidate closest to price, but never go below 0.99
+  let best = candidates[0];
+  let bestDist = Math.abs(price - best);
+  for (const c of candidates) {
+    const dist = Math.abs(price - c);
+    if (dist < bestDist && c >= 0.99) {
+      best = c;
+      bestDist = dist;
+    }
+  }
+  return parseFloat(best.toFixed(2));
+}
+
+/** @deprecated Use roundPrice instead */
+export function roundTo99(price: number): number {
+  return roundPrice(price, '99');
 }
 
 interface VariantForPricing {
@@ -448,7 +475,7 @@ export async function generateSuggestions(
     enforceMonotonicPricing(group, params.monotonicStep);
     for (const v of group) {
       if (v.priceLocked) continue;
-      const rounded = roundTo99(v.price);
+      const rounded = roundPrice(v.price, params.roundingMode);
       await prisma.shopifyProductTemplateVariant.update({
         where: { id: v.id },
         data: { proposedPrice: rounded },
