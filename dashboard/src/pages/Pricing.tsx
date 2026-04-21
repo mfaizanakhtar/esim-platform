@@ -24,6 +24,7 @@ import {
   Eye,
   Lock,
   Unlock,
+  Trash2,
   TrendingDown,
   BarChart3,
   Zap,
@@ -110,6 +111,146 @@ function ConfirmDialog({
               </button>
             );
           })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Cost Floor Config Dialog ─────────────────────────────────────
+
+function CostFloorDialog({
+  params,
+  onRun,
+  onClose,
+}: {
+  params: CostFloorParams;
+  onRun: (params: CostFloorParams) => void;
+  onClose: () => void;
+}) {
+  const [localParams, setLocalParams] = useState<CostFloorParams>({
+    minimumPrice: params.minimumPrice,
+    marginTiers: params.marginTiers.map((t) => ({ ...t })),
+  });
+
+  function updateTier(idx: number, field: 'maxCost' | 'multiplier', value: number) {
+    setLocalParams((p) => {
+      const tiers = p.marginTiers.map((t, i) =>
+        i === idx ? { ...t, [field]: value } : { ...t },
+      );
+      return { ...p, marginTiers: tiers };
+    });
+  }
+
+  function removeTier(idx: number) {
+    setLocalParams((p) => ({
+      ...p,
+      marginTiers: p.marginTiers.filter((_, i) => i !== idx),
+    }));
+  }
+
+  function addTier() {
+    setLocalParams((p) => {
+      const tiers = [...p.marginTiers];
+      const lastIdx = tiers.length - 1;
+      const newMaxCost = lastIdx > 0 ? tiers[lastIdx - 1].maxCost + 10 : 10;
+      tiers.splice(lastIdx, 0, { maxCost: newMaxCost, multiplier: 1.5 });
+      return { ...p, marginTiers: tiers };
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-white rounded-lg shadow-lg max-w-md w-full mx-4 p-6 space-y-4">
+        <div className="flex items-start justify-between">
+          <h3 className="text-lg font-semibold">Calculate Cost Floors</h3>
+          <button onClick={onClose} className="p-1 hover:bg-muted rounded">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Calculate minimum prices based on provider costs and margin tiers.
+        </p>
+
+        <div>
+          <label className="text-xs text-muted-foreground">Minimum Retail Price ($)</label>
+          <input
+            type="number"
+            step="0.01"
+            value={localParams.minimumPrice}
+            onChange={(e) =>
+              setLocalParams((p) => ({ ...p, minimumPrice: parseFloat(e.target.value) || 0 }))
+            }
+            className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs text-muted-foreground font-medium">Margin Tiers</label>
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+              <span className="w-28">Cost up to</span>
+              <span className="w-24">Multiplier</span>
+            </div>
+            {localParams.marginTiers.map((tier, idx) => {
+              const isLast = idx === localParams.marginTiers.length - 1;
+              return (
+                <div key={idx} className="flex items-center gap-2">
+                  {isLast ? (
+                    <span className="w-28 text-sm text-muted-foreground italic">Above</span>
+                  ) : (
+                    <div className="flex items-center gap-1 w-28">
+                      <span className="text-sm text-muted-foreground">$</span>
+                      <input
+                        type="number"
+                        step="1"
+                        value={tier.maxCost}
+                        onChange={(e) => updateTier(idx, 'maxCost', parseFloat(e.target.value) || 0)}
+                        className="w-full px-2 py-1 text-sm border rounded-md"
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1 w-24">
+                    <input
+                      type="number"
+                      step="0.05"
+                      value={tier.multiplier}
+                      onChange={(e) => updateTier(idx, 'multiplier', parseFloat(e.target.value) || 1)}
+                      className="w-full px-2 py-1 text-sm border rounded-md"
+                    />
+                    <span className="text-sm text-muted-foreground shrink-0">x</span>
+                  </div>
+                  <div className="w-6">
+                    {!isLast && (
+                      <button
+                        onClick={() => removeTier(idx)}
+                        className="p-1 text-muted-foreground hover:text-destructive rounded hover:bg-muted"
+                        title="Remove tier"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button onClick={addTier} className="mt-2 text-xs text-primary hover:underline">
+            + Add Tier
+          </button>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-sm border rounded-md hover:bg-muted">
+            Cancel
+          </button>
+          <button
+            onClick={() => onRun(localParams)}
+            className="px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Calculate
+          </button>
         </div>
       </div>
     </div>
@@ -361,8 +502,9 @@ export function Pricing() {
   const [expandedCountry, setExpandedCountry] = useState<string | null>(null);
   const [selectedCountries, setSelectedCountries] = useState<Set<string>>(() => new Set());
   const [showRuns, setShowRuns] = useState(false);
+  const [showCostFloorDialog, setShowCostFloorDialog] = useState(false);
   const [pricingParams, setPricingParams] = useState<PricingParams>(DEFAULT_PRICING_PARAMS);
-  const [costFloorParams, setCostFloorParams] = useState<CostFloorParams>({
+  const [costFloorParams] = useState<CostFloorParams>({
     ...DEFAULT_COST_FLOOR_PARAMS,
     marginTiers: DEFAULT_MARGIN_TIERS.map((t) => ({ ...t })),
   });
@@ -424,115 +566,7 @@ export function Pricing() {
   }
 
   function handleCostFloors() {
-    setConfirm({
-      title: 'Calculate Cost Floors',
-      message: 'Calculate minimum prices based on provider costs and margin tiers.',
-      children: (
-        <div className="space-y-3 pt-2">
-          <div>
-            <label className="text-xs text-muted-foreground">Minimum Retail Price ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={costFloorParams.minimumPrice}
-              onChange={(e) =>
-                setCostFloorParams((p) => ({ ...p, minimumPrice: parseFloat(e.target.value) || 0 }))
-              }
-              className="w-full mt-1 px-2 py-1 text-sm border rounded-md"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground font-medium">Margin Tiers</label>
-            <div className="mt-1 space-y-1.5">
-              {costFloorParams.marginTiers.map((tier, idx) => {
-                const isLast = idx === costFloorParams.marginTiers.length - 1;
-                return (
-                  <div key={idx} className="flex items-center gap-2">
-                    {isLast ? (
-                      <span className="w-24 text-xs text-muted-foreground">Above</span>
-                    ) : (
-                      <div className="flex items-center gap-1 w-24">
-                        <span className="text-xs text-muted-foreground">$</span>
-                        <input
-                          type="number"
-                          step="0.5"
-                          value={tier.maxCost}
-                          onChange={(e) =>
-                            setCostFloorParams((p) => {
-                              const tiers = [...p.marginTiers];
-                              tiers[idx] = { ...tiers[idx], maxCost: parseFloat(e.target.value) || 0 };
-                              return { ...p, marginTiers: tiers };
-                            })
-                          }
-                          className="w-full px-1.5 py-0.5 text-xs border rounded"
-                        />
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1 w-20">
-                      <input
-                        type="number"
-                        step="0.05"
-                        value={tier.multiplier}
-                        onChange={(e) =>
-                          setCostFloorParams((p) => {
-                            const tiers = [...p.marginTiers];
-                            tiers[idx] = { ...tiers[idx], multiplier: parseFloat(e.target.value) || 1 };
-                            return { ...p, marginTiers: tiers };
-                          })
-                        }
-                        className="w-full px-1.5 py-0.5 text-xs border rounded"
-                      />
-                      <span className="text-xs text-muted-foreground">x</span>
-                    </div>
-                    {!isLast && (
-                      <button
-                        onClick={() =>
-                          setCostFloorParams((p) => ({
-                            ...p,
-                            marginTiers: p.marginTiers.filter((_, i) => i !== idx),
-                          }))
-                        }
-                        className="p-0.5 text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-            <button
-              onClick={() =>
-                setCostFloorParams((p) => {
-                  const tiers = [...p.marginTiers];
-                  const lastIdx = tiers.length - 1;
-                  const newMaxCost = lastIdx > 0 ? (tiers[lastIdx - 1].maxCost + 10) : 10;
-                  tiers.splice(lastIdx, 0, { maxCost: newMaxCost, multiplier: 1.5 });
-                  return { ...p, marginTiers: tiers };
-                })
-              }
-              className="mt-2 text-xs text-primary hover:underline"
-            >
-              + Add Tier
-            </button>
-          </div>
-        </div>
-      ),
-      actions: [
-        {
-          label: 'Calculate',
-          variant: 'primary',
-          onClick: () =>
-            costFloorMutation.mutate(
-              { costFloorParams },
-              {
-                onSuccess: () => showToast('Calculating cost floors in background', 'info'),
-                onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
-              },
-            ),
-        },
-      ],
-    });
+    setShowCostFloorDialog(true);
   }
 
   function handleGenerateSuggestions() {
@@ -690,6 +724,22 @@ export function Pricing() {
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       {confirm && <ConfirmDialog {...confirm} onClose={() => setConfirm(null)} />}
+      {showCostFloorDialog && (
+        <CostFloorDialog
+          params={costFloorParams}
+          onRun={(cfp) => {
+            setShowCostFloorDialog(false);
+            costFloorMutation.mutate(
+              { costFloorParams: cfp },
+              {
+                onSuccess: () => showToast('Calculating cost floors in background', 'info'),
+                onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
+              },
+            );
+          }}
+          onClose={() => setShowCostFloorDialog(false)}
+        />
+      )}
 
       {/* Zone 1: Pipeline Steps */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
