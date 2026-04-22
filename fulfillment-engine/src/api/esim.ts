@@ -390,6 +390,30 @@ export default function esimRoutes(
    * Returns only status — no credentials or access tokens.
    * Used by the checkout UI extension which cannot receive metafield updates reactively.
    */
+  /**
+   * Returns all deliveries for an order, used by customer account extensions.
+   */
+  app.get(
+    '/esim/order-deliveries/:orderId',
+    async (request: FastifyRequest<{ Params: { orderId: string } }>, reply: FastifyReply) => {
+      const { orderId } = request.params;
+
+      const deliveries = await prisma.esimDelivery.findMany({
+        where: { orderId },
+        select: { lineItemId: true, status: true, accessToken: true },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      return reply.send({
+        deliveries: deliveries.map((d) => ({
+          lineItemId: d.lineItemId,
+          status: d.status,
+          ...(d.status === 'delivered' && d.accessToken ? { accessToken: d.accessToken } : {}),
+        })),
+      });
+    },
+  );
+
   app.get(
     '/esim/order-status/:orderId',
     async (request: FastifyRequest<{ Params: { orderId: string } }>, reply: FastifyReply) => {

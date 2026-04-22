@@ -1,7 +1,7 @@
 import {
   reactExtension,
   useTarget,
-  useMetafields,
+  useApi,
   BlockStack,
   InlineStack,
   Text,
@@ -14,7 +14,11 @@ import {
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
 import { CancelSection } from './CancelEsim';
-import { BACKEND_URL, type DeliveryMetafieldEntry, parseTokenMap, PROVISIONING_QUIPS } from './shared';
+import {
+  extractNumericId,
+  useOrderDeliveries,
+  PROVISIONING_QUIPS,
+} from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -26,65 +30,31 @@ export default reactExtension(
 );
 
 function EsimOrderStatusBlock() {
-  const backendUrl = BACKEND_URL;
+  const api = useApi<'customer-account.order-status.cart-line-item.render-after'>();
+  const orderId = extractNumericId((api as { orderId?: string }).orderId ?? '');
 
   const target = useTarget();
-
-  // The extension renders once per line item.
-  // target.id is formatted as gid://shopify/LineItem/123 on order status page.
   const lineItemId = target.id.split('/').pop() ?? '';
 
-  // Read the single "esim.delivery_tokens" metafield declared in shopify.extension.toml.
-  // Value is a JSON object: { "<lineItemId>": { status, accessToken, lpa, ... }, ... }
-  const metafields = useMetafields({ namespace: 'esim', key: 'delivery_tokens' });
-  const tokensRaw = metafields?.[0]?.value as string | undefined;
-  const tokenMap = parseTokenMap(tokensRaw);
-  const entry = lineItemId ? tokenMap[lineItemId] : undefined;
+  const deliveryMap = useOrderDeliveries(orderId);
+  const entry = lineItemId ? deliveryMap[lineItemId] : undefined;
 
   const [cancelled, setCancelled] = useState(false);
-  const [liveEntry, setLiveEntry] = useState<DeliveryMetafieldEntry | null>(null);
   const [quipIndex, setQuipIndex] = useState(0);
-
-  const resolvedEntry = liveEntry ?? entry;
 
   // Rotate quips while provisioning
   useEffect(() => {
-    if (resolvedEntry?.status !== 'provisioning') return;
+    if (entry?.status !== 'provisioning') return;
     const interval = setInterval(() => {
       setQuipIndex((prev) => (prev + 1) % PROVISIONING_QUIPS.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, [resolvedEntry?.status]);
-
-  // Poll the backend every 5s while status is provisioning so the card
-  // auto-updates to delivered without requiring a page reload.
-  useEffect(() => {
-    if (!resolvedEntry?.accessToken || resolvedEntry.status !== 'provisioning') return;
-    let attempts = 0;
-    const interval = setInterval(() => {
-      if (++attempts > 120) {
-        clearInterval(interval);
-        return;
-      }
-      void fetch(`${backendUrl}/esim/delivery/${resolvedEntry.accessToken}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data: DeliveryMetafieldEntry | null) => {
-          if (data && ['delivered', 'failed', 'cancelled'].includes(data.status)) {
-            setLiveEntry(data);
-            clearInterval(interval);
-          }
-        })
-        .catch(() => {
-          /* network blip — retry next tick */
-        });
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [resolvedEntry?.accessToken, resolvedEntry?.status, backendUrl]);
+  }, [entry?.status]);
 
   // Don't render anything if this line item has no eSIM entry
-  if (!resolvedEntry) return null;
+  if (!entry) return null;
 
-  if (resolvedEntry.status === 'provisioning') {
+  if (entry.status === 'provisioning') {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -105,7 +75,7 @@ function EsimOrderStatusBlock() {
     );
   }
 
-  if (resolvedEntry.status === 'failed') {
+  if (entry.status === 'failed') {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -116,7 +86,7 @@ function EsimOrderStatusBlock() {
     );
   }
 
-  if (resolvedEntry.status === 'cancelled' || cancelled) {
+  if (entry.status === 'cancelled' || cancelled) {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -125,7 +95,7 @@ function EsimOrderStatusBlock() {
     );
   }
 
-  if (resolvedEntry.status !== 'delivered') {
+  if (entry.status !== 'delivered') {
     return (
       <BlockStack spacing="base">
         <Divider />
@@ -142,43 +112,43 @@ function EsimOrderStatusBlock() {
         Your eSIM
       </Text>
 
-      {resolvedEntry.lpa && (
-        <QRCode content={resolvedEntry.lpa} accessibilityLabel="eSIM QR code" size="fill" />
+      {entry.lpa && (
+        <QRCode content={entry.lpa} accessibilityLabel="eSIM QR code" size="fill" />
       )}
 
       <BlockStack spacing="tight">
-        {resolvedEntry.activationCode && (
+        {entry.activationCode && (
           <BlockStack spacing="extraTight">
             <Text appearance="subdued">Activation Code</Text>
-            <Text emphasis="bold">{resolvedEntry.activationCode}</Text>
+            <Text emphasis="bold">{entry.activationCode}</Text>
           </BlockStack>
         )}
-        {resolvedEntry.iccid && (
+        {entry.iccid && (
           <BlockStack spacing="extraTight">
             <Text appearance="subdued">ICCID</Text>
-            <Text>{resolvedEntry.iccid}</Text>
+            <Text>{entry.iccid}</Text>
           </BlockStack>
         )}
       </BlockStack>
 
       <InlineStack spacing="base">
-        {resolvedEntry.lpa && (
+        {entry.lpa && (
           <Button
-            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(resolvedEntry.lpa)}`}
+            to={`https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=${encodeURIComponent(entry.lpa)}`}
             appearance="primary"
           >
             Install on iPhone
           </Button>
         )}
-        {resolvedEntry.usageUrl && (
-          <Button to={resolvedEntry.usageUrl} appearance="secondary">
+        {entry.usageUrl && (
+          <Button to={entry.usageUrl} appearance="secondary">
             View Usage
           </Button>
         )}
       </InlineStack>
 
       <CancelSection
-        accessToken={resolvedEntry.accessToken}
+        accessToken={entry.accessToken}
         cancelled={cancelled}
         onCancelled={() => setCancelled(true)}
       />

@@ -38,8 +38,3 @@ handle = "esim-order-status"
 
   [extensions.capabilities]
   network_access = true
-
-  [[extensions.metafields]]
-  namespace = "esim"
-  key = "delivery_tokens"
-
