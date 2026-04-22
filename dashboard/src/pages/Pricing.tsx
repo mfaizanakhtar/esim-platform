@@ -378,7 +378,7 @@ function SmartPricingDialog({
               />
             </div>
           </div>
-          <div className="col-span-2">
+          <div>
             <label className="text-xs text-muted-foreground">No Data Buffer</label>
             <div className="mt-1">
               <NumericInput
@@ -388,8 +388,22 @@ function SmartPricingDialog({
               />
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Multiplier on floor when no competitor data (1.0 = use floor as-is)
+              1.0 = use floor as-is
             </p>
+          </div>
+          <div>
+            <label htmlFor="rounding-mode" className="text-xs text-muted-foreground">Price Rounding</label>
+            <select
+              id="rounding-mode"
+              value={local.roundingMode}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, roundingMode: e.target.value as '99' | '49_99' }))
+              }
+              className="w-full mt-1 px-2 py-1.5 text-sm border rounded-md bg-white"
+            >
+              <option value="49_99">.49 / .99 (recommended)</option>
+              <option value="99">.99 only</option>
+            </select>
           </div>
         </div>
 

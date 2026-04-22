@@ -98,12 +98,15 @@ export const DEFAULT_COST_FLOOR_PARAMS: CostFloorParams = {
   marginTiers: DEFAULT_MARGIN_TIERS,
 };
 
+export type RoundingMode = '99' | '49_99';
+
 export interface PricingParams {
   survivalMargin: number;
   undercutPercent: number;
   minimumPrice: number;
   monotonicStep: number;
   noDataBuffer: number;
+  roundingMode: RoundingMode;
 }
 
 export const DEFAULT_PRICING_PARAMS: PricingParams = {
@@ -112,6 +115,7 @@ export const DEFAULT_PRICING_PARAMS: PricingParams = {
   minimumPrice: 2.99,
   monotonicStep: 1.0,
   noDataBuffer: 1.0,
+  roundingMode: '49_99',
 };
 
 // ─── Delayed refetch for background tasks ────────────────────────────

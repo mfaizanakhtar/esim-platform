@@ -3,6 +3,7 @@ import {
   calculateFloors,
   calculateSuggestedPrice,
   roundTo99,
+  roundPrice,
   enforceMonotonicPricing,
   DEFAULT_PRICING_PARAMS,
   DEFAULT_MARGIN_TIERS,
@@ -22,6 +23,7 @@ describe('DEFAULT_PRICING_PARAMS', () => {
       minimumPrice: 2.99,
       monotonicStep: 1.0,
       noDataBuffer: 1.0,
+      roundingMode: '49_99',
     });
   });
 });
@@ -320,6 +322,34 @@ describe('roundTo99', () => {
 
   it('handles large values', () => {
     expect(roundTo99(999.12)).toBe(999.99);
+  });
+});
+
+describe('roundPrice', () => {
+  it('mode 99: always rounds to .99', () => {
+    expect(roundPrice(2.68, '99')).toBe(2.99);
+    expect(roundPrice(4.07, '99')).toBe(4.99);
+    expect(roundPrice(0.5, '99')).toBe(0.99);
+  });
+
+  it('mode 49_99: rounds UP to next .49 or .99', () => {
+    expect(roundPrice(2.3, '49_99')).toBe(2.49);
+    expect(roundPrice(2.5, '49_99')).toBe(2.99);
+    expect(roundPrice(2.68, '49_99')).toBe(2.99);
+    expect(roundPrice(4.07, '49_99')).toBe(4.49);
+    expect(roundPrice(4.5, '49_99')).toBe(4.99);
+    expect(roundPrice(4.99, '49_99')).toBe(4.99);
+    expect(roundPrice(5.0, '49_99')).toBe(5.49);
+  });
+
+  it('sub-$1 always returns 0.99', () => {
+    expect(roundPrice(0.5, '49_99')).toBe(0.99);
+    expect(roundPrice(0.3, '99')).toBe(0.99);
+  });
+
+  it('defaults to 49_99 mode', () => {
+    expect(roundPrice(2.3)).toBe(2.49);
+    expect(roundPrice(2.5)).toBe(2.99);
   });
 });
 
