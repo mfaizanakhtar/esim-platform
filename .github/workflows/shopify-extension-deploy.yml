@@ -1,4 +1,4 @@
-name: Build Shopify Extension
+name: Deploy Shopify Extension
 
 on:
   push:
@@ -8,8 +8,8 @@ on:
       - 'fulfillment-engine/shopify.app.toml'
 
 jobs:
-  build-extension:
-    name: Build eSIM Order Status extension
+  deploy-extension:
+    name: Deploy eSIM Order Status extension
     runs-on: ubuntu-latest
 
     steps:
@@ -26,9 +26,8 @@ jobs:
         working-directory: fulfillment-engine/extensions/esim-order-status
         run: npm ci
 
-      - name: Build extension
+      - name: Deploy extension
         working-directory: fulfillment-engine
-        run: shopify app build --client-id ${{ secrets.SHOPIFY_CLIENT_ID }}
-
-      # Deploy requires an interactive Shopify session — run locally:
-      #   cd fulfillment-engine && shopify app deploy --force
+        env:
+          SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+        run: shopify app deploy --force --client-id ${{ secrets.SHOPIFY_CLIENT_ID }}
