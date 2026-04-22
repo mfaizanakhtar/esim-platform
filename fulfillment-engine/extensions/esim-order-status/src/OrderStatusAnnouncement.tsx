@@ -11,12 +11,8 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
-import {
-  type DeliveryMetafieldEntry,
-  extractNumericId,
-  useOrderDeliveries,
-  PROVISIONING_QUIPS,
-} from './shared';
+import { type DeliveryMetafieldEntry, useOrderMetafield, PROVISIONING_QUIPS } from './shared';
+
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -29,17 +25,17 @@ export default reactExtension(
 
 function EsimOrderStatusAnnouncement() {
   const order = useOrder();
-  const orderId = extractNumericId(order?.id);
+  const tokenMap = useOrderMetafield(order?.id);
 
-  const deliveryMap = useOrderDeliveries(orderId);
-  const [quipIndex, setQuipIndex] = useState(0);
-
-  const activeEntries = Object.values(deliveryMap).filter(
+  const activeEntries = Object.values(tokenMap).filter(
     (e) => e.status === 'provisioning' || e.status === 'delivered',
   );
 
-  // ── Quip rotation ────────────────────────────────────────────────────────
+  const [quipIndex, setQuipIndex] = useState(0);
+
   const anyProvisioning = activeEntries.some((e) => e.status === 'provisioning');
+  const allDelivered = activeEntries.every((e) => e.status === 'delivered' && e.lpa);
+
   useEffect(() => {
     if (!anyProvisioning) return;
     const interval = setInterval(() => {
@@ -48,10 +44,7 @@ function EsimOrderStatusAnnouncement() {
     return () => clearInterval(interval);
   }, [anyProvisioning]);
 
-  // ── Render ───────────────────────────────────────────────────────────────
   if (activeEntries.length === 0) return null;
-
-  const allDelivered = activeEntries.every((e) => e.status === 'delivered' && e.lpa);
 
   if (anyProvisioning) {
     return (
@@ -91,10 +84,6 @@ function EsimOrderStatusAnnouncement() {
 
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Modal content — full eSIM card (QR code, activation code, ICCID)
-// ---------------------------------------------------------------------------
 
 function EsimModalContent({ entry }: { entry: DeliveryMetafieldEntry }) {
   return (

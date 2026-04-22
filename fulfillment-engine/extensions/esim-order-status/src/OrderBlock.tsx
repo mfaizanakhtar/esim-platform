@@ -13,7 +13,7 @@ import {
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState } from 'react';
 import { CancelSection } from './CancelEsim';
-import { type DeliveryMetafieldEntry, extractNumericId, useOrderDeliveries } from './shared';
+import { type DeliveryMetafieldEntry, useOrderMetafield } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point — order action panel in customer account
@@ -22,11 +22,11 @@ import { type DeliveryMetafieldEntry, extractNumericId, useOrderDeliveries } fro
 export default reactExtension('customer-account.order.action.render', () => <EsimOrderAction />);
 
 function EsimOrderAction() {
+  // OrderApi provides orderId as a GID string
   const api = useApi<'customer-account.order.action.render'>();
-  const orderId = extractNumericId((api as unknown as { orderId: string }).orderId);
-
-  const deliveryMap = useOrderDeliveries(orderId);
-  const entries = Object.values(deliveryMap);
+  const orderGid = (api as unknown as { orderId: string }).orderId;
+  const tokenMap = useOrderMetafield(orderGid);
+  const entries = Object.values(tokenMap);
 
   return (
     <CustomerAccountAction title="Your eSIM">
@@ -42,10 +42,6 @@ function EsimOrderAction() {
     </CustomerAccountAction>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Per-eSIM card
-// ---------------------------------------------------------------------------
 
 function EsimCard({ entry }: { entry: DeliveryMetafieldEntry }) {
   const [cancelled, setCancelled] = useState(false);
@@ -70,7 +66,6 @@ function EsimCard({ entry }: { entry: DeliveryMetafieldEntry }) {
     return <Text appearance="subdued">Your eSIM is being prepared...</Text>;
   }
 
-  // Delivered — show full eSIM card
   return (
     <BlockStack spacing="base">
       <Divider />
