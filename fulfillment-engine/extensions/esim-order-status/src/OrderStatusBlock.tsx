@@ -1,7 +1,7 @@
 import {
   reactExtension,
   useTarget,
-  useApi,
+  useOrder,
   BlockStack,
   InlineStack,
   Text,
@@ -30,8 +30,8 @@ export default reactExtension(
 );
 
 function EsimOrderStatusBlock() {
-  const api = useApi<'customer-account.order-status.cart-line-item.render-after'>();
-  const orderId = extractNumericId((api as { orderId?: string }).orderId ?? '');
+  const order = useOrder();
+  const orderId = extractNumericId(order?.id);
 
   const target = useTarget();
   const lineItemId = target.id.split('/').pop() ?? '';

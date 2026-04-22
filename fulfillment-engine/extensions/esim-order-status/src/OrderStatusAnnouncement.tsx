@@ -1,6 +1,6 @@
 import {
   reactExtension,
-  useApi,
+  useOrder,
   InlineStack,
   Text,
   Button,
@@ -28,8 +28,8 @@ export default reactExtension(
 );
 
 function EsimOrderStatusAnnouncement() {
-  const api = useApi<'customer-account.order-status.announcement.render'>();
-  const orderId = extractNumericId((api as { orderId?: string }).orderId ?? '');
+  const order = useOrder();
+  const orderId = extractNumericId(order?.id);
 
   const deliveryMap = useOrderDeliveries(orderId);
   const [quipIndex, setQuipIndex] = useState(0);
