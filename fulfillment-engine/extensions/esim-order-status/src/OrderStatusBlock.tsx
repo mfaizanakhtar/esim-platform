@@ -14,11 +14,7 @@ import {
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
 import { CancelSection } from './CancelEsim';
-import {
-  extractNumericId,
-  useOrderDeliveries,
-  PROVISIONING_QUIPS,
-} from './shared';
+import { useOrderMetafield, PROVISIONING_QUIPS } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -31,18 +27,15 @@ export default reactExtension(
 
 function EsimOrderStatusBlock() {
   const order = useOrder();
-  const orderId = extractNumericId(order?.id);
+  const tokenMap = useOrderMetafield(order?.id);
 
   const target = useTarget();
   const lineItemId = target.id.split('/').pop() ?? '';
-
-  const deliveryMap = useOrderDeliveries(orderId);
-  const entry = lineItemId ? deliveryMap[lineItemId] : undefined;
+  const entry = lineItemId ? tokenMap[lineItemId] : undefined;
 
   const [cancelled, setCancelled] = useState(false);
   const [quipIndex, setQuipIndex] = useState(0);
 
-  // Rotate quips while provisioning
   useEffect(() => {
     if (entry?.status !== 'provisioning') return;
     const interval = setInterval(() => {
@@ -51,7 +44,6 @@ function EsimOrderStatusBlock() {
     return () => clearInterval(interval);
   }, [entry?.status]);
 
-  // Don't render anything if this line item has no eSIM entry
   if (!entry) return null;
 
   if (entry.status === 'provisioning') {
@@ -104,13 +96,10 @@ function EsimOrderStatusBlock() {
     );
   }
 
-  // Delivered — show full eSIM card
   return (
     <BlockStack spacing="base">
       <Divider />
-      <Text size="medium" emphasis="bold">
-        Your eSIM
-      </Text>
+      <Text size="medium" emphasis="bold">Your eSIM</Text>
 
       {entry.lpa && (
         <QRCode content={entry.lpa} accessibilityLabel="eSIM QR code" size="fill" />
