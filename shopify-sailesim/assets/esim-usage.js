@@ -137,7 +137,7 @@
   // ── Single result ─────────────────────────────────────────────────────────
 
   function renderSingle(data) {
-    var isFiroam = data.provider === 'firoam' || (!data.provider && data.usage && data.usage.usedMb != null);
+    var isFiroam = data.usage && data.usage.usedMb != null;
 
     // Info card
     els.iccid.textContent = data.iccid || '—';
@@ -244,7 +244,7 @@
   }
 
   function renderMiniCard(data, index) {
-    var isFiroam = data.provider === 'firoam' || (!data.provider && data.usage && data.usage.usedMb != null);
+    var isFiroam = data.usage && data.usage.usedMb != null;
     var html = '<div class="esim-card esim-mini-card">';
     html += '<div class="esim-mini-order">Order ' + esc(data.orderNum || '—') + '</div>';
     html += '<div class="esim-mini-iccid">' + esc(data.iccid || '—') + '</div>';
