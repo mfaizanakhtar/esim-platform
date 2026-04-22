@@ -61,7 +61,9 @@ export function parseTokenMap(raw: string | undefined): Record<string, DeliveryM
  * This reads ORDER metafields (written post-checkout by finalizeDelivery),
  * unlike useMetafields() which only reads checkout-scoped metafields.
  */
-export function useOrderMetafield(orderGid: string | undefined): Record<string, DeliveryMetafieldEntry> {
+export function useOrderMetafield(
+  orderGid: string | undefined,
+): Record<string, DeliveryMetafieldEntry> {
   const [tokenMap, setTokenMap] = useState<Record<string, DeliveryMetafieldEntry>>({});
 
   useEffect(() => {
