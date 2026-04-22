@@ -1,6 +1,6 @@
 import {
   reactExtension,
-  useMetafields,
+  useApi,
   InlineStack,
   Text,
   Button,
@@ -11,7 +11,12 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
-import { BACKEND_URL, type DeliveryMetafieldEntry, parseTokenMap, PROVISIONING_QUIPS } from './shared';
+import {
+  type DeliveryMetafieldEntry,
+  extractNumericId,
+  useOrderDeliveries,
+  PROVISIONING_QUIPS,
+} from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -23,62 +28,18 @@ export default reactExtension(
 );
 
 function EsimOrderStatusAnnouncement() {
-  const backendUrl = BACKEND_URL;
+  const api = useApi<'customer-account.order-status.announcement.render'>();
+  const orderId = extractNumericId((api as { orderId?: string }).orderId ?? '');
 
-  const metafields = useMetafields({ namespace: 'esim', key: 'delivery_tokens' });
-  const tokensRaw = metafields?.[0]?.value as string | undefined;
-  const tokenMap = parseTokenMap(tokensRaw);
+  const deliveryMap = useOrderDeliveries(orderId);
+  const [quipIndex, setQuipIndex] = useState(0);
 
-  const activeEntries = Object.values(tokenMap).filter(
+  const activeEntries = Object.values(deliveryMap).filter(
     (e) => e.status === 'provisioning' || e.status === 'delivered',
   );
 
-  // Live updates from /esim/delivery/:token polling
-  const [liveMap, setLiveMap] = useState<Record<string, DeliveryMetafieldEntry>>({});
-  const [quipIndex, setQuipIndex] = useState(0);
-
-  // Apply live updates, preserving the original accessToken (the
-  // /esim/delivery/:token response doesn't include it).
-  const resolvedEntries = activeEntries.map((e) =>
-    e.accessToken && liveMap[e.accessToken]
-      ? { ...e, ...liveMap[e.accessToken], accessToken: e.accessToken }
-      : e,
-  );
-
-  // ── Token poll ───────────────────────────────────────────────────────────
-  // For any provisioning entry with an accessToken, poll every 5s.
-  const pollingEntry = resolvedEntries.find(
-    (e) => e.status === 'provisioning' && e.accessToken,
-  );
-
-  useEffect(() => {
-    if (!pollingEntry?.accessToken) return;
-    const token = pollingEntry.accessToken;
-    let attempts = 0;
-
-    const interval = setInterval(() => {
-      if (++attempts > 120) {
-        clearInterval(interval);
-        return;
-      }
-      void fetch(`${backendUrl}/esim/delivery/${token}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data: DeliveryMetafieldEntry | null) => {
-          if (data && ['delivered', 'failed', 'cancelled'].includes(data.status)) {
-            setLiveMap((prev) => ({ ...prev, [token]: data }));
-            clearInterval(interval);
-          }
-        })
-        .catch(() => {
-          /* network blip */
-        });
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [pollingEntry?.accessToken, backendUrl]);
-
   // ── Quip rotation ────────────────────────────────────────────────────────
-  const anyProvisioning = resolvedEntries.some((e) => e.status === 'provisioning');
+  const anyProvisioning = activeEntries.some((e) => e.status === 'provisioning');
   useEffect(() => {
     if (!anyProvisioning) return;
     const interval = setInterval(() => {
@@ -88,9 +49,9 @@ function EsimOrderStatusAnnouncement() {
   }, [anyProvisioning]);
 
   // ── Render ───────────────────────────────────────────────────────────────
-  if (resolvedEntries.length === 0) return null;
+  if (activeEntries.length === 0) return null;
 
-  const allDelivered = resolvedEntries.every((e) => e.status === 'delivered');
+  const allDelivered = activeEntries.every((e) => e.status === 'delivered' && e.lpa);
 
   if (anyProvisioning) {
     return (
@@ -105,7 +66,7 @@ function EsimOrderStatusAnnouncement() {
     return (
       <InlineStack spacing="base" blockAlignment="center">
         <Text emphasis="bold" appearance="success">{'✓ Your eSIM is ready!'}</Text>
-        {resolvedEntries.map((e, i) =>
+        {activeEntries.map((e, i) =>
           e.accessToken ? (
             <Button
               key={e.accessToken}
@@ -113,14 +74,14 @@ function EsimOrderStatusAnnouncement() {
               overlay={
                 <Modal
                   id={`esim-modal-${e.accessToken}`}
-                  title={resolvedEntries.length > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'}
+                  title={activeEntries.length > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'}
                   padding
                 >
                   <EsimModalContent entry={e} />
                 </Modal>
               }
             >
-              {resolvedEntries.length > 1 ? `View eSIM ${i + 1}` : 'View eSIM'}
+              {activeEntries.length > 1 ? `View eSIM ${i + 1}` : 'View eSIM'}
             </Button>
           ) : null,
         )}

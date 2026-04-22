@@ -1,6 +1,6 @@
 import {
   reactExtension,
-  useMetafields,
+  useApi,
   BlockStack,
   InlineStack,
   Text,
@@ -13,19 +13,7 @@ import {
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState } from 'react';
 import { CancelSection } from './CancelEsim';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface DeliveryMetafieldEntry {
-  status: 'provisioning' | 'delivered' | 'cancelled' | 'failed';
-  accessToken?: string;
-  lpa?: string;
-  activationCode?: string;
-  iccid?: string;
-  usageUrl?: string;
-}
+import { type DeliveryMetafieldEntry, extractNumericId, useOrderDeliveries } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point — order action panel in customer account
@@ -34,19 +22,11 @@ interface DeliveryMetafieldEntry {
 export default reactExtension('customer-account.order.action.render', () => <EsimOrderAction />);
 
 function EsimOrderAction() {
-  const metafields = useMetafields({ namespace: 'esim', key: 'delivery_tokens' });
-  const tokensRaw = metafields?.[0]?.value as string | undefined;
+  const api = useApi<'customer-account.order.action.render'>();
+  const orderId = extractNumericId((api as { orderId?: string }).orderId ?? '');
 
-  let tokenMap: Record<string, DeliveryMetafieldEntry> = {};
-  if (tokensRaw) {
-    try {
-      tokenMap = JSON.parse(tokensRaw) as Record<string, DeliveryMetafieldEntry>;
-    } catch {
-      // Malformed metafield; treat as empty
-    }
-  }
-
-  const entries = Object.values(tokenMap);
+  const deliveryMap = useOrderDeliveries(orderId);
+  const entries = Object.values(deliveryMap);
 
   return (
     <CustomerAccountAction title="Your eSIM">
@@ -64,7 +44,7 @@ function EsimOrderAction() {
 }
 
 // ---------------------------------------------------------------------------
-// Per-eSIM card — renders one eSIM entry from metafield
+// Per-eSIM card
 // ---------------------------------------------------------------------------
 
 function EsimCard({ entry }: { entry: DeliveryMetafieldEntry }) {
