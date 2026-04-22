@@ -52,13 +52,21 @@ function ThankYouEsimBlock() {
     let attempts = 0;
     let stopped = false;
 
-    const fetchCredentials = (accessToken: string) => {
+    const pollCredentials = (accessToken: string) => {
+      if (stopped) return;
       void fetch(`${backendUrl}/esim/delivery/${accessToken}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data: DeliveryMetafieldEntry | null) => {
-          if (data) setCredentials(data);
+          if (data?.lpa) {
+            stopped = true;
+            setCredentials(data);
+          } else if (!stopped) {
+            setTimeout(() => pollCredentials(accessToken), 3000);
+          }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (!stopped) setTimeout(() => pollCredentials(accessToken), 3000);
+        });
     };
 
     const poll = () => {
@@ -69,8 +77,7 @@ function ThankYouEsimBlock() {
           if (!data || stopped) return;
           if (data.status) setStatus(data.status);
           if (data.status === 'delivered') {
-            stopped = true;
-            if (data.accessToken) fetchCredentials(data.accessToken);
+            if (data.accessToken) pollCredentials(data.accessToken);
             return;
           }
           if (data.status === 'failed' || data.status === 'cancelled') {
