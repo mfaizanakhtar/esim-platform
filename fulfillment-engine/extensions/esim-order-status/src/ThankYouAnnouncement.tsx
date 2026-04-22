@@ -2,7 +2,6 @@ import {
   reactExtension,
   useApi,
   useSubscription,
-  useSettings,
   InlineStack,
   Text,
   Button,
@@ -13,7 +12,7 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
-import { PROVISIONING_QUIPS, type DeliveryMetafieldEntry } from './shared';
+import { BACKEND_URL, PROVISIONING_QUIPS, type DeliveryMetafieldEntry } from './shared';
 
 export default reactExtension(
   'purchase.thank-you.announcement.render',
@@ -23,8 +22,7 @@ export default reactExtension(
 type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
 
 function ThankYouAnnouncementBlock() {
-  const { backend_url } = useSettings<{ backend_url?: string }>();
-  const backendUrl = (backend_url as string | undefined) ?? '';
+  const backendUrl = BACKEND_URL;
 
   const api = useApi<'purchase.thank-you.announcement.render'>();
   const orderConfirmation = useSubscription(
@@ -84,27 +82,19 @@ function ThankYouAnnouncementBlock() {
     return () => { stopped = true; };
   }, [numericOrderId, backendUrl]);
 
-  const isProvisioning = status === 'provisioning' || status === 'pending';
+  // Keep quips cycling until credentials are loaded
+  const showQuips = !credentials?.lpa && status !== 'failed' && status !== 'cancelled';
   useEffect(() => {
-    if (!isProvisioning) return;
+    if (!showQuips) return;
     const interval = setInterval(() => {
       setQuipIndex((prev) => (prev + 1) % PROVISIONING_QUIPS.length);
     }, 3000);
     return () => clearInterval(interval);
-  }, [isProvisioning]);
+  }, [showQuips]);
 
   if (status === 'failed' || status === 'cancelled') return null;
 
-  if (isProvisioning || !status) {
-    return (
-      <InlineStack spacing="base" blockAlignment="center">
-        <Spinner size="small" />
-        <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
-      </InlineStack>
-    );
-  }
-
-  if (status === 'delivered' && credentials?.lpa) {
+  if (credentials?.lpa) {
     return (
       <InlineStack spacing="base" blockAlignment="center">
         <Text emphasis="bold" appearance="success">{'✓ Your eSIM is ready!'}</Text>
@@ -122,16 +112,13 @@ function ThankYouAnnouncementBlock() {
     );
   }
 
-  if (status === 'delivered') {
-    return (
-      <InlineStack spacing="base" blockAlignment="center">
-        <Spinner size="small" />
-        <Text emphasis="bold">Your eSIM is ready — loading details…</Text>
-      </InlineStack>
-    );
-  }
-
-  return null;
+  // Show cycling quips while waiting (provisioning, polling, or fetching credentials)
+  return (
+    <InlineStack spacing="base" blockAlignment="center">
+      <Spinner size="small" />
+      <Text>{PROVISIONING_QUIPS[quipIndex]}</Text>
+    </InlineStack>
+  );
 }
 
 function EsimModalContent({ entry }: { entry: DeliveryMetafieldEntry }) {

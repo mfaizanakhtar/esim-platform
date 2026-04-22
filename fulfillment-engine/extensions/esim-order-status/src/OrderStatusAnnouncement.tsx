@@ -1,7 +1,6 @@
 import {
   reactExtension,
   useAppMetafields,
-  useSettings,
   InlineStack,
   Text,
   Button,
@@ -12,7 +11,7 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
-import { type DeliveryMetafieldEntry, parseTokenMap, PROVISIONING_QUIPS } from './shared';
+import { BACKEND_URL, type DeliveryMetafieldEntry, parseTokenMap, PROVISIONING_QUIPS } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -24,8 +23,7 @@ export default reactExtension(
 );
 
 function EsimOrderStatusAnnouncement() {
-  const { backend_url } = useSettings<{ backend_url?: string }>();
-  const backendUrl = (backend_url as string | undefined) ?? '';
+  const backendUrl = BACKEND_URL;
 
   const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
   const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;

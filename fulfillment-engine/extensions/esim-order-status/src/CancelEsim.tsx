@@ -4,17 +4,16 @@ import {
   Text,
   Button,
   Banner,
-  useSettings,
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useCallback } from 'react';
+import { BACKEND_URL } from './shared';
 
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
 
 export function useCancelEsim(accessToken: string | undefined, onSuccess: () => void) {
-  const { backend_url } = useSettings<{ backend_url?: string }>();
-  const backendUrl = ((backend_url as string | undefined) ?? '').trim().replace(/\/+$/, '');
+  const backendUrl = BACKEND_URL;
 
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
