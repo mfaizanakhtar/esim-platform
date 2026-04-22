@@ -2,7 +2,7 @@ import {
   reactExtension,
   useApi,
   useSubscription,
-  useSettings,
+  useShop,
   BlockStack,
   InlineStack,
   Banner,
@@ -32,10 +32,10 @@ export default reactExtension(
 type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
 
 function ThankYouEsimBlock() {
-  const { storefront_url } = useSettings<{ storefront_url?: string }>();
+  const shop = useShop();
   const backendUrl = BACKEND_URL;
-  const storefrontUrl = ((storefront_url as string | undefined) ?? '').trim().replace(/\/+$/, '');
-  const accountOrdersUrl = storefrontUrl ? `${storefrontUrl}/account/orders` : null;
+  const storefrontUrl = shop.storefrontUrl ?? `https://${shop.myshopifyDomain}`;
+  const accountOrdersUrl = `${storefrontUrl}/account/orders`;
 
   const api = useApi<'purchase.thank-you.cart-line-item.render-after'>();
   const orderConfirmation = useSubscription(

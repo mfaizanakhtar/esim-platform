@@ -43,13 +43,3 @@ handle = "esim-order-status"
   namespace = "esim"
   key = "delivery_tokens"
 
-  [extensions.settings]
-    [[extensions.settings.fields]]
-    key = "backend_url"
-    type = "single_line_text_field"
-    name = "Backend API URL"
-
-    [[extensions.settings.fields]]
-    key = "storefront_url"
-    type = "single_line_text_field"
-    name = "Storefront URL"
