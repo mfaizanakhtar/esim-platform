@@ -1,7 +1,7 @@
 import {
   reactExtension,
   useTarget,
-  useAppMetafields,
+  useMetafields,
   BlockStack,
   InlineStack,
   Text,
@@ -36,8 +36,8 @@ function EsimOrderStatusBlock() {
 
   // Read the single "esim.delivery_tokens" metafield declared in shopify.extension.toml.
   // Value is a JSON object: { "<lineItemId>": { status, accessToken, lpa, ... }, ... }
-  const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
-  const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
+  const metafields = useMetafields({ namespace: 'esim', key: 'delivery_tokens' });
+  const tokensRaw = metafields?.[0]?.value as string | undefined;
   const tokenMap = parseTokenMap(tokensRaw);
   const entry = lineItemId ? tokenMap[lineItemId] : undefined;
 
