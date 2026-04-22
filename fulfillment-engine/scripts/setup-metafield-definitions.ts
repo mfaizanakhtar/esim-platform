@@ -30,11 +30,19 @@ const graphql = async (query: string, variables?: Record<string, unknown>) => {
 
 async function ensureDefinition() {
   // Check if definition already exists
-  const existing = await graphql(`{
-    metafieldDefinitions(ownerType: ORDER, namespace: "esim", key: "delivery_tokens", first: 1) {
-      nodes { id access { admin customerAccount } }
+  const existing = await graphql(`
+    {
+      metafieldDefinitions(ownerType: ORDER, namespace: "esim", key: "delivery_tokens", first: 1) {
+        nodes {
+          id
+          access {
+            admin
+            customerAccount
+          }
+        }
+      }
     }
-  }`);
+  `);
 
   const node = existing.data?.metafieldDefinitions?.nodes?.[0];
 
@@ -47,12 +55,25 @@ async function ensureDefinition() {
     // Update access
     const update = await graphql(`
       mutation {
-        metafieldDefinitionUpdate(definition: {
-          namespace: "esim", key: "delivery_tokens", ownerType: ORDER,
-          access: { customerAccount: READ }
-        }) {
-          updatedDefinition { id access { admin customerAccount } }
-          userErrors { field message }
+        metafieldDefinitionUpdate(
+          definition: {
+            namespace: "esim"
+            key: "delivery_tokens"
+            ownerType: ORDER
+            access: { customerAccount: READ }
+          }
+        ) {
+          updatedDefinition {
+            id
+            access {
+              admin
+              customerAccount
+            }
+          }
+          userErrors {
+            field
+            message
+          }
         }
       }
     `);
@@ -69,13 +90,22 @@ async function ensureDefinition() {
   // Create definition
   const create = await graphql(`
     mutation {
-      metafieldDefinitionCreate(definition: {
-        name: "eSIM Delivery Tokens",
-        namespace: "esim", key: "delivery_tokens",
-        type: "json", ownerType: ORDER
-      }) {
-        createdDefinition { id }
-        userErrors { field message }
+      metafieldDefinitionCreate(
+        definition: {
+          name: "eSIM Delivery Tokens"
+          namespace: "esim"
+          key: "delivery_tokens"
+          type: "json"
+          ownerType: ORDER
+        }
+      ) {
+        createdDefinition {
+          id
+        }
+        userErrors {
+          field
+          message
+        }
       }
     }
   `);
@@ -89,12 +119,25 @@ async function ensureDefinition() {
   // Set customer account access (separate call — create doesn't allow it with custom app tokens)
   const update = await graphql(`
     mutation {
-      metafieldDefinitionUpdate(definition: {
-        namespace: "esim", key: "delivery_tokens", ownerType: ORDER,
-        access: { customerAccount: READ }
-      }) {
-        updatedDefinition { id access { admin customerAccount } }
-        userErrors { field message }
+      metafieldDefinitionUpdate(
+        definition: {
+          namespace: "esim"
+          key: "delivery_tokens"
+          ownerType: ORDER
+          access: { customerAccount: READ }
+        }
+      ) {
+        updatedDefinition {
+          id
+          access {
+            admin
+            customerAccount
+          }
+        }
+        userErrors {
+          field
+          message
+        }
       }
     }
   `);
