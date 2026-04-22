@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'shopify/**'
+      - 'shopify-sailesim/**'
 
 jobs:
   deploy-theme:
@@ -36,7 +36,7 @@ jobs:
           echo "token=${TOKEN}" >> "$GITHUB_OUTPUT"
 
       - name: Push theme
-        working-directory: shopify
+        working-directory: shopify-sailesim
         env:
           SHOPIFY_CLI_THEME_TOKEN: ${{ steps.get_token.outputs.token }}
         run: |
