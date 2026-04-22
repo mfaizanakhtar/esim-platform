@@ -1,6 +1,6 @@
 import {
   reactExtension,
-  useAppMetafields,
+  useMetafields,
   InlineStack,
   Text,
   Button,
@@ -25,8 +25,8 @@ export default reactExtension(
 function EsimOrderStatusAnnouncement() {
   const backendUrl = BACKEND_URL;
 
-  const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
-  const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
+  const metafields = useMetafields({ namespace: 'esim', key: 'delivery_tokens' });
+  const tokensRaw = metafields?.[0]?.value as string | undefined;
   const tokenMap = parseTokenMap(tokensRaw);
 
   const activeEntries = Object.values(tokenMap).filter(
