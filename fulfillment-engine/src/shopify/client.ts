@@ -1172,7 +1172,7 @@ export class ShopifyClient {
               variants: [
                 {
                   id: defaultVariantId,
-                  inventoryItem: { sku: firstVariant.sku, tracked: false },
+                  inventoryItem: { sku: firstVariant.sku, tracked: false, requiresShipping: false },
                   inventoryPolicy: 'CONTINUE',
                   price: firstVariant.price,
                 },
@@ -1203,7 +1203,7 @@ export class ShopifyClient {
       for (let i = 0; i < remainingVariants.length; i += BATCH_SIZE) {
         const batch = remainingVariants.slice(i, i + BATCH_SIZE);
         const variantInputs = batch.map((v) => ({
-          inventoryItem: { sku: v.sku, tracked: false },
+          inventoryItem: { sku: v.sku, tracked: false, requiresShipping: false },
           inventoryPolicy: 'CONTINUE',
           price: v.price,
           optionValues: v.optionValues.map((val, idx) => ({
