@@ -23,7 +23,7 @@ export default reactExtension('customer-account.order.action.render', () => <Esi
 
 function EsimOrderAction() {
   const api = useApi<'customer-account.order.action.render'>();
-  const orderId = extractNumericId((api as { orderId?: string }).orderId ?? '');
+  const orderId = extractNumericId((api as unknown as { orderId: string }).orderId);
 
   const deliveryMap = useOrderDeliveries(orderId);
   const entries = Object.values(deliveryMap);
