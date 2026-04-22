@@ -120,7 +120,8 @@ export class TgtProvider implements VendorProvider {
       productCode,
       channelOrderNo,
       idempotencyKey,
-      email: ctx.customerEmail || undefined,
+      // Omit email so TGT does not send their own QR email — we send via Resend instead
+      email: undefined,
       startDate,
     });
 
