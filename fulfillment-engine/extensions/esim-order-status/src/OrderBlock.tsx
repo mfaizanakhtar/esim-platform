@@ -1,6 +1,6 @@
 import {
   reactExtension,
-  useAppMetafields,
+  useMetafields,
   BlockStack,
   InlineStack,
   Text,
@@ -34,8 +34,8 @@ interface DeliveryMetafieldEntry {
 export default reactExtension('customer-account.order.action.render', () => <EsimOrderAction />);
 
 function EsimOrderAction() {
-  const metafields = useAppMetafields({ namespace: 'esim', key: 'delivery_tokens' });
-  const tokensRaw = metafields?.[0]?.metafield?.value as string | undefined;
+  const metafields = useMetafields({ namespace: 'esim', key: 'delivery_tokens' });
+  const tokensRaw = metafields?.[0]?.value as string | undefined;
 
   let tokenMap: Record<string, DeliveryMetafieldEntry> = {};
   if (tokensRaw) {
