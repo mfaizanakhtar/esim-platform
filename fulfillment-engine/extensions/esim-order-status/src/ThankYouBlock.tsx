@@ -14,7 +14,7 @@ import {
   Spinner,
 } from '@shopify/ui-extensions-react/checkout';
 import { useState, useEffect } from 'react';
-import { PROVISIONING_QUIPS, type DeliveryMetafieldEntry } from './shared';
+import { BACKEND_URL, PROVISIONING_QUIPS, type DeliveryMetafieldEntry } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point — renders under each line item on the post-checkout
@@ -32,8 +32,8 @@ export default reactExtension(
 type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
 
 function ThankYouEsimBlock() {
-  const { backend_url, storefront_url } = useSettings<{ backend_url?: string; storefront_url?: string }>();
-  const backendUrl = ((backend_url as string | undefined) ?? '').trim().replace(/\/+$/, '');
+  const { storefront_url } = useSettings<{ storefront_url?: string }>();
+  const backendUrl = BACKEND_URL;
   const storefrontUrl = ((storefront_url as string | undefined) ?? '').trim().replace(/\/+$/, '');
   const accountOrdersUrl = storefrontUrl ? `${storefrontUrl}/account/orders` : null;
 

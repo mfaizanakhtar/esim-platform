@@ -2,7 +2,6 @@ import {
   reactExtension,
   useTarget,
   useAppMetafields,
-  useSettings,
   BlockStack,
   InlineStack,
   Text,
@@ -15,7 +14,7 @@ import {
 } from '@shopify/ui-extensions-react/customer-account';
 import { useState, useEffect } from 'react';
 import { CancelSection } from './CancelEsim';
-import { type DeliveryMetafieldEntry, parseTokenMap, PROVISIONING_QUIPS } from './shared';
+import { BACKEND_URL, type DeliveryMetafieldEntry, parseTokenMap, PROVISIONING_QUIPS } from './shared';
 
 // ---------------------------------------------------------------------------
 // Extension entry point
@@ -27,8 +26,7 @@ export default reactExtension(
 );
 
 function EsimOrderStatusBlock() {
-  const { backend_url } = useSettings<{ backend_url?: string }>();
-  const backendUrl = (backend_url as string | undefined) ?? '';
+  const backendUrl = BACKEND_URL;
 
   const target = useTarget();
 

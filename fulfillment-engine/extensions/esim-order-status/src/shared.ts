@@ -1,5 +1,7 @@
 // Shared types, constants, and utilities for eSIM order status extension components
 
+export const BACKEND_URL = 'https://api.sailesim.com';
+
 export interface DeliveryMetafieldEntry {
   status: 'provisioning' | 'delivered' | 'cancelled' | 'failed';
   accessToken?: string;
