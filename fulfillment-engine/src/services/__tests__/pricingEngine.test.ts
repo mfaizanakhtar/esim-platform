@@ -332,13 +332,14 @@ describe('roundPrice', () => {
     expect(roundPrice(0.5, '99')).toBe(0.99);
   });
 
-  it('mode 49_99: rounds to nearest .49 or .99', () => {
+  it('mode 49_99: rounds UP to next .49 or .99', () => {
     expect(roundPrice(2.3, '49_99')).toBe(2.49);
-    expect(roundPrice(2.68, '49_99')).toBe(2.49);
-    expect(roundPrice(2.8, '49_99')).toBe(2.99);
-    expect(roundPrice(4.07, '49_99')).toBe(3.99);
-    expect(roundPrice(4.5, '49_99')).toBe(4.49);
-    expect(roundPrice(4.75, '49_99')).toBe(4.99);
+    expect(roundPrice(2.5, '49_99')).toBe(2.99);
+    expect(roundPrice(2.68, '49_99')).toBe(2.99);
+    expect(roundPrice(4.07, '49_99')).toBe(4.49);
+    expect(roundPrice(4.5, '49_99')).toBe(4.99);
+    expect(roundPrice(4.99, '49_99')).toBe(4.99);
+    expect(roundPrice(5.0, '49_99')).toBe(5.49);
   });
 
   it('sub-$1 always returns 0.99', () => {
@@ -347,8 +348,8 @@ describe('roundPrice', () => {
   });
 
   it('defaults to 49_99 mode', () => {
-    expect(roundPrice(2.68)).toBe(2.49);
-    expect(roundPrice(2.8)).toBe(2.99);
+    expect(roundPrice(2.3)).toBe(2.49);
+    expect(roundPrice(2.5)).toBe(2.99);
   });
 });
 

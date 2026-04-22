@@ -112,22 +112,11 @@ export function roundPrice(price: number, mode: RoundingMode = '49_99'): number 
   if (mode === '99') {
     return Math.floor(price) + 0.99;
   }
-  // '49_99': round to nearest .49 or .99
-  // Candidates: floor.49, floor.99, (floor-1).99
+  // '49_99': round UP to the next .49 or .99 (never below input price)
   const base = Math.floor(price);
-  const candidates = [base + 0.49, base + 0.99];
-  if (base > 0) candidates.push(base - 0.01); // previous .99 (e.g., 3.99 when price is 4.07)
-  // Pick the candidate closest to price, but never go below 0.99
-  let best = candidates[0];
-  let bestDist = Math.abs(price - best);
-  for (const c of candidates) {
-    const dist = Math.abs(price - c);
-    if (dist < bestDist && c >= 0.99) {
-      best = c;
-      bestDist = dist;
-    }
-  }
-  return parseFloat(best.toFixed(2));
+  const candidates = [base + 0.49, base + 0.99, base + 1.49].filter((c) => c >= 0.99);
+  const rounded = candidates.find((c) => c >= price) ?? base + 1.99;
+  return parseFloat(rounded.toFixed(2));
 }
 
 /** @deprecated Use roundPrice instead */

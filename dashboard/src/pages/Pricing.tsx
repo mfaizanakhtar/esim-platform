@@ -392,8 +392,9 @@ function SmartPricingDialog({
             </p>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground">Price Rounding</label>
+            <label htmlFor="rounding-mode" className="text-xs text-muted-foreground">Price Rounding</label>
             <select
+              id="rounding-mode"
               value={local.roundingMode}
               onChange={(e) =>
                 setLocal((p) => ({ ...p, roundingMode: e.target.value as '99' | '49_99' }))
