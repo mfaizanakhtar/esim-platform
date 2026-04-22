@@ -484,16 +484,22 @@ async function fetchTgtUsageData(
 
   if (!usage) return null;
 
+  // Normalize TGT response to match FiRoam format for uniform frontend rendering
+  const totalMb = usage.dataTotal ? parseFloat(usage.dataTotal) : 0;
+  const usedMb = usage.dataUsage ? parseFloat(usage.dataUsage) : 0;
+  const remainingMb = usage.dataResidual ? parseFloat(usage.dataResidual) : totalMb - usedMb;
+  const usagePercent = totalMb > 0 ? Math.round((usedMb / totalMb) * 10000) / 100 : 0;
+
   return {
     iccid,
     provider: 'tgt',
     orderNum: delivery.orderName,
     vendorOrderNo: orderNo,
     usage: {
-      dataTotal: usage.dataTotal ?? null,
-      dataUsage: usage.dataUsage ?? null,
-      dataResidual: usage.dataResidual ?? null,
-      refuelingTotal: usage.refuelingTotal ?? null,
+      totalMb,
+      usedMb,
+      remainingMb,
+      usagePercent,
     },
   };
 }

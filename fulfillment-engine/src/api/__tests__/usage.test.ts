@@ -271,7 +271,7 @@ describe('GET /api/esim/:iccid/usage', () => {
       }),
     ]);
     mockGetUsage.mockResolvedValue({
-      usage: { dataTotal: '5 GB', dataUsage: '2 GB', dataResidual: '3 GB', refuelingTotal: null },
+      usage: { dataTotal: '5120', dataUsage: '2048', dataResidual: '3072', refuelingTotal: null },
     });
 
     const res = await app.inject({ method: 'GET', url: `/api/esim/${ICCID}/usage` });
@@ -284,9 +284,10 @@ describe('GET /api/esim/:iccid/usage', () => {
     expect(body.iccid).toBe(ICCID);
     expect(body.orderNum).toBe('#1001');
     expect(body.vendorOrderNo).toBe('TGT-123');
-    expect(body.usage.dataTotal).toBe('5 GB');
-    expect(body.usage.dataUsage).toBe('2 GB');
-    expect(body.usage.dataResidual).toBe('3 GB');
+    expect(body.usage.totalMb).toBe(5120);
+    expect(body.usage.usedMb).toBe(2048);
+    expect(body.usage.remainingMb).toBe(3072);
+    expect(body.usage.usagePercent).toBe(40);
   });
 
   it('returns 404 when TGT returns no usage data', async () => {
