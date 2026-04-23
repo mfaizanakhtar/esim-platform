@@ -283,7 +283,8 @@ describe('GET /api/esim/:iccid/usage', () => {
     expect(body.provider).toBe('tgt');
     expect(body.iccid).toBe(ICCID);
     expect(body.orderNum).toBe('#1001');
-    expect(body.vendorOrderNo).toBe('TGT-123');
+    expect(body.vendorOrderNo).toBeUndefined();
+    expect(body.status).toBe(0);
     expect(body.usage.totalMb).toBe(5120);
     expect(body.usage.usedMb).toBe(2048);
     expect(body.usage.remainingMb).toBe(3072);

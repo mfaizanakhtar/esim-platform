@@ -4,6 +4,8 @@ import prisma from '~/db/prisma';
 import FiRoamClient from '~/vendor/firoamClient';
 import TgtClient from '~/vendor/tgtClient';
 import { decrypt, hashIccid } from '~/utils/crypto';
+import { parseShopifySku } from '~/utils/parseShopifySku';
+import { getCountryByCode } from '~/utils/countryCodes';
 
 /**
  * Schema for the JSON stored in EsimDelivery.payloadEncrypted.
@@ -27,6 +29,7 @@ type DeliveryRow = {
   payloadEncrypted: string | null;
   orderName: string;
   customerEmail: string | null;
+  sku: string | null;
 };
 
 /**
@@ -113,6 +116,7 @@ async function handleIccidSearch(app: FastifyInstance, reply: FastifyReply, icci
       payloadEncrypted: true,
       orderName: true,
       customerEmail: true,
+      sku: true,
     },
   });
 
@@ -143,6 +147,7 @@ async function handleIccidSearch(app: FastifyInstance, reply: FastifyReply, icci
       payloadEncrypted: true,
       orderName: true,
       customerEmail: true,
+      sku: true,
     },
   });
 
@@ -187,6 +192,7 @@ async function handleOrderSearch(app: FastifyInstance, reply: FastifyReply, orde
       payloadEncrypted: true,
       orderName: true,
       customerEmail: true,
+      sku: true,
     },
   });
 
@@ -233,6 +239,7 @@ async function handleEmailSearch(app: FastifyInstance, reply: FastifyReply, emai
       payloadEncrypted: true,
       orderName: true,
       customerEmail: true,
+      sku: true,
     },
   });
 
@@ -490,16 +497,24 @@ async function fetchTgtUsageData(
   const remainingMb = usage.dataResidual ? parseFloat(usage.dataResidual) : totalMb - usedMb;
   const usagePercent = totalMb > 0 ? Math.round((usedMb / totalMb) * 10000) / 100 : 0;
 
+  // Derive region from SKU (e.g. TR-5GB-7D-FIXED → "Turkey")
+  const parsed = delivery.sku ? parseShopifySku(delivery.sku) : null;
+  const region = parsed ? (getCountryByCode(parsed.regionCode)?.name ?? null) : null;
+
+  // Derive status: 0=Active, 1=Pending
+  const status = totalMb > 0 ? 0 : 1;
+
   return {
     iccid,
     provider: 'tgt',
     orderNum: delivery.orderName,
-    vendorOrderNo: orderNo,
+    region,
     usage: {
       totalMb,
       usedMb,
       remainingMb,
       usagePercent,
     },
+    status,
   };
 }
