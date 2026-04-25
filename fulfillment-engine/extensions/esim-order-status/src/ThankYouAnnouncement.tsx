@@ -19,7 +19,12 @@ export default reactExtension(
   () => <ThankYouAnnouncementBlock />,
 );
 
-type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
+interface DeliveryStatus {
+  lineItemId: string;
+  variantId: string;
+  status: string;
+  accessToken?: string;
+}
 
 function ThankYouAnnouncementBlock() {
   const backendUrl = BACKEND_URL;
@@ -30,8 +35,8 @@ function ThankYouAnnouncementBlock() {
   ) as { order?: { id?: string } } | null;
   const numericOrderId = orderConfirmation?.order?.id?.split('/').pop() ?? '';
 
-  const [status, setStatus] = useState<EsimStatus>(null);
-  const [credentials, setCredentials] = useState<DeliveryMetafieldEntry | null>(null);
+  const [deliveries, setDeliveries] = useState<DeliveryStatus[]>([]);
+  const [credentialsMap, setCredentialsMap] = useState<Record<string, DeliveryMetafieldEntry>>({});
   const [quipIndex, setQuipIndex] = useState(0);
 
   useEffect(() => {
@@ -39,39 +44,54 @@ function ThankYouAnnouncementBlock() {
     let attempts = 0;
     let stopped = false;
 
-    const pollCredentials = (accessToken: string) => {
-      if (stopped) return;
-      void fetch(`${backendUrl}/esim/delivery/${accessToken}`)
-        .then((r) => (r.ok ? r.json() : null))
-        .then((data: DeliveryMetafieldEntry | null) => {
-          if (data?.lpa) {
-            stopped = true;
-            setCredentials(data);
-          } else if (!stopped) {
-            setTimeout(() => pollCredentials(accessToken), 3000);
-          }
-        })
-        .catch(() => {
-          if (!stopped) setTimeout(() => pollCredentials(accessToken), 3000);
-        });
+    // Track which access tokens are already being polled for credentials
+    const pollingTokens = new Set<string>();
+
+    const pollCredentials = (accessToken: string, lineItemId: string) => {
+      if (stopped || pollingTokens.has(accessToken)) return;
+      pollingTokens.add(accessToken);
+
+      let credAttempts = 0;
+      const doPoll = () => {
+        if (stopped || ++credAttempts > 200) return;
+        void fetch(`${backendUrl}/esim/delivery/${accessToken}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data: DeliveryMetafieldEntry | null) => {
+            if (data?.lpa) {
+              setCredentialsMap((prev) => ({ ...prev, [lineItemId]: data }));
+            } else if (!stopped) {
+              setTimeout(doPoll, 3000);
+            }
+          })
+          .catch(() => {
+            if (!stopped) setTimeout(doPoll, 3000);
+          });
+      };
+      doPoll();
     };
 
     const poll = () => {
       if (stopped || ++attempts > 120) return;
       void fetch(`${backendUrl}/esim/order-status/${numericOrderId}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((data: { status: EsimStatus; accessToken?: string } | null) => {
-          if (!data || stopped) return;
-          if (data.status) setStatus(data.status);
-          if (data.status === 'delivered') {
-            if (data.accessToken) pollCredentials(data.accessToken);
-            return;
+        .then((data: { deliveries?: DeliveryStatus[] } | null) => {
+          if (!data?.deliveries || stopped) return;
+          setDeliveries(data.deliveries);
+
+          const allTerminal = data.deliveries.every(
+            (d) => d.status === 'delivered' || d.status === 'failed' || d.status === 'cancelled',
+          );
+
+          // Start credential polling for each delivered item
+          for (const d of data.deliveries) {
+            if (d.status === 'delivered' && d.accessToken) {
+              pollCredentials(d.accessToken, d.lineItemId);
+            }
           }
-          if (data.status === 'failed' || data.status === 'cancelled') {
-            stopped = true;
-            return;
+
+          if (!allTerminal) {
+            setTimeout(poll, 5000);
           }
-          setTimeout(poll, 5000);
         })
         .catch(() => {
           if (!stopped) setTimeout(poll, 5000);
@@ -82,8 +102,16 @@ function ThankYouAnnouncementBlock() {
     return () => { stopped = true; };
   }, [numericOrderId, backendUrl]);
 
-  // Keep quips cycling until credentials are loaded
-  const showQuips = !credentials?.lpa && status !== 'failed' && status !== 'cancelled';
+  const deliveredCount = deliveries.filter((d) => d.status === 'delivered').length;
+  const totalCount = deliveries.length;
+  const allFailed = totalCount > 0 && deliveries.every(
+    (d) => d.status === 'failed' || d.status === 'cancelled',
+  );
+  const credentialsList = Object.entries(credentialsMap);
+  const allCredentialsReady = totalCount > 0 && credentialsList.length === deliveredCount && deliveredCount === totalCount;
+
+  // Keep quips cycling until all credentials are loaded
+  const showQuips = !allCredentialsReady && !allFailed;
   useEffect(() => {
     if (!showQuips) return;
     const interval = setInterval(() => {
@@ -92,27 +120,47 @@ function ThankYouAnnouncementBlock() {
     return () => clearInterval(interval);
   }, [showQuips]);
 
-  if (status === 'failed' || status === 'cancelled') return null;
+  if (allFailed) return null;
 
-  if (credentials?.lpa) {
+  // All eSIMs ready with credentials
+  if (allCredentialsReady) {
     return (
       <InlineStack spacing="base" blockAlignment="center">
-        <Text emphasis="bold" appearance="success">{'✓ Your eSIM is ready!'}</Text>
-        <Button
-          appearance="primary"
-          overlay={
-            <Modal id="esim-thankyou-announcement-modal" title="eSIM Details" padding>
-              <EsimModalContent entry={credentials} />
-            </Modal>
-          }
-        >
-          View eSIM
-        </Button>
+        <Text emphasis="bold" appearance="success">
+          {totalCount > 1 ? `✓ All ${totalCount} eSIMs are ready!` : '✓ Your eSIM is ready!'}
+        </Text>
+        {credentialsList.map(([lineItemId, entry], i) => (
+          <Button
+            key={lineItemId}
+            appearance="primary"
+            overlay={
+              <Modal
+                id={`esim-thankyou-modal-${lineItemId}`}
+                title={totalCount > 1 ? `eSIM ${i + 1} Details` : 'eSIM Details'}
+                padding
+              >
+                <EsimModalContent entry={entry} />
+              </Modal>
+            }
+          >
+            {totalCount > 1 ? `View eSIM ${i + 1}` : 'View eSIM'}
+          </Button>
+        ))}
       </InlineStack>
     );
   }
 
-  // Show cycling quips while waiting (provisioning, polling, or fetching credentials)
+  // Partial progress
+  if (deliveredCount > 0 && deliveredCount < totalCount) {
+    return (
+      <InlineStack spacing="base" blockAlignment="center">
+        <Spinner size="small" />
+        <Text>{`${deliveredCount} of ${totalCount} eSIMs ready — setting up the rest...`}</Text>
+      </InlineStack>
+    );
+  }
+
+  // Still waiting
   return (
     <InlineStack spacing="base" blockAlignment="center">
       <Spinner size="small" />

@@ -108,10 +108,10 @@ Configured per-surface in Shopify Admin (Checkout editor or Customer accounts ed
 - **Customer account:** Shopify Admin → Settings → Customer accounts → Customize → click eSIM block → settings panel
 
 ### Key Features
-- Polls `/esim/delivery/:token` every 5 seconds until `status === 'delivered'`
+- **Multi-eSIM support:** Thank-you page polls `/esim/order-status/:orderId` which returns all deliveries. Announcement shows "View eSIM 1", "View eSIM 2" buttons. Per-line-item blocks match by variant ID.
+- Polls `/esim/order-status/:orderId` every 5s for status, then `/esim/delivery/:token` every 3s for credentials
 - Shows QR code when `lpa` is available
 - Rotating provisioning messages while waiting
-- Handles multiple eSIMs per order
 
 ---
 
