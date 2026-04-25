@@ -51,8 +51,9 @@ function ThankYouAnnouncementBlock() {
       if (stopped || pollingTokens.has(accessToken)) return;
       pollingTokens.add(accessToken);
 
+      let credAttempts = 0;
       const doPoll = () => {
-        if (stopped) return;
+        if (stopped || ++credAttempts > 200) return;
         void fetch(`${backendUrl}/esim/delivery/${accessToken}`)
           .then((r) => (r.ok ? r.json() : null))
           .then((data: DeliveryMetafieldEntry | null) => {

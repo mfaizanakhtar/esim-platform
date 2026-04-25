@@ -67,8 +67,9 @@ function ThankYouEsimBlock() {
     let attempts = 0;
     let stopped = false;
 
+    let credAttempts = 0;
     const pollCredentials = (accessToken: string) => {
-      if (stopped) return;
+      if (stopped || ++credAttempts > 200) return;
       void fetch(`${backendUrl}/esim/delivery/${accessToken}`)
         .then((r) => (r.ok ? r.json() : null))
         .then((data: DeliveryMetafieldEntry | null) => {
