@@ -183,7 +183,7 @@ async function handleIccidSearch(app: FastifyInstance, reply: FastifyReply, icci
 }
 
 async function handleOrderSearch(app: FastifyInstance, reply: FastifyReply, orderName: string) {
-  const delivery = await prisma.esimDelivery.findFirst({
+  const deliveries = await prisma.esimDelivery.findMany({
     where: { orderName, status: 'delivered' },
     select: {
       id: true,
@@ -196,37 +196,70 @@ async function handleOrderSearch(app: FastifyInstance, reply: FastifyReply, orde
     },
   });
 
-  if (!delivery) {
+  if (deliveries.length === 0) {
     return reply.code(404).send({
       error: 'Order not found',
       message: `No delivered eSIM found for order ${orderName}`,
     });
   }
 
-  // Decrypt to get the ICCID for the response
-  let iccid = '';
-  let storedPayload: StoredPayload | null = null;
-  if (delivery.payloadEncrypted) {
-    try {
-      const decrypted = decrypt(delivery.payloadEncrypted);
-      const result = StoredPayloadSchema.safeParse(JSON.parse(decrypted));
-      if (result.success) {
-        storedPayload = result.data;
-        iccid = result.data.iccid ?? '';
+  // Single delivery — return directly (no wrapper array)
+  if (deliveries.length === 1) {
+    const delivery = deliveries[0];
+    let iccid = '';
+    let storedPayload: StoredPayload | null = null;
+    if (delivery.payloadEncrypted) {
+      try {
+        const decrypted = decrypt(delivery.payloadEncrypted);
+        const result = StoredPayloadSchema.safeParse(JSON.parse(decrypted));
+        if (result.success) {
+          storedPayload = result.data;
+          iccid = result.data.iccid ?? '';
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
+
+    if (!iccid) {
+      return reply.code(404).send({
+        error: 'Usage not found',
+        message: 'Could not retrieve ICCID for this order',
+      });
+    }
+
+    return await dispatchUsageByProvider(app, reply, delivery, storedPayload, iccid);
   }
 
-  if (!iccid) {
-    return reply.code(404).send({
-      error: 'Usage not found',
-      message: 'Could not retrieve ICCID for this order',
-    });
-  }
+  // Multiple deliveries — return as array (same format as email search)
+  const results = await Promise.all(
+    deliveries.map(async (delivery) => {
+      let iccid = '';
+      let storedPayload: StoredPayload | null = null;
+      if (delivery.payloadEncrypted) {
+        try {
+          const decrypted = decrypt(delivery.payloadEncrypted);
+          const parsed = StoredPayloadSchema.safeParse(JSON.parse(decrypted));
+          if (parsed.success) {
+            storedPayload = parsed.data;
+            iccid = parsed.data.iccid ?? '';
+          }
+        } catch {
+          // ignore
+        }
+      }
 
-  return await dispatchUsageByProvider(app, reply, delivery, storedPayload, iccid);
+      try {
+        const usageData = await fetchUsageData(delivery, storedPayload, iccid);
+        return usageData;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const filtered = results.filter((r) => r !== null);
+  return reply.send({ results: filtered });
 }
 
 async function handleEmailSearch(app: FastifyInstance, reply: FastifyReply, email: string) {

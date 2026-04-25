@@ -33,7 +33,7 @@ Core record. One per Shopify line item. Tracks provisioning from start to finish
 
 **Status values:** `pending` → `provisioning` → `vendor_ordered` → `polling` → `awaiting_callback` → `delivered` | `failed` | `cancelled`
 
-**Idempotency key:** `(orderId, lineItemId)` — checked before creating a new delivery
+**Unique constraint:** `@@unique([orderId, lineItemId])` — ensures one delivery per line item per order
 
 ---
 

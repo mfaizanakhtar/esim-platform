@@ -16,6 +16,8 @@ vi.mock('~/db/prisma', () => ({
   default: {
     esimDelivery: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
       update: vi.fn(),
     },
     providerSkuMapping: {

@@ -30,6 +30,7 @@ model EsimDelivery {
   attempts          DeliveryAttempt[]
   esimOrders        EsimOrder[]
 
+  @@unique([orderId, lineItemId])
   @@index([iccidHash])
 }
 

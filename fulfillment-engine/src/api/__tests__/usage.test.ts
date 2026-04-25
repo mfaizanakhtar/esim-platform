@@ -516,7 +516,7 @@ describe('GET /api/esim/usage?q=', () => {
   });
 
   it('searches by order number when q matches #NNN or NNN', async () => {
-    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
       makeDelivery({
         id: 'del-order',
         provider: 'tgt',
@@ -524,7 +524,7 @@ describe('GET /api/esim/usage?q=', () => {
         payloadEncrypted: makePayload(ICCID),
         orderName: '#1001',
       }),
-    );
+    ]);
     mockGetUsage.mockResolvedValue({
       usage: { dataTotal: '5 GB', dataUsage: '1 GB', dataResidual: '4 GB', refuelingTotal: null },
     });
@@ -532,14 +532,14 @@ describe('GET /api/esim/usage?q=', () => {
     const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=%231001' });
 
     expect(res.statusCode).toBe(200);
-    expect(vi.mocked(prisma.esimDelivery.findFirst)).toHaveBeenCalledWith(
+    expect(vi.mocked(prisma.esimDelivery.findMany)).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ orderName: '#1001' }) }),
     );
     expect(res.json()).toMatchObject({ provider: 'tgt' });
   });
 
   it('normalises bare order number (no #) when q is numeric', async () => {
-    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
       makeDelivery({
         id: 'del-order2',
         provider: 'firoam',
@@ -547,23 +547,54 @@ describe('GET /api/esim/usage?q=', () => {
         payloadEncrypted: makePayload(ICCID),
         orderName: '#2002',
       }),
-    );
+    ]);
     mockQueryEsimOrder.mockResolvedValue(makeUsageResponse(ICCID));
 
     const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=2002' });
 
     expect(res.statusCode).toBe(200);
-    expect(vi.mocked(prisma.esimDelivery.findFirst)).toHaveBeenCalledWith(
+    expect(vi.mocked(prisma.esimDelivery.findMany)).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ orderName: '#2002' }) }),
     );
   });
 
   it('returns 404 when order not found', async () => {
-    vi.mocked(prisma.esimDelivery.findFirst).mockResolvedValue(null);
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([]);
 
     const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=9999' });
 
     expect(res.statusCode).toBe(404);
+  });
+
+  it('returns results array for order with multiple eSIMs', async () => {
+    vi.mocked(prisma.esimDelivery.findMany).mockResolvedValue([
+      makeDelivery({
+        id: 'del-multi-1',
+        provider: 'firoam',
+        vendorReferenceId: 'EP-M1',
+        payloadEncrypted: makePayload(ICCID),
+        orderName: '#5001',
+      }),
+      makeDelivery({
+        id: 'del-multi-2',
+        provider: 'tgt',
+        vendorReferenceId: 'TGT-M2',
+        payloadEncrypted: makePayload('8901234567890123457'),
+        orderName: '#5001',
+      }),
+    ]);
+    mockQueryEsimOrder.mockResolvedValue(makeUsageResponse(ICCID));
+    mockGetUsage.mockResolvedValue({
+      usage: { dataTotal: '10 GB', dataUsage: '2 GB', dataResidual: '8 GB', refuelingTotal: null },
+    });
+
+    const res = await app.inject({ method: 'GET', url: '/api/esim/usage?q=%235001' });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('results');
+    expect(Array.isArray(body.results)).toBe(true);
+    expect(body.results.length).toBe(2);
   });
 
   it('searches by email and returns results array', async () => {

@@ -419,23 +419,29 @@ export default function esimRoutes(
     async (request: FastifyRequest<{ Params: { orderId: string } }>, reply: FastifyReply) => {
       const { orderId } = request.params;
 
-      const delivery = await prisma.esimDelivery.findFirst({
+      const deliveries = await prisma.esimDelivery.findMany({
         where: { orderId },
-        select: { status: true, accessToken: true },
-        orderBy: { createdAt: 'desc' },
+        select: { lineItemId: true, variantId: true, status: true, accessToken: true },
+        orderBy: { createdAt: 'asc' },
       });
 
-      if (!delivery) {
-        return reply.send({ status: null });
+      if (deliveries.length === 0) {
+        return reply.send({ status: null, deliveries: [] });
       }
 
-      // Include the access token only when delivered so the extension can
-      // fetch full credentials from /esim/delivery/:token for the modal.
+      // Backward-compatible single-delivery fields from the first delivery
+      const first = deliveries[0];
       return reply.send({
-        status: delivery.status,
-        ...(delivery.status === 'delivered' && delivery.accessToken
-          ? { accessToken: delivery.accessToken }
+        status: first.status,
+        ...(first.status === 'delivered' && first.accessToken
+          ? { accessToken: first.accessToken }
           : {}),
+        deliveries: deliveries.map((d) => ({
+          lineItemId: d.lineItemId,
+          variantId: d.variantId,
+          status: d.status,
+          ...(d.status === 'delivered' && d.accessToken ? { accessToken: d.accessToken } : {}),
+        })),
       });
     },
   );

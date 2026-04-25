@@ -22,6 +22,8 @@ import { BACKEND_URL, PROVISIONING_QUIPS, type DeliveryMetafieldEntry } from './
 //
 // Credentials are fetched by polling the backend — useAppMetafields is a
 // one-time snapshot in the checkout surface and never updates after render.
+//
+// Matches to the correct delivery by variant ID extracted from the cart line.
 // ---------------------------------------------------------------------------
 
 export default reactExtension(
@@ -30,6 +32,13 @@ export default reactExtension(
 );
 
 type EsimStatus = 'pending' | 'provisioning' | 'delivered' | 'failed' | 'cancelled' | null;
+
+interface DeliveryInfo {
+  lineItemId: string;
+  variantId: string;
+  status: string;
+  accessToken?: string;
+}
 
 function ThankYouEsimBlock() {
   const shop = useShop();
@@ -42,6 +51,12 @@ function ThankYouEsimBlock() {
     (api as unknown as { orderConfirmation: Parameters<typeof useSubscription>[0] }).orderConfirmation,
   ) as { order?: { id?: string } } | null;
   const numericOrderId = orderConfirmation?.order?.id?.split('/').pop() ?? '';
+
+  // Get the current cart line item's variant to match against deliveries
+  const target = useSubscription(
+    (api as unknown as { target: Parameters<typeof useSubscription>[0] }).target,
+  ) as { merchandise?: { id?: string } } | null;
+  const cartVariantId = target?.merchandise?.id?.split('/').pop() ?? '';
 
   const [status, setStatus] = useState<EsimStatus>(null);
   const [credentials, setCredentials] = useState<DeliveryMetafieldEntry | null>(null);
@@ -73,14 +88,24 @@ function ThankYouEsimBlock() {
       if (stopped || ++attempts > 120) return;
       void fetch(`${backendUrl}/esim/order-status/${numericOrderId}`)
         .then((r) => (r.ok ? r.json() : null))
-        .then((data: { status: EsimStatus; accessToken?: string } | null) => {
-          if (!data || stopped) return;
-          if (data.status) setStatus(data.status);
-          if (data.status === 'delivered') {
-            if (data.accessToken) pollCredentials(data.accessToken);
+        .then((data: { deliveries?: DeliveryInfo[] } | null) => {
+          if (!data?.deliveries || stopped) return;
+
+          // Match this block's variant to the correct delivery
+          const myDelivery = cartVariantId
+            ? data.deliveries.find((d) => d.variantId === cartVariantId)
+            : data.deliveries[0];
+
+          if (!myDelivery) return;
+
+          const myStatus = myDelivery.status as EsimStatus;
+          setStatus(myStatus);
+
+          if (myStatus === 'delivered') {
+            if (myDelivery.accessToken) pollCredentials(myDelivery.accessToken);
             return;
           }
-          if (data.status === 'failed' || data.status === 'cancelled') {
+          if (myStatus === 'failed' || myStatus === 'cancelled') {
             stopped = true;
             return;
           }
@@ -93,7 +118,7 @@ function ThankYouEsimBlock() {
 
     poll();
     return () => { stopped = true; };
-  }, [numericOrderId, backendUrl]);
+  }, [numericOrderId, cartVariantId, backendUrl]);
 
   const isProvisioning = !status || status === 'pending' || status === 'provisioning';
 
