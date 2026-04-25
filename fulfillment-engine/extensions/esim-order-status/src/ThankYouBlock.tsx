@@ -91,10 +91,13 @@ function ThankYouEsimBlock() {
         .then((data: { deliveries?: DeliveryInfo[] } | null) => {
           if (!data?.deliveries || stopped) return;
 
-          // Match this block's variant to the correct delivery
+          // Match this block's variant to the correct delivery.
+          // If we can't determine the variant, fall back to first only for single-item orders.
           const myDelivery = cartVariantId
             ? data.deliveries.find((d) => d.variantId === cartVariantId)
-            : data.deliveries[0];
+            : data.deliveries.length === 1
+              ? data.deliveries[0]
+              : undefined;
 
           if (!myDelivery) return;
 

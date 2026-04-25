@@ -221,13 +221,6 @@ async function handleOrderSearch(app: FastifyInstance, reply: FastifyReply, orde
       }
     }
 
-    if (!iccid) {
-      return reply.code(404).send({
-        error: 'Usage not found',
-        message: 'Could not retrieve ICCID for this order',
-      });
-    }
-
     return await dispatchUsageByProvider(app, reply, delivery, storedPayload, iccid);
   }
 

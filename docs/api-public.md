@@ -69,7 +69,7 @@ Search for eSIM usage data. Used by the Shopify usage page (`/pages/esim-usage`)
 ### GET /esim/order-status/:orderId
 Returns all delivery statuses for an order. Used by checkout thank-you page extensions.
 
-**Response:**
+**Response (order with deliveries):**
 ```json
 {
   "status": "delivered",
@@ -81,10 +81,27 @@ Returns all delivery statuses for an order. Used by checkout thank-you page exte
 }
 ```
 
-Top-level `status`/`accessToken` are backward-compatible (first delivery). `deliveries[]` contains all line items.
+**Response (no deliveries):**
+```json
+{ "status": null, "deliveries": [] }
+```
+
+Top-level `status`/`accessToken` are backward-compatible (first delivery only). `accessToken` is only present when the first delivery's status is `"delivered"`. `deliveries[]` contains all line items with per-item `lineItemId`, `variantId`, `status`, and `accessToken` (when delivered).
 
 ### GET /esim/order-deliveries/:orderId
 Returns all deliveries for an order. Used by customer account extensions.
+
+**Response:**
+```json
+{
+  "deliveries": [
+    { "lineItemId": "123", "status": "delivered", "accessToken": "uuid-1" },
+    { "lineItemId": "124", "status": "provisioning" }
+  ]
+}
+```
+
+Each entry includes `lineItemId`, `status`, and `accessToken` (only when `status === "delivered"`).
 
 ---
 
