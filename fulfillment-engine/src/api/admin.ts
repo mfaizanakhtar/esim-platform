@@ -1399,11 +1399,20 @@ export default function adminRoutes(
     };
 
     // Mode selection:
-    //   explicit "COUNTRY" or "REGION" → only that branch (backwards compatible)
-    //   omitted/anything else          → BOTH (dashboard default — single-click parity with country-only flows)
-    const explicit = typeof body.templateType === 'string' ? body.templateType.toUpperCase() : null;
-    const mode: 'COUNTRY' | 'REGION' | 'BOTH' =
-      explicit === 'COUNTRY' || explicit === 'REGION' ? explicit : 'BOTH';
+    //   omitted              → BOTH (dashboard default — single-click parity with country-only flows)
+    //   "COUNTRY" / "REGION" → only that branch (backwards compatible)
+    //   anything else        → 400 (catches typos like "REGOIN" before we silently overwrite templates)
+    let mode: 'COUNTRY' | 'REGION' | 'BOTH' = 'BOTH';
+    if (typeof body.templateType === 'string') {
+      const explicit = body.templateType.trim().toUpperCase();
+      if (explicit === 'COUNTRY' || explicit === 'REGION') {
+        mode = explicit;
+      } else {
+        return reply
+          .code(400)
+          .send({ error: 'templateType must be "COUNTRY" or "REGION" (or omitted for both)' });
+      }
+    }
 
     // ── REGION generation ──────────────────────────────────────────────────
     async function runRegionGeneration() {

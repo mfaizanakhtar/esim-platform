@@ -5920,6 +5920,22 @@ describe('Admin Routes', () => {
       expect(body.region.plans).toBeDefined();
     });
 
+    it('rejects unknown templateType values with 400 (no writes)', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'REGOIN' }, // typo
+      });
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/templateType/);
+      // No catalog or region lookups should have happened.
+      expect(prismaCatalog.findMany).not.toHaveBeenCalled();
+      expect(prismaRegion.findMany).not.toHaveBeenCalled();
+      expect(prismaTpl.upsert).not.toHaveBeenCalled();
+    });
+
     it('runs country generation when region branch has no active regions', async () => {
       prismaCatalog.findMany.mockResolvedValue([{ countryCodes: ['DE'], region: 'EU' }]);
       prismaRegion.findMany.mockResolvedValue([]);

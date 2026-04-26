@@ -1,7 +1,7 @@
 # Region Schema + CRUD + Discovery + Templates + Mapping + Dashboard
 
 **ID:** 0002 · **Status:** shipped · **Owner:** faizanakh
-**Shipped:** 2026-04-26 · **PRs:** #226 (schema + CRUD), #227 (discovery), #228 (template generation), #229 (region-aware mapping), #_TBD_ (dashboard parity)
+**Shipped:** 2026-04-26 · **PRs:** #226 (schema + CRUD), #227 (discovery), #228 (template generation), #229 (region-aware mapping), #230 (dashboard parity)
 
 ## What it does
 
@@ -88,8 +88,7 @@ Migration: `20260426000001_add_region_support`. Hand-written SQL — backfills `
 ## Future work / known gaps
 
 - **Per-variant coverage filtering** — current behaviour skips an entire region if any country isn't covered. Future improvement: skip individual (data, validity) variants where no provider has matching `parsedJson`, so partial regions can still expose the variants that ARE fulfillable.
-- **Push to Shopify** — Phase 4 generates DB records only. The existing `POST /admin/product-templates/push-to-shopify` flow needs verification (or extension) for region-flavoured templates.
-- **Dashboard UI** for region CRUD + suggestions review + generate trigger — backend is ready; the React dashboard pages are deferred.
+- **Push to Shopify** — region templates flow through the existing `POST /admin/product-templates/push-to-shopify` path; verify in production after the next Railway deploy that the new `region-<slug>` handles don't collide with anything.
 - **Pricing for region templates** — pricing engine currently skips region templates; the multiplier-based prices are placeholders until a region-specific cost-floor + competitor strategy exists.
 - **Discovery doesn't auto-merge synonyms** (e.g. `EU` and `Europe`) — intentional for safety, but a future enhancement could surface merge suggestions when two groups share a `parentCode`.
 - **AI prompt doesn't yet send the region's country list** to GPT for REGION SKUs. Today GPT picks a candidate by display-name similarity and the deterministic post-filter rejects sub-coverage hits. Including the country list in the prompt would help GPT pick smarter candidates upfront.
