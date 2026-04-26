@@ -5069,6 +5069,57 @@ describe('Admin Routes', () => {
       });
     });
 
+    describe('GET /regions/suggestions', () => {
+      it('returns aggregated groups from provider catalog', async () => {
+        prismaCatalog.findMany.mockResolvedValue([
+          { provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT'] },
+          { provider: 'tgt', region: 'EU', countryCodes: ['DE', 'FR', 'BE'] },
+        ]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/regions/suggestions',
+          headers: AUTH,
+        });
+
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body.total).toBe(1);
+        expect(body.groups[0].label).toBe('EU');
+        expect(body.groups[0].intersection).toEqual(['DE', 'FR']);
+        expect(body.groups[0].suggestions.length).toBeGreaterThan(0);
+      });
+
+      it('honours unionLimit query param', async () => {
+        prismaCatalog.findMany.mockResolvedValue([
+          { provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT'] },
+          { provider: 'tgt', region: 'EU', countryCodes: ['BE'] },
+        ]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/regions/suggestions?unionLimit=2',
+          headers: AUTH,
+        });
+
+        const body = res.json();
+        // Union has 4 countries; unionLimit=2 drops the UNION suggestion.
+        expect(
+          body.groups[0].suggestions.find((s: { kind: string }) => s.kind === 'UNION'),
+        ).toBeUndefined();
+      });
+
+      it('returns empty groups when no regional catalog entries', async () => {
+        prismaCatalog.findMany.mockResolvedValue([]);
+        const res = await app.inject({
+          method: 'GET',
+          url: '/regions/suggestions',
+          headers: AUTH,
+        });
+        expect(res.json()).toMatchObject({ total: 0, suggestionCount: 0, groups: [] });
+      });
+    });
+
     describe('GET /regions/:code', () => {
       it('returns the region', async () => {
         prismaRegion.findUnique.mockResolvedValue(makeRegion());

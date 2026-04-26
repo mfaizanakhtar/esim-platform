@@ -248,6 +248,60 @@ List registered vendors.
 
 Canonical groupings of countries used by region-type Shopify product templates. The `code` is referenced in regional Shopify SKUs (`REGION-<code>-...`); `countryCodes` is the strict canonical coverage advertised to customers. See [`docs/database.md`](database.md#region) for schema.
 
+### GET /admin/regions/suggestions
+
+Read-only discovery: aggregates the live `ProviderSkuCatalog` (entries with a non-null `region` and non-empty `countryCodes`) by normalized vendor label per provider, then proposes canonical `Region` rows the admin can review and save via `POST /admin/regions`.
+
+**Query params:**
+| Param | Default | Description |
+|-------|---------|-------------|
+| `unionLimit` | `60` | Drop UNION suggestions exceeding this many countries (cap 200) |
+
+**Response:**
+```json
+{
+  "total": 3,
+  "suggestionCount": 5,
+  "groups": [
+    {
+      "label": "EU",                     // normalized vendor region label
+      "parentCode": "EU",                // canonical parent (best-guess; admin may override)
+      "providers": [
+        { "provider": "firoam", "countries": ["AT","BE","DE","FR"], "skuCount": 12 },
+        { "provider": "tgt",    "countries": ["BE","DE","FR"],      "skuCount": 6 }
+      ],
+      "intersection": ["BE","DE","FR"],
+      "union":        ["AT","BE","DE","FR"],
+      "suggestions": [
+        {
+          "code": "EU3",
+          "parentCode": "EU",
+          "countryCodes": ["BE","DE","FR"],
+          "kind": "INTERSECTION",
+          "rationale": "All 2 providers cover every country — safest choice for strict coverage matching.",
+          "providersAvailable": ["firoam","tgt"]
+        },
+        {
+          "code": "EU4",
+          "parentCode": "EU",
+          "countryCodes": ["AT","BE","DE","FR"],
+          "kind": "UNION",
+          "rationale": "Union across all providers — at least one provider covers every country, but no single provider covers all of them. Strict matching may eliminate this region in practice.",
+          "providersAvailable": ["firoam"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Suggestion rules:
+- **INTERSECTION** is emitted whenever ≥2 countries are common to every provider in the group. Always safe under strict-coverage matching.
+- **UNION** is emitted only when union > intersection AND union ≤ `unionLimit`. `providersAvailable` lists providers that single-handedly cover the full union (often empty).
+- Vendor labels are NOT merged across providers. `EU` and `Europe` show up as separate groups (both with `parentCode = "EU"`) — the admin reconciles them when saving.
+
+---
+
 ### GET /admin/regions
 
 List regions.

@@ -22,6 +22,7 @@ import {
 } from '~/services/embeddingService';
 import { parseShopifySku } from '~/utils/parseShopifySku';
 import { getCountryByCode, firoamNameToCode } from '~/utils/countryCodes';
+import { buildRegionSuggestions } from '~/services/regionService';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
 
@@ -4345,6 +4346,31 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
       })),
+    });
+  });
+
+  /**
+   * GET /admin/regions/suggestions
+   * Run discovery against the live ProviderSkuCatalog and return proposed
+   * Region rows the admin can review and save. Read-only / side-effect-free.
+   *
+   * Query params:
+   *   unionLimit=<n>  Cap union suggestions at <n> countries (default 60).
+   */
+  app.get('/regions/suggestions', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const query = (request.query || {}) as { unionLimit?: string };
+    const unionLimit =
+      query.unionLimit && /^\d+$/.test(query.unionLimit)
+        ? Math.min(parseInt(query.unionLimit, 10), 200)
+        : undefined;
+
+    const groups = await buildRegionSuggestions({ unionLimit });
+    return reply.send({
+      total: groups.length,
+      suggestionCount: groups.reduce((n, g) => n + g.suggestions.length, 0),
+      groups,
     });
   });
 

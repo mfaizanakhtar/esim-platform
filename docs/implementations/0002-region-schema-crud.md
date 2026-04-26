@@ -1,11 +1,11 @@
-# Region Schema + CRUD
+# Region Schema + CRUD + Discovery
 
 **ID:** 0002 · **Status:** in progress · **Owner:** faizanakh
-**Shipped:** in progress · **PRs:** _to be filled in at merge_
+**Shipped:** in progress · **PRs:** #226 (schema + CRUD), #_TBD_ (discovery)
 
 ## What it does
 
-Introduces a first-class `Region` entity (e.g. `EU30`, `ASIA4`, `GCC6`) and extends `ShopifyProductTemplate` so country and region templates coexist. Adds admin CRUD endpoints under `/admin/regions` so operators can curate canonical country groupings via the dashboard. This is the schema + API foundation for regional SKUs — discovery, template generation, and provider matching land in subsequent PRs.
+Introduces a first-class `Region` entity (e.g. `EU30`, `ASIA4`, `GCC6`) and extends `ShopifyProductTemplate` so country and region templates coexist. Adds admin CRUD endpoints under `/admin/regions` so operators can curate canonical country groupings via the dashboard. Adds `GET /admin/regions/suggestions`: a read-only discovery endpoint that aggregates the live `ProviderSkuCatalog` and proposes Region rows the admin can review and save. Together these are the schema + API foundation for regional SKUs — template generation and provider matching land in subsequent PRs.
 
 ## Why
 
@@ -17,8 +17,10 @@ Both FiRoam and TGT sell regional packages (Asia, Europe, GCC, Global) at much b
 |------|------|
 | `fulfillment-engine/prisma/schema.prisma` | Adds `Region` model; `templateType` + `regionCode` on `ShopifyProductTemplate`; `countryCode` made nullable |
 | `fulfillment-engine/prisma/migrations/20260426000001_add_region_support/migration.sql` | Creates `Region` table + indexes; backfills `templateType='COUNTRY'`; adds `regionCode` FK with `ON DELETE SET NULL` |
-| `fulfillment-engine/src/api/admin.ts` | New `GET/POST/PATCH/DELETE /admin/regions` endpoints (region CRUD section near bottom of file) |
-| `fulfillment-engine/src/api/__tests__/admin.test.ts` | Region CRUD test suite (17+ cases: list, filters, create, validation, dedup/uppercase normalization, P2002 conflict, partial update, delete) |
+| `fulfillment-engine/src/api/admin.ts` | New `GET/POST/PATCH/DELETE /admin/regions` endpoints + `GET /admin/regions/suggestions` (region CRUD section near bottom of file) |
+| `fulfillment-engine/src/services/regionService.ts` | Discovery service: `buildRegionSuggestions()` aggregates provider catalog → groups → INTERSECTION/UNION suggestions; pure functions `normalizeLabel`/`inferParentCode` for label canonicalization |
+| `fulfillment-engine/src/services/__tests__/regionService.test.ts` | 18 unit tests covering normalization, intersection/union math, suggestion emission rules, edge cases (invalid country codes, empty arrays, unionLimit) |
+| `fulfillment-engine/src/api/__tests__/admin.test.ts` | Region CRUD test suite + suggestions endpoint integration tests (33+ cases total) |
 | `fulfillment-engine/src/services/pricingEngine.ts` | Skips variants whose template has no `countryCode` (region templates are not priced through the country-only path yet) |
 | `fulfillment-engine/src/services/competitorScraper.ts` | Filters out region templates when discovering countries to scrape |
 
@@ -26,6 +28,7 @@ Both FiRoam and TGT sell regional packages (Asia, Europe, GCC, Global) at much b
 
 - Prisma schema + generated client (everything that imports `Region` or `ShopifyProductTemplate`)
 - Admin API surface (`/admin/regions/*`)
+- Provider catalog (read-only consumer for discovery)
 - Pricing engine and competitor scraper — both made `countryCode`-null-safe
 - No changes to: webhook, `provisionEsim`, vendor providers, customer-facing extensions, email path
 
@@ -48,6 +51,10 @@ Migration: `20260426000001_add_region_support`. Hand-written SQL — backfills `
 - **Region `code` is immutable via PATCH.** It's embedded in SKUs that are already in customer hands and Shopify metafields — renaming it would break references everywhere. The `Region.code` field has no PATCH branch.
 - **`parentCode` validation is stricter than `code`** (no dashes, max 16 chars). Parent codes are pure family labels (`EU`, `ASIA`); the dash is only useful in variant codes (`AMERICAS-NA3`).
 - **Pricing engine + competitor scraper changes are minimal but necessary.** They were written against `countryCode: String` (non-null). Now they skip rows where `countryCode` is NULL — region templates aren't in those code paths' scope yet (Phase 4+ adds region-aware pricing).
+- **Discovery groups by *exact* normalized vendor label, not by inferred parent code.** That means `EU` and `Europe` show up as two separate groups (both with `parentCode: "EU"`) when providers use different labels. This is intentional — auto-merging would let one provider's quirky label silently absorb another's coverage, hiding mismatches. The admin reconciles by saving one canonical `Region` and ignoring the other group.
+- **Discovery skips entries with empty `countryCodes`.** Some vendor regional SKUs have a `region` label but no member country list — we can't propose coverage from those rows, so they're filtered out at the suggestion stage.
+- **`UNION` suggestions can have empty `providersAvailable`.** That signals "no single provider can fulfil this region under strict-coverage matching" — the suggestion exists for visibility but the admin should usually prefer the INTERSECTION variant or restrict the region.
+- **Suggestion endpoint is read-only and idempotent.** It runs each call against the live catalog; no caching, no DB writes. Cheap because catalog rows are O(thousands), not O(millions).
 
 ## Related docs
 
@@ -56,8 +63,8 @@ Migration: `20260426000001_add_region_support`. Hand-written SQL — backfills `
 
 ## Future work / known gaps
 
-- **Region discovery service** (Phase 3) — aggregate provider catalog coverage to suggest variants like `ASIA4` (intersection of all providers) vs `ASIA6` (extended).
 - **Region template generation** (Phase 4) — extend `POST /admin/product-templates/generate` with a REGION branch + strict-coverage filter.
 - **Region-aware mapping** (Phase 5) — coverage filter in structured + AI mapping paths.
-- **Dashboard UI** for region CRUD — backend is ready; the React dashboard pages are deferred.
+- **Dashboard UI** for region CRUD + suggestions review — backend is ready; the React dashboard pages are deferred.
 - **Pricing for region templates** — pricing engine currently skips region templates; needs a region-specific cost-floor + competitor strategy later.
+- **Discovery doesn't auto-merge synonyms** (e.g. `EU` and `Europe`) — intentional for safety, but a future enhancement could surface merge suggestions when two groups share a `parentCode`.
