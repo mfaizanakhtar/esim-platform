@@ -248,9 +248,32 @@ List registered vendors.
 
 ### POST /admin/product-templates/generate
 
-Generate product template records in DB. Two modes selected by `templateType`:
+Generate product template records in DB. Three modes selected by `templateType`:
 
-**COUNTRY mode (default)** — country-keyed templates.
+**Combined mode (no `templateType`, dashboard default)** — runs both country and region branches in one call. Used by the Products page "Generate All Templates" button so a single click materializes everything.
+
+| Body field | Default | Description |
+|------------|---------|-------------|
+| `templateType` | _omitted_ | When omitted → BOTH branches run |
+| `countries` | auto-discover | Forwarded to the country branch |
+| `regionCodes` | all active | Forwarded to the region branch |
+| `priceMultiplier` | `2.5` | Forwarded to the region branch |
+| `overwrite` | `false` | Applies to both |
+| `dryRun` | `false` | Applies to both |
+
+**Combined response:**
+```json
+{
+  "ok": true,
+  "country": { "templateType": "COUNTRY", "generated": 24, "skippedExisting": 0, "skippedInvalid": 0, "errors": [] },
+  "region":  { "templateType": "REGION",  "priceMultiplier": 2.5, "generated": 3, "skippedExisting": 0, "skippedNoCoverage": 2, "errors": [] }
+}
+```
+Combined dry-run returns `{ ok, country: { dryRun, toGenerate, skipped }, region: { dryRun, plans } }`.
+
+---
+
+**COUNTRY mode** — country-keyed templates.
 
 | Body field | Default | Description |
 |------------|---------|-------------|
@@ -259,7 +282,7 @@ Generate product template records in DB. Two modes selected by `templateType`:
 | `overwrite` | `false` | Replace existing templates |
 | `dryRun` | `false` | Preview without writing |
 
-**Response:** `{ ok, generated, skippedExisting, skippedInvalid, errors[] }`
+**Response:** `{ ok, templateType: "COUNTRY", generated, skippedExisting, skippedInvalid, errors[] }`
 
 ---
 
@@ -360,6 +383,24 @@ Suggestion rules:
 - **INTERSECTION** is emitted whenever ≥2 countries are common to every provider in the group. Always safe under strict-coverage matching.
 - **UNION** is emitted only when union > intersection AND union ≤ `unionLimit`. `providersAvailable` lists providers that single-handedly cover the full union (often empty).
 - Vendor labels are NOT merged across providers. `EU` and `Europe` show up as separate groups (both with `parentCode = "EU"`) — the admin reconciles them when saving.
+
+---
+
+### POST /admin/regions/accept-suggestion
+
+One-click create from a discovery suggestion. Re-runs `buildRegionSuggestions()`, finds the suggestion by `code`, derives a human-readable `name` (e.g. `"Europe (3 countries)"`), and creates the `Region` row. The `/regions` dashboard page uses this for its **Accept** buttons so the operator never types JSON.
+
+**Body:**
+```json
+{ "code": "EU3" }
+```
+
+**Response:** `201` + the created `Region` object, or:
+- `400` if `code` is missing
+- `404` if no current suggestion matches the code (e.g. provider catalog changed since the suggestion was rendered)
+- `409` if a region with that code already exists
+
+The created row uses the suggestion's `parentCode` and `countryCodes`, `isActive: true`, `sortOrder: 0`. Edit afterwards with `PATCH /admin/regions/:code` if you need to tweak the name or coverage.
 
 ---
 

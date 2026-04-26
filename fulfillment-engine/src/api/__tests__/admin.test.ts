@@ -5834,9 +5834,77 @@ describe('Admin Routes', () => {
       });
     });
 
-    it('does NOT trigger REGION branch for default COUNTRY templateType', async () => {
-      // Stub catalog so the COUNTRY branch's discovery doesn't blow up.
+    it('explicit templateType=COUNTRY runs only the COUNTRY branch', async () => {
       prismaCatalog.findMany.mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'COUNTRY', dryRun: true },
+      });
+
+      const body = res.json();
+      expect(body.dryRun).toBe(true);
+      expect(body.templateType).toBe('COUNTRY');
+      expect(body.toGenerate).toBeDefined();
+      expect(prismaRegion.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── POST /product-templates/generate (combined / no templateType) ───────
+
+  describe('POST /product-templates/generate — BOTH (no templateType)', () => {
+    const prismaRegion = (
+      prisma as unknown as {
+        region: {
+          findMany: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).region;
+    const prismaTpl = (
+      prisma as unknown as {
+        shopifyProductTemplate: {
+          findUnique: ReturnType<typeof vi.fn>;
+          upsert: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).shopifyProductTemplate;
+
+    it('runs both branches and returns { ok, country, region } when no templateType is given', async () => {
+      prismaCatalog.findMany.mockResolvedValue([]); // empty country discovery
+      prismaRegion.findMany.mockResolvedValue([]); // no active regions
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.ok).toBe(true);
+      expect(body.country).toBeDefined();
+      expect(body.country.templateType).toBe('COUNTRY');
+      expect(body.region).toBeDefined();
+      expect(body.region.templateType).toBe('REGION');
+    });
+
+    it('combined dry-run returns both block shapes', async () => {
+      prismaCatalog.findMany.mockResolvedValue([{ countryCodes: ['DE'], region: 'EU' }]);
+      prismaRegion.findMany.mockResolvedValue([
+        {
+          id: 'reg-1',
+          code: 'EU3',
+          parentCode: 'EU',
+          name: 'Europe (3)',
+          countryCodes: ['DE', 'FR', 'AT'],
+          isActive: true,
+          sortOrder: 0,
+        },
+      ]);
+      prismaTpl.findUnique.mockResolvedValue(null);
 
       const res = await app.inject({
         method: 'POST',
@@ -5845,11 +5913,141 @@ describe('Admin Routes', () => {
         payload: { dryRun: true },
       });
 
-      // COUNTRY branch returns shape with toGenerate, not templateType=REGION
       const body = res.json();
-      expect(body.dryRun).toBe(true);
-      expect(body.templateType).toBeUndefined();
-      expect(prismaRegion.findMany).not.toHaveBeenCalled();
+      expect(body.country.dryRun).toBe(true);
+      expect(body.country.toGenerate).toBeDefined();
+      expect(body.region.dryRun).toBe(true);
+      expect(body.region.plans).toBeDefined();
+    });
+
+    it('runs country generation when region branch has no active regions', async () => {
+      prismaCatalog.findMany.mockResolvedValue([{ countryCodes: ['DE'], region: 'EU' }]);
+      prismaRegion.findMany.mockResolvedValue([]);
+      prismaTpl.findUnique.mockResolvedValue(null);
+      prismaTpl.upsert.mockResolvedValue({});
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      const body = res.json();
+      expect(body.country.generated).toBe(1);
+      expect(body.region.generated).toBe(0);
+      expect(body.region.errors).toContain('No active regions');
+    });
+  });
+
+  // ── POST /regions/accept-suggestion ──────────────────────────────────────
+
+  describe('POST /regions/accept-suggestion', () => {
+    const prismaRegion = (
+      prisma as unknown as {
+        region: {
+          create: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).region;
+
+    function suggestionGroup() {
+      return {
+        provider: 'firoam',
+        region: 'EU',
+        countryCodes: ['DE', 'FR', 'AT'],
+      };
+    }
+
+    it('creates a region from a matching suggestion code with auto-derived name', async () => {
+      // Discovery returns one EU group → INTERSECTION suggestion code = "EU3"
+      prismaCatalog.findMany.mockResolvedValue([suggestionGroup()]);
+      prismaRegion.create.mockResolvedValue({
+        id: 'reg-001',
+        code: 'EU3',
+        parentCode: 'EU',
+        name: 'Europe (3 countries)',
+        countryCodes: ['DE', 'FR', 'AT'],
+        isActive: true,
+        sortOrder: 0,
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/regions/accept-suggestion',
+        headers: JSON_HEADERS,
+        payload: { code: 'EU3' },
+      });
+
+      expect(res.statusCode).toBe(201);
+      // buildRegionSuggestions sorts countryCodes alphabetically.
+      expect(prismaRegion.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          code: 'EU3',
+          parentCode: 'EU',
+          name: 'Europe (3 countries)',
+          countryCodes: ['AT', 'DE', 'FR'],
+          isActive: true,
+          sortOrder: 0,
+        }),
+      });
+    });
+
+    it('uppercases incoming code before matching', async () => {
+      prismaCatalog.findMany.mockResolvedValue([suggestionGroup()]);
+      prismaRegion.create.mockResolvedValue({});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/regions/accept-suggestion',
+        headers: JSON_HEADERS,
+        payload: { code: 'eu3' },
+      });
+      expect(res.statusCode).toBe(201);
+    });
+
+    it('returns 404 when no current suggestion matches the code', async () => {
+      prismaCatalog.findMany.mockResolvedValue([suggestionGroup()]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/regions/accept-suggestion',
+        headers: JSON_HEADERS,
+        payload: { code: 'NONEXISTENT' },
+      });
+
+      expect(res.statusCode).toBe(404);
+      expect(prismaRegion.create).not.toHaveBeenCalled();
+    });
+
+    it('returns 409 when the region was already created', async () => {
+      const { Prisma } = await import('@prisma/client');
+      prismaCatalog.findMany.mockResolvedValue([suggestionGroup()]);
+      prismaRegion.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('dup', {
+          code: 'P2002',
+          clientVersion: 'x',
+        }),
+      );
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/regions/accept-suggestion',
+        headers: JSON_HEADERS,
+        payload: { code: 'EU3' },
+      });
+
+      expect(res.statusCode).toBe(409);
+    });
+
+    it('returns 400 when code is missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/regions/accept-suggestion',
+        headers: JSON_HEADERS,
+        payload: {},
+      });
+
+      expect(res.statusCode).toBe(400);
     });
   });
 });

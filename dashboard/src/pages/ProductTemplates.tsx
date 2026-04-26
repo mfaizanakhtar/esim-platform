@@ -6,6 +6,7 @@ import {
   usePushToShopify,
   useDeleteTemplate,
   type ProductTemplateSummary,
+  type GenerateResult,
 } from '@/hooks/useProductTemplates';
 import { apiClient } from '@/lib/api';
 import {
@@ -396,11 +397,39 @@ export function ProductTemplates() {
 
   // ─── Global action handlers ─────────────────────────────────────
 
+  /**
+   * Produce a single toast string from the combined-or-legacy generate response.
+   * Combined response (no `templateType` in request) has `country` and `region`
+   * blocks; explicit-mode responses have flat fields.
+   */
+  function summarizeGenerate(d: GenerateResult, verb: 'Generated' | 'Regenerated'): string {
+    if (d.country || d.region) {
+      const cGen = d.country?.generated ?? 0;
+      const rGen = d.region?.generated ?? 0;
+      const rSkipped = d.region?.skippedNoCoverage ?? 0;
+      const main = `${verb} ${cGen} country + ${rGen} region templates`;
+      const tail =
+        rSkipped > 0
+          ? ` (${rSkipped} region${rSkipped === 1 ? '' : 's'} skipped — no provider coverage)`
+          : '';
+      return main + tail;
+    }
+    return `${verb} ${d.generated ?? 0} templates`;
+  }
+
+  function generatedAny(d: GenerateResult): boolean {
+    if (d.country || d.region) {
+      return (d.country?.generated ?? 0) + (d.region?.generated ?? 0) > 0;
+    }
+    return (d.generated ?? 0) > 0;
+  }
+
   function handleGenerateAll() {
     if (totalCount === 0) {
       setConfirm({
         title: 'Generate Templates',
-        message: 'Generate product templates for all countries found in the catalog?',
+        message:
+          'Generate product templates for all countries from the catalog AND every active region?',
         actions: [
           {
             label: 'Generate',
@@ -409,7 +438,7 @@ export function ProductTemplates() {
               generateMutation.mutate(
                 {},
                 {
-                  onSuccess: (d) => showToast(`Generated ${d.generated} templates`, 'success'),
+                  onSuccess: (d) => showToast(summarizeGenerate(d, 'Generated'), 'success'),
                   onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
                 },
               ),
@@ -419,7 +448,7 @@ export function ProductTemplates() {
     } else {
       setConfirm({
         title: 'Generate Templates',
-        message: `${totalCount} templates already exist. Generate new ones only, or regenerate all? Regenerating will reset prices and variants.`,
+        message: `${totalCount} templates already exist. Generate new ones only, or regenerate all? Regenerating will reset prices and variants. (Both country and region templates are included.)`,
         actions: [
           {
             label: 'New Only',
@@ -430,10 +459,10 @@ export function ProductTemplates() {
                 {
                   onSuccess: (d) =>
                     showToast(
-                      d.generated > 0
-                        ? `Generated ${d.generated} new templates`
+                      generatedAny(d)
+                        ? summarizeGenerate(d, 'Generated')
                         : 'No new templates to generate',
-                      d.generated > 0 ? 'success' : 'info',
+                      generatedAny(d) ? 'success' : 'info',
                     ),
                   onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
                 },
@@ -446,7 +475,7 @@ export function ProductTemplates() {
               generateMutation.mutate(
                 { overwrite: true },
                 {
-                  onSuccess: (d) => showToast(`Regenerated ${d.generated} templates`, 'success'),
+                  onSuccess: (d) => showToast(summarizeGenerate(d, 'Regenerated'), 'success'),
                   onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
                 },
               ),
