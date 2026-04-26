@@ -1,11 +1,11 @@
-# Region Schema + CRUD + Discovery + Templates + Mapping
+# Region Schema + CRUD + Discovery + Templates + Mapping + Dashboard
 
 **ID:** 0002 · **Status:** shipped · **Owner:** faizanakh
-**Shipped:** 2026-04-26 · **PRs:** #226 (schema + CRUD), #227 (discovery), #228 (template generation), #229 (region-aware mapping)
+**Shipped:** 2026-04-26 · **PRs:** #226 (schema + CRUD), #227 (discovery), #228 (template generation), #229 (region-aware mapping), #230 (dashboard parity)
 
 ## What it does
 
-Introduces a first-class `Region` entity (e.g. `EU30`, `ASIA4`, `GCC6`) and extends `ShopifyProductTemplate` so country and region templates coexist. Admin CRUD under `/admin/regions` curates canonical country groupings; `GET /admin/regions/suggestions` discovers candidate regions from the live provider catalog. `POST /admin/product-templates/generate` gains a REGION mode that materializes per-region Shopify product templates with `REGION-<code>-...` SKUs, scaled prices, and a strict-coverage skip. Both structured matching (`/sku-mappings/structured-match[/jobs]`) and AI mapping (`/sku-mappings/ai-map/jobs`) recognise REGION SKUs and apply strict-coverage filtering: a regional Shopify SKU resolves only to a provider catalog row whose `countryCodes` is a superset of the canonical region's countries. End-to-end, regional eSIMs can now be sold on Shopify and provisioned through the existing FiRoam/TGT path with no worker changes.
+Introduces a first-class `Region` entity (e.g. `EU30`, `ASIA4`, `GCC6`) and extends `ShopifyProductTemplate` so country and region templates coexist. Admin CRUD under `/admin/regions` curates canonical country groupings; `GET /admin/regions/suggestions` discovers candidate regions from the live provider catalog. `POST /admin/product-templates/generate` gains a REGION mode that materializes per-region Shopify product templates with `REGION-<code>-...` SKUs, scaled prices, and a strict-coverage skip. Both structured matching (`/sku-mappings/structured-match[/jobs]`) and AI mapping (`/sku-mappings/ai-map/jobs`) recognise REGION SKUs and apply strict-coverage filtering: a regional Shopify SKU resolves only to a provider catalog row whose `countryCodes` is a superset of the canonical region's countries. The dashboard now exposes the entire region workflow without curl: a new `/regions` page lists discovery suggestions with 1-click Accept buttons (calling the new `POST /admin/regions/accept-suggestion`), and the existing "Generate All Templates" button on `/product-templates` materializes BOTH country and region templates in one click. End-to-end, regional eSIMs can be defined, generated, mapped, and sold without leaving the dashboard.
 
 ## Why
 
@@ -17,7 +17,13 @@ Both FiRoam and TGT sell regional packages (Asia, Europe, GCC, Global) at much b
 |------|------|
 | `fulfillment-engine/prisma/schema.prisma` | Adds `Region` model; `templateType` + `regionCode` on `ShopifyProductTemplate`; `countryCode` made nullable |
 | `fulfillment-engine/prisma/migrations/20260426000001_add_region_support/migration.sql` | Creates `Region` table + indexes; backfills `templateType='COUNTRY'`; adds `regionCode` FK with `ON DELETE SET NULL` |
-| `fulfillment-engine/src/api/admin.ts` | Region CRUD + suggestions + REGION template generation + REGION branch in `findStructuredMatches` (JSONB `@>` strict-superset) + REGION branch in AI mapping post-filter (uses pre-fetched region map) |
+| `fulfillment-engine/src/api/admin.ts` | Region CRUD + suggestions + REGION template generation + REGION branch in `findStructuredMatches` (JSONB `@>` strict-superset) + REGION branch in AI mapping post-filter (uses pre-fetched region map) + `POST /regions/accept-suggestion` + combined `country` & `region` response when `templateType` omitted on `/product-templates/generate` |
+| `dashboard/src/pages/Regions.tsx` | **NEW** — discovery suggestions cards + saved regions table; 1-click Accept; edit/delete dialogs |
+| `dashboard/src/hooks/useRegions.ts` | **NEW** — React Query hooks (`useRegions`, `useRegionSuggestions`, `useAcceptSuggestion`, `useUpdateRegion`, `useDeleteRegion`) |
+| `dashboard/src/App.tsx` | New `/regions` lazy route registered between `/catalog` and `/pricing` |
+| `dashboard/src/components/layout/AppShell.tsx` | Sidebar nav entry "Regions" (Globe icon) between Catalog and Products |
+| `dashboard/src/hooks/useProductTemplates.ts` | `GenerateResult` now optionally exposes `country` and `region` blocks for the combined response |
+| `dashboard/src/pages/ProductTemplates.tsx` | "Generate All Templates" toast surfaces both counts; `summarizeGenerate()` helper handles combined + legacy shapes |
 | `fulfillment-engine/src/utils/parseShopifySku.ts` | Adds `kind: 'COUNTRY' \| 'REGION'` discriminator + new `REGION-<code>-...` regex |
 | `fulfillment-engine/src/services/regionService.ts` | Discovery service: `buildRegionSuggestions()` aggregates provider catalog → groups → INTERSECTION/UNION suggestions; pure functions `normalizeLabel`/`inferParentCode` for label canonicalization |
 | `fulfillment-engine/src/services/__tests__/regionService.test.ts` | 18 unit tests covering normalization, intersection/union math, suggestion emission rules, edge cases (invalid country codes, empty arrays, unionLimit) |
@@ -68,6 +74,11 @@ Migration: `20260426000001_add_region_support`. Hand-written SQL — backfills `
 - **AI mapping has TWO post-filter sites** (vector path and fallback path) that must stay in sync — both apply the same REGION branch. The fallback path is dead code in normal operation (vector search is on by default) but is exercised when pgvector is unavailable.
 - **REGION SKU with unknown region code returns empty drafts immediately**, before any catalog query runs. Avoids wasting a JSONB scan when the SKU points at a region we never created — also surfaces the misconfiguration faster than silently matching nothing.
 - **Existing tests that exercise AI/structured mapping had to be updated** to default-mock `prisma.region.findMany` to `[]`. The pre-fetch is now in the hot path for every mapping job; tests that don't care about REGION still need the mock to return an array (otherwise `.length` blows up). Set in the top-level `beforeEach` so tests don't have to know about it.
+- **`/product-templates/generate` defaults to BOTH branches when `templateType` is omitted, not COUNTRY-only.** This is the core UX change in Phase 6 — the dashboard's bare `{}` body now produces both kinds of templates from a single click. Explicit `templateType: "COUNTRY"` and `templateType: "REGION"` callers keep their previous single-branch behavior (backward compatible for any external integrations).
+- **`accept-suggestion` re-runs discovery on every call** rather than caching suggestion → row mappings. Cheap (catalog rows are O(thousands)), keeps the endpoint stateless, and means a stale suggestion code (e.g. provider sync changed since the user opened the page) returns 404 instead of creating a misaligned region. The dashboard surfaces the 404 inline on the row.
+- **Auto-derived region name uses a small parent-name lookup table** (`PARENT_NAMES` in admin.ts: `EU → "Europe"`, `ASIA → "Asia"`, etc.) so the saved row reads as "Europe (3 countries)" not "EU (3 countries)". Falls back to the parent code itself for unknown parents. Editable post-creation via the dashboard or `PATCH /admin/regions/:code`.
+- **Combined dry-run returns both block shapes** so the dashboard can preview the full effect of clicking Generate. Each block keeps its existing dry-run shape (`toGenerate` for country, `plans` for region) so dry-run-aware tooling doesn't have to special-case combined mode.
+- **Region delete uses `window.confirm` not a custom dialog.** Dashboard convention elsewhere uses a custom modal but for a single inline destructive action with a clear blast radius (orphans templates via `ON DELETE SET NULL`), the browser confirm is faster to ship and keeps the page lean. Can be upgraded later if needed.
 
 ## Related docs
 
@@ -77,8 +88,7 @@ Migration: `20260426000001_add_region_support`. Hand-written SQL — backfills `
 ## Future work / known gaps
 
 - **Per-variant coverage filtering** — current behaviour skips an entire region if any country isn't covered. Future improvement: skip individual (data, validity) variants where no provider has matching `parsedJson`, so partial regions can still expose the variants that ARE fulfillable.
-- **Push to Shopify** — Phase 4 generates DB records only. The existing `POST /admin/product-templates/push-to-shopify` flow needs verification (or extension) for region-flavoured templates.
-- **Dashboard UI** for region CRUD + suggestions review + generate trigger — backend is ready; the React dashboard pages are deferred.
+- **Push to Shopify** — region templates flow through the existing `POST /admin/product-templates/push-to-shopify` path; verify in production after the next Railway deploy that the new `region-<slug>` handles don't collide with anything.
 - **Pricing for region templates** — pricing engine currently skips region templates; the multiplier-based prices are placeholders until a region-specific cost-floor + competitor strategy exists.
 - **Discovery doesn't auto-merge synonyms** (e.g. `EU` and `Europe`) — intentional for safety, but a future enhancement could surface merge suggestions when two groups share a `parentCode`.
 - **AI prompt doesn't yet send the region's country list** to GPT for REGION SKUs. Today GPT picks a candidate by display-name similarity and the deterministic post-filter rejects sub-coverage hits. Including the country list in the prompt would help GPT pick smarter candidates upfront.

@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Map as MapIcon,
   Package,
+  Globe,
   ShoppingBag,
   DollarSign,
   LogOut,
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/deliveries', label: 'Deliveries', icon: LayoutDashboard },
   { to: '/sku-mappings', label: 'SKU Mappings', icon: MapIcon },
   { to: '/catalog', label: 'Catalog', icon: Package },
+  { to: '/regions', label: 'Regions', icon: Globe },
   { to: '/product-templates', label: 'Products', icon: ShoppingBag },
   { to: '/pricing', label: 'Pricing', icon: DollarSign },
 ];

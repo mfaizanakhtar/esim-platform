@@ -9,6 +9,7 @@ const DeliveryDetail = lazy(() => import('@/pages/DeliveryDetail').then((m) => (
 const SkuMappings = lazy(() => import('@/pages/SkuMappings').then((m) => ({ default: m.SkuMappings })));
 const AiMap = lazy(() => import('@/pages/AiMap').then((m) => ({ default: m.AiMap })));
 const Catalog = lazy(() => import('@/pages/Catalog').then((m) => ({ default: m.Catalog })));
+const Regions = lazy(() => import('@/pages/Regions').then((m) => ({ default: m.Regions })));
 const ProductTemplates = lazy(() =>
   import('@/pages/ProductTemplates').then((m) => ({ default: m.ProductTemplates })),
 );
@@ -58,6 +59,14 @@ export function App() {
             element={
               <Suspense fallback={<PageLoader />}>
                 <Catalog />
+              </Suspense>
+            }
+          />
+          <Route
+            path="/regions"
+            element={
+              <Suspense fallback={<PageLoader />}>
+                <Regions />
               </Suspense>
             }
           />

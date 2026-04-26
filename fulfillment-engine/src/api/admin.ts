@@ -1398,9 +1398,24 @@ export default function adminRoutes(
       dryRun?: boolean;
     };
 
-    const templateType = (body.templateType ?? 'COUNTRY').toUpperCase();
+    // Mode selection:
+    //   omitted              → BOTH (dashboard default — single-click parity with country-only flows)
+    //   "COUNTRY" / "REGION" → only that branch (backwards compatible)
+    //   anything else        → 400 (catches typos like "REGOIN" before we silently overwrite templates)
+    let mode: 'COUNTRY' | 'REGION' | 'BOTH' = 'BOTH';
+    if (typeof body.templateType === 'string') {
+      const explicit = body.templateType.trim().toUpperCase();
+      if (explicit === 'COUNTRY' || explicit === 'REGION') {
+        mode = explicit;
+      } else {
+        return reply
+          .code(400)
+          .send({ error: 'templateType must be "COUNTRY" or "REGION" (or omitted for both)' });
+      }
+    }
 
-    if (templateType === 'REGION') {
+    // ── REGION generation ──────────────────────────────────────────────────
+    async function runRegionGeneration() {
       const multiplier =
         typeof body.priceMultiplier === 'number' && body.priceMultiplier > 0
           ? body.priceMultiplier
@@ -1416,14 +1431,14 @@ export default function adminRoutes(
       });
 
       if (regions.length === 0) {
-        return reply.send({
-          ok: true,
-          templateType: 'REGION',
+        return {
+          templateType: 'REGION' as const,
+          priceMultiplier: multiplier,
           generated: 0,
           skippedExisting: 0,
           skippedNoCoverage: 0,
           errors: regionCodesUpper ? ['No matching regions found'] : ['No active regions'],
-        });
+        };
       }
 
       type RegionPlan = {
@@ -1447,9 +1462,9 @@ export default function adminRoutes(
       }
 
       if (body.dryRun) {
-        return reply.send({
-          dryRun: true,
-          templateType: 'REGION',
+        return {
+          dryRun: true as const,
+          templateType: 'REGION' as const,
           priceMultiplier: multiplier,
           plans: plans.map((p) => ({
             code: p.code,
@@ -1464,7 +1479,7 @@ export default function adminRoutes(
                   ? 'overwrite'
                   : 'create',
           })),
-        });
+        };
       }
 
       let generated = 0;
@@ -1545,131 +1560,144 @@ export default function adminRoutes(
         }
       }
 
-      return reply.send({
-        ok: true,
-        templateType: 'REGION',
+      return {
+        templateType: 'REGION' as const,
         priceMultiplier: multiplier,
         generated,
         skippedExisting,
         skippedNoCoverage,
         errors,
-      });
+      };
     }
 
-    // ── Default: COUNTRY templates (legacy behaviour) ─────────────────────
-
-    // Discover countries (same logic as bulk-create)
-    let codes: string[];
-    if (body.countries && body.countries.length > 0) {
-      codes = body.countries.map((c) => c.toUpperCase());
-    } else {
-      const catalogRows = (await providerSkuCatalog.findMany({
-        where: { isActive: true },
-        select: { countryCodes: true, region: true },
-      })) as Array<{ countryCodes: unknown; region: string | null }>;
-      const codeSet = new Set<string>();
-      for (const row of catalogRows) {
-        const cc = row.countryCodes as string[] | null;
-        if (!Array.isArray(cc)) continue;
-        for (const c of cc) {
-          if (typeof c === 'string' && c.length === 2) {
-            codeSet.add(c.toUpperCase());
-          } else if (typeof c === 'string') {
-            const code = firoamNameToCode(c);
-            if (code) codeSet.add(code);
+    // ── COUNTRY generation ─────────────────────────────────────────────────
+    async function runCountryGeneration() {
+      // Discover countries from active provider catalog (same logic as bulk-create).
+      let codes: string[];
+      if (body.countries && body.countries.length > 0) {
+        codes = body.countries.map((c) => c.toUpperCase());
+      } else {
+        const catalogRows = (await providerSkuCatalog.findMany({
+          where: { isActive: true },
+          select: { countryCodes: true, region: true },
+        })) as Array<{ countryCodes: unknown; region: string | null }>;
+        const codeSet = new Set<string>();
+        for (const row of catalogRows) {
+          const cc = row.countryCodes as string[] | null;
+          if (!Array.isArray(cc)) continue;
+          for (const c of cc) {
+            if (typeof c === 'string' && c.length === 2) {
+              codeSet.add(c.toUpperCase());
+            } else if (typeof c === 'string') {
+              const code = firoamNameToCode(c);
+              if (code) codeSet.add(code);
+            }
           }
         }
-      }
-      codes = [...codeSet].sort();
-    }
-
-    const valid = codes.filter((c) => getCountryByCode(c));
-    const skipped = codes.filter((c) => !getCountryByCode(c));
-
-    if (body.dryRun) {
-      return reply.send({
-        dryRun: true,
-        toGenerate: valid.map((c) => ({ code: c, name: getCountryByCode(c)?.name })),
-        skipped: skipped.map((c) => ({ code: c, reason: 'unknown_code' })),
-      });
-    }
-
-    let generated = 0;
-    let skippedExisting = 0;
-    const errors: string[] = [];
-
-    for (const code of valid) {
-      const country = getCountryByCode(code)!;
-
-      // Check if template already exists
-      const existing = await prisma.shopifyProductTemplate.findUnique({
-        where: { countryCode: code },
-      });
-      if (existing && !body.overwrite) {
-        skippedExisting++;
-        continue;
+        codes = [...codeSet].sort();
       }
 
-      const variants = buildTemplateVariants(code);
-      const ccLower = code.toLowerCase();
+      const valid = codes.filter((c) => getCountryByCode(c));
+      const skipped = codes.filter((c) => !getCountryByCode(c));
 
-      try {
-        await prisma.shopifyProductTemplate.upsert({
+      if (body.dryRun) {
+        return {
+          dryRun: true as const,
+          templateType: 'COUNTRY' as const,
+          toGenerate: valid.map((c) => ({ code: c, name: getCountryByCode(c)?.name })),
+          skipped: skipped.map((c) => ({ code: c, reason: 'unknown_code' })),
+        };
+      }
+
+      let generated = 0;
+      let skippedExisting = 0;
+      const errors: string[] = [];
+
+      for (const code of valid) {
+        const country = getCountryByCode(code)!;
+        const existing = await prisma.shopifyProductTemplate.findUnique({
           where: { countryCode: code },
-          update: {
-            title: country.name,
-            handle: country.slug,
-            descriptionHtml: `<p><img src="https://flagcdn.com/w80/${ccLower}.png" alt="${country.name} flag" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
-            status: 'ACTIVE',
-            vendor: 'SAILeSIM',
-            tags: ['esim', ccLower, country.region],
-            imageUrl: `https://flagcdn.com/w640/${ccLower}.png`,
-            variants: {
-              deleteMany: {},
-              create: variants.map((v) => ({
-                sku: v.sku,
-                price: v.price,
-                planType: v.planType,
-                validity: v.validity,
-                volume: v.volume,
-                sortOrder: v.sortOrder,
-              })),
-            },
-          },
-          create: {
-            countryCode: code,
-            title: country.name,
-            handle: country.slug,
-            descriptionHtml: `<p><img src="https://flagcdn.com/w80/${ccLower}.png" alt="${country.name} flag" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
-            status: 'ACTIVE',
-            vendor: 'SAILeSIM',
-            tags: ['esim', ccLower, country.region],
-            imageUrl: `https://flagcdn.com/w640/${ccLower}.png`,
-            variants: {
-              create: variants.map((v) => ({
-                sku: v.sku,
-                price: v.price,
-                planType: v.planType,
-                validity: v.validity,
-                volume: v.volume,
-                sortOrder: v.sortOrder,
-              })),
-            },
-          },
         });
-        generated++;
-      } catch (err) {
-        errors.push(`${code}: ${err instanceof Error ? err.message : String(err)}`);
+        if (existing && !body.overwrite) {
+          skippedExisting++;
+          continue;
+        }
+
+        const variants = buildTemplateVariants(code);
+        const ccLower = code.toLowerCase();
+
+        try {
+          await prisma.shopifyProductTemplate.upsert({
+            where: { countryCode: code },
+            update: {
+              title: country.name,
+              handle: country.slug,
+              descriptionHtml: `<p><img src="https://flagcdn.com/w80/${ccLower}.png" alt="${country.name} flag" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
+              status: 'ACTIVE',
+              vendor: 'SAILeSIM',
+              tags: ['esim', ccLower, country.region],
+              imageUrl: `https://flagcdn.com/w640/${ccLower}.png`,
+              variants: {
+                deleteMany: {},
+                create: variants.map((v) => ({
+                  sku: v.sku,
+                  price: v.price,
+                  planType: v.planType,
+                  validity: v.validity,
+                  volume: v.volume,
+                  sortOrder: v.sortOrder,
+                })),
+              },
+            },
+            create: {
+              countryCode: code,
+              title: country.name,
+              handle: country.slug,
+              descriptionHtml: `<p><img src="https://flagcdn.com/w80/${ccLower}.png" alt="${country.name} flag" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
+              status: 'ACTIVE',
+              vendor: 'SAILeSIM',
+              tags: ['esim', ccLower, country.region],
+              imageUrl: `https://flagcdn.com/w640/${ccLower}.png`,
+              variants: {
+                create: variants.map((v) => ({
+                  sku: v.sku,
+                  price: v.price,
+                  planType: v.planType,
+                  validity: v.validity,
+                  volume: v.volume,
+                  sortOrder: v.sortOrder,
+                })),
+              },
+            },
+          });
+          generated++;
+        } catch (err) {
+          errors.push(`${code}: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
+
+      return {
+        templateType: 'COUNTRY' as const,
+        generated,
+        skippedExisting,
+        skippedInvalid: skipped.length,
+        errors,
+      };
     }
 
-    return reply.send({
-      ok: true,
-      generated,
-      skippedExisting,
-      skippedInvalid: skipped.length,
-      errors,
-    });
+    // ── Dispatch by mode ───────────────────────────────────────────────────
+    if (mode === 'REGION') {
+      const result = await runRegionGeneration();
+      return reply.send({ ok: true, ...result });
+    }
+    if (mode === 'COUNTRY') {
+      const result = await runCountryGeneration();
+      return reply.send({ ok: true, ...result });
+    }
+    // mode === 'BOTH'
+    const country = await runCountryGeneration();
+    const region = await runRegionGeneration();
+    return reply.send({ ok: true, country, region });
   });
 
   /**
@@ -4718,6 +4746,81 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       suggestionCount: groups.reduce((n, g) => n + g.suggestions.length, 0),
       groups,
     });
+  });
+
+  /**
+   * POST /admin/regions/accept-suggestion
+   * Convenience wrapper: re-runs buildRegionSuggestions(), finds the suggestion
+   * by `code`, derives a human-readable `name`, and creates the Region row.
+   *
+   * Lets the dashboard create a region from a 1-click Accept button without
+   * re-encoding any of the suggestion's fields. Same validation as POST /regions
+   * applies because we go through the same prisma path.
+   *
+   * Body: { code: string }
+   * Returns: 201 + region | 404 if no matching suggestion | 409 if region already exists
+   */
+  const PARENT_NAMES: Record<string, string> = {
+    EU: 'Europe',
+    ASIA: 'Asia',
+    GCC: 'GCC',
+    ME: 'Middle East',
+    AMERICAS: 'Americas',
+    GLOBAL: 'Global',
+    AFRICA: 'Africa',
+    OCEANIA: 'Oceania',
+  };
+
+  app.post('/regions/accept-suggestion', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = (request.body || {}) as { code?: unknown };
+    const codeRaw = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
+    if (codeRaw.length === 0) {
+      return reply.code(400).send({ error: 'code is required' });
+    }
+
+    const groups = await buildRegionSuggestions();
+    let match: {
+      code: string;
+      parentCode: string;
+      countryCodes: string[];
+    } | null = null;
+    for (const g of groups) {
+      for (const s of g.suggestions) {
+        if (s.code === codeRaw) {
+          match = { code: s.code, parentCode: s.parentCode, countryCodes: s.countryCodes };
+          break;
+        }
+      }
+      if (match) break;
+    }
+
+    if (!match) {
+      return reply.code(404).send({ error: `No current suggestion with code "${codeRaw}"` });
+    }
+
+    const parentName = PARENT_NAMES[match.parentCode] ?? match.parentCode;
+    const name = `${parentName} (${match.countryCodes.length} countries)`;
+
+    try {
+      const region = await prisma.region.create({
+        data: {
+          code: match.code,
+          parentCode: match.parentCode,
+          name,
+          countryCodes: match.countryCodes,
+          isActive: true,
+          sortOrder: 0,
+        },
+      });
+      return reply.code(201).send(region);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return reply.code(409).send({ error: `Region already exists: ${match.code}` });
+      }
+      throw err;
+    }
   });
 
   /**

@@ -23,17 +23,50 @@ interface TemplateListResponse {
 }
 
 interface GenerateInput {
+  templateType?: 'COUNTRY' | 'REGION';
   countries?: string[];
+  regionCodes?: string[];
+  priceMultiplier?: number;
   overwrite?: boolean;
   dryRun?: boolean;
 }
 
-interface GenerateResult {
-  ok: boolean;
+interface CountryGenerateBlock {
+  templateType: 'COUNTRY';
   generated: number;
   skippedExisting: number;
   skippedInvalid: number;
   errors: string[];
+}
+
+interface RegionGenerateBlock {
+  templateType: 'REGION';
+  priceMultiplier: number;
+  generated: number;
+  skippedExisting: number;
+  skippedNoCoverage: number;
+  errors: string[];
+}
+
+/**
+ * The bare-call shape the dashboard uses (`{}` body) returns BOTH country and
+ * region branches. Explicit-mode calls return only their own branch fields at
+ * the top level (backward compatible). The dashboard reads `country` / `region`
+ * when present and falls back to top-level fields otherwise.
+ */
+export interface GenerateResult {
+  ok: boolean;
+  // Combined-mode fields (no templateType in request)
+  country?: CountryGenerateBlock;
+  region?: RegionGenerateBlock;
+  // Explicit-mode fields (legacy / backwards compatible)
+  templateType?: 'COUNTRY' | 'REGION';
+  generated?: number;
+  skippedExisting?: number;
+  skippedInvalid?: number;
+  skippedNoCoverage?: number;
+  priceMultiplier?: number;
+  errors?: string[];
 }
 
 interface GenerateSeoInput {
