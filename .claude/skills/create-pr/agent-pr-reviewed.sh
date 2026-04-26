@@ -82,7 +82,7 @@ else
   BRANCH_NAME="$CURRENT_BRANCH"
 fi
 
-# ── Stage & commit ───────────────────────────────────────────────────────────
+# ── Stage ────────────────────────────────────────────────────────────────────
 git add -A
 
 if git diff --staged --quiet; then
@@ -90,6 +90,56 @@ if git diff --staged --quiet; then
   exit 0
 fi
 
+# ── Implementation log gate (Layer 2 enforcement) ───────────────────────────
+# Refuses to proceed if substantive code changed but docs/implementations/
+# wasn't touched. Escape hatch: include [skip-impl-log] in the commit message
+# (use only for pure refactors / fixes / CI tweaks with no behaviour change).
+git fetch origin main --quiet 2>/dev/null || true
+
+CHANGED=$(
+  {
+    git diff --name-only "origin/main...HEAD" 2>/dev/null || true
+    git diff --name-only --cached 2>/dev/null || true
+  } | sort -u
+)
+
+SUBSTANTIVE=$(echo "$CHANGED" \
+  | grep -E '^(fulfillment-engine/src|fulfillment-engine/extensions|dashboard/src)/' \
+  | grep -vE '(__tests__|\.test\.|\.spec\.|prisma/migrations)' \
+  || true)
+
+LOG_TOUCHED=$(echo "$CHANGED" | grep -E '^docs/implementations/' || true)
+SKIP_FLAG=$(echo "$COMMIT_MSG" | grep -F '[skip-impl-log]' || true)
+
+if [ -n "$SUBSTANTIVE" ] && [ -z "$LOG_TOUCHED" ] && [ -z "$SKIP_FLAG" ]; then
+  cat <<EOF
+
+════════════════════════════════════════════════════════════════════════
+  ⛔ IMPLEMENTATION LOG UPDATE REQUIRED
+════════════════════════════════════════════════════════════════════════
+This PR touches substantive code but doesn't update docs/implementations/.
+
+Files that triggered this check:
+$(echo "$SUBSTANTIVE" | sed 's/^/    /')
+
+Required action:
+  • If this is a NEW feature → copy docs/implementations/_TEMPLATE.md to
+    docs/implementations/<NNNN>-<slug>.md, fill it in, and add a row to
+    docs/implementations/INDEX.md
+  • If this extends an EXISTING feature → update its existing entry
+  • If this is a pure refactor / fix / CI tweak with no behaviour change →
+    re-run with [skip-impl-log] anywhere in the commit message
+
+Nothing has been committed. Add your implementation log entry, then
+re-run: npm run pr:create "<your commit message>"
+════════════════════════════════════════════════════════════════════════
+
+EOF
+  git reset --quiet HEAD
+  exit 2
+fi
+
+# ── Commit ──────────────────────────────────────────────────────────────────
 git commit -m "$COMMIT_MSG"
 echo "✅ Committed: ${COMMIT_MSG}"
 

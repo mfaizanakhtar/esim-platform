@@ -1,0 +1,103 @@
+name: Implementation Log Check
+
+# Layer 3 enforcement: blocks PRs that change substantive code without
+# adding or updating an entry in docs/implementations/. Mirrors the gate
+# in .claude/skills/create-pr/agent-pr-reviewed.sh.
+#
+# Escape hatch: include "[skip-impl-log]" in the PR title or commit message,
+# OR add the "skip-impl-log" label to the PR.
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
+
+jobs:
+  check-implementation-log:
+    name: Verify implementation log is updated
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute changed files vs base
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only "$BASE_SHA...$HEAD_SHA")
+          echo "changed<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Check for skip clause
+        id: skip
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          LABELS_JSON: ${{ toJSON(github.event.pull_request.labels) }}
+        run: |
+          set -euo pipefail
+          SKIP=""
+          if echo "$PR_TITLE" | grep -qF '[skip-impl-log]'; then SKIP="title"; fi
+          if [ -z "$SKIP" ] && echo "$PR_BODY" | grep -qF '[skip-impl-log]'; then SKIP="body"; fi
+          if [ -z "$SKIP" ] && echo "$LABELS_JSON" | grep -q '"skip-impl-log"'; then SKIP="label"; fi
+          echo "via=$SKIP" >> "$GITHUB_OUTPUT"
+
+      - name: Verify implementation log update
+        env:
+          CHANGED: ${{ steps.diff.outputs.changed }}
+          SKIP_VIA: ${{ steps.skip.outputs.via }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "$SKIP_VIA" ]; then
+            echo "✅ Skip clause detected via $SKIP_VIA — bypassing implementation log check."
+            exit 0
+          fi
+
+          SUBSTANTIVE=$(echo "$CHANGED" \
+            | grep -E '^(fulfillment-engine/src|fulfillment-engine/extensions|dashboard/src)/' \
+            | grep -vE '(__tests__|\.test\.|\.spec\.|prisma/migrations)' \
+            || true)
+
+          LOG_TOUCHED=$(echo "$CHANGED" | grep -E '^docs/implementations/' || true)
+
+          if [ -z "$SUBSTANTIVE" ]; then
+            echo "✅ No substantive code paths changed — implementation log not required."
+            exit 0
+          fi
+
+          if [ -n "$LOG_TOUCHED" ]; then
+            echo "✅ Implementation log updated:"
+            echo "$LOG_TOUCHED" | sed 's/^/    /'
+            exit 0
+          fi
+
+          cat <<EOF
+
+          ════════════════════════════════════════════════════════════════════════
+            ⛔ IMPLEMENTATION LOG UPDATE REQUIRED
+          ════════════════════════════════════════════════════════════════════════
+          This PR touches substantive code but doesn't update docs/implementations/.
+
+          Files that triggered this check:
+          $(echo "$SUBSTANTIVE" | sed 's/^/    /')
+
+          Required action (pick one):
+            • Add or update an entry in docs/implementations/ — copy
+              docs/implementations/_TEMPLATE.md to NNNN-<slug>.md, fill it in,
+              and add a row to docs/implementations/INDEX.md.
+            • If this is a pure refactor/fix/CI tweak with no behaviour change,
+              add [skip-impl-log] to the PR title OR add the 'skip-impl-log'
+              label to this PR.
+
+          See docs/implementations/INDEX.md and the create-pr skill for context.
+          ════════════════════════════════════════════════════════════════════════
+
+          EOF
+          exit 1
