@@ -146,9 +146,32 @@ model AiMapJob {
   @@map("AiMapJob")
 }
 
+model Region {
+  id           String                   @id @default(cuid())
+  code         String                   @unique          // "EU30", "ASIA4", "GCC6"
+  parentCode   String                                    // "EU", "ASIA", "GCC" — groups variants
+  name         String                                    // "Europe (30 countries)"
+  description  String?
+  countryCodes Json                                      // ["DE", "FR", ...] canonical coverage
+  isActive     Boolean                  @default(true)
+  sortOrder    Int                      @default(0)
+  templates    ShopifyProductTemplate[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+
+  @@index([parentCode])
+  @@index([isActive])
+}
+
 model ShopifyProductTemplate {
   id               String                         @id @default(cuid())
-  countryCode      String                         @unique
+  templateType     String                         @default("COUNTRY") // "COUNTRY" | "REGION"
+  // Exactly one of countryCode / regionCode is populated, depending on templateType.
+  // Both columns are nullable + @unique. Postgres treats NULLs as distinct in unique
+  // indexes, so multiple REGION rows can have NULL countryCode and vice versa.
+  countryCode      String?                        @unique
+  regionCode       String?                        @unique
+  region           Region?                        @relation(fields: [regionCode], references: [code])
   title            String
   handle           String                         @unique
   descriptionHtml  String                         @db.Text
@@ -166,6 +189,7 @@ model ShopifyProductTemplate {
   variants         ShopifyProductTemplateVariant[]
 
   @@index([status])
+  @@index([templateType])
 }
 
 model ShopifyProductTemplateVariant {

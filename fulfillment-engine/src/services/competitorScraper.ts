@@ -186,12 +186,13 @@ export async function scrapeCompetitors(countryCodes?: string[]): Promise<Scrape
   if (countryCodes && countryCodes.length > 0) {
     codes = countryCodes;
   } else {
-    // Get all countries that have templates
+    // Get all countries that have templates (skip region templates which have no countryCode).
     const templates = await prisma.shopifyProductTemplate.findMany({
+      where: { countryCode: { not: null } },
       select: { countryCode: true },
       orderBy: { countryCode: 'asc' },
     });
-    codes = templates.map((t) => t.countryCode);
+    codes = templates.map((t) => t.countryCode).filter((c): c is string => c !== null);
   }
 
   let totalPlans = 0;

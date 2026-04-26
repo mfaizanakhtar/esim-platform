@@ -77,6 +77,13 @@ vi.mock('~/db/prisma', () => ({
       upsert: vi.fn(),
       deleteMany: vi.fn(),
     },
+    region: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
   },
@@ -4987,6 +4994,417 @@ describe('Admin Routes', () => {
       expect(body.drafts).toHaveLength(1);
       expect(body.drafts[0].catalogId).toBe('cat-high');
       expect(body.drafts[0].confidence).toBe(1.0);
+    });
+  });
+
+  // ── Region CRUD ─────────────────────────────────────────────────────────
+
+  describe('Region CRUD', () => {
+    const prismaRegion = (
+      prisma as unknown as {
+        region: {
+          findMany: ReturnType<typeof vi.fn>;
+          findUnique: ReturnType<typeof vi.fn>;
+          create: ReturnType<typeof vi.fn>;
+          update: ReturnType<typeof vi.fn>;
+          delete: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).region;
+
+    function makeRegion(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'reg-001',
+        code: 'EU30',
+        parentCode: 'EU',
+        name: 'Europe (30 countries)',
+        description: null,
+        countryCodes: ['DE', 'FR', 'AT'],
+        isActive: true,
+        sortOrder: 0,
+        createdAt: new Date('2026-04-26'),
+        updatedAt: new Date('2026-04-26'),
+        ...overrides,
+      };
+    }
+
+    describe('GET /regions', () => {
+      it('returns list with template counts', async () => {
+        prismaRegion.findMany.mockResolvedValue([{ ...makeRegion(), _count: { templates: 2 } }]);
+
+        const res = await app.inject({ method: 'GET', url: '/regions', headers: AUTH });
+
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        expect(body.total).toBe(1);
+        expect(body.regions[0]).toMatchObject({
+          code: 'EU30',
+          parentCode: 'EU',
+          templateCount: 2,
+        });
+      });
+
+      it('filters by active=true', async () => {
+        prismaRegion.findMany.mockResolvedValue([]);
+        await app.inject({ method: 'GET', url: '/regions?active=true', headers: AUTH });
+        expect(prismaRegion.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ isActive: true }) }),
+        );
+      });
+
+      it('filters by parentCode (uppercase normalized)', async () => {
+        prismaRegion.findMany.mockResolvedValue([]);
+        await app.inject({ method: 'GET', url: '/regions?parentCode=eu', headers: AUTH });
+        expect(prismaRegion.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ parentCode: 'EU' }) }),
+        );
+      });
+
+      it('filters by active=false', async () => {
+        prismaRegion.findMany.mockResolvedValue([]);
+        await app.inject({ method: 'GET', url: '/regions?active=false', headers: AUTH });
+        expect(prismaRegion.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ isActive: false }) }),
+        );
+      });
+    });
+
+    describe('GET /regions/:code', () => {
+      it('returns the region', async () => {
+        prismaRegion.findUnique.mockResolvedValue(makeRegion());
+        const res = await app.inject({ method: 'GET', url: '/regions/EU30', headers: AUTH });
+        expect(res.statusCode).toBe(200);
+        expect(res.json().code).toBe('EU30');
+      });
+
+      it('uppercases the code lookup', async () => {
+        prismaRegion.findUnique.mockResolvedValue(makeRegion());
+        await app.inject({ method: 'GET', url: '/regions/eu30', headers: AUTH });
+        expect(prismaRegion.findUnique).toHaveBeenCalledWith({ where: { code: 'EU30' } });
+      });
+
+      it('404s when not found', async () => {
+        prismaRegion.findUnique.mockResolvedValue(null);
+        const res = await app.inject({ method: 'GET', url: '/regions/NOPE', headers: AUTH });
+        expect(res.statusCode).toBe(404);
+      });
+    });
+
+    describe('POST /regions', () => {
+      it('creates a region with normalized country codes', async () => {
+        prismaRegion.create.mockResolvedValue(makeRegion());
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: {
+            code: 'eu30',
+            parentCode: 'eu',
+            name: 'Europe (30 countries)',
+            countryCodes: ['de', 'fr', 'at', 'DE'], // dupe + lowercase
+          },
+        });
+
+        expect(res.statusCode).toBe(201);
+        expect(prismaRegion.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            code: 'EU30',
+            parentCode: 'EU',
+            countryCodes: ['DE', 'FR', 'AT'], // dedup + uppercase
+            isActive: true,
+            sortOrder: 0,
+          }),
+        });
+      });
+
+      it('rejects invalid region code', async () => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: { code: 'eu_30!', parentCode: 'EU', name: 'x', countryCodes: ['DE'] },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/code/);
+      });
+
+      it('rejects empty countryCodes', async () => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: { code: 'EU30', parentCode: 'EU', name: 'x', countryCodes: [] },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/countryCodes/);
+      });
+
+      it('rejects malformed country codes', async () => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: {
+            code: 'EU30',
+            parentCode: 'EU',
+            name: 'x',
+            countryCodes: ['DE', 'GERMANY'],
+          },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/Invalid country code/);
+      });
+
+      it('returns 409 on duplicate code', async () => {
+        const { Prisma } = await import('@prisma/client');
+        prismaRegion.create.mockRejectedValue(
+          new Prisma.PrismaClientKnownRequestError('dup', {
+            code: 'P2002',
+            clientVersion: 'x',
+          }),
+        );
+
+        const res = await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: {
+            code: 'EU30',
+            parentCode: 'EU',
+            name: 'Europe (30 countries)',
+            countryCodes: ['DE'],
+          },
+        });
+        expect(res.statusCode).toBe(409);
+      });
+
+      it('rejects invalid parentCode', async () => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: { code: 'EU30', parentCode: 'too-long-parent', name: 'x', countryCodes: ['DE'] },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/parentCode/);
+      });
+
+      it('rejects empty name', async () => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: { code: 'EU30', parentCode: 'EU', name: '   ', countryCodes: ['DE'] },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toMatch(/name/);
+      });
+
+      it('rejects when countryCodes is not an array', async () => {
+        const res = await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: { code: 'EU30', parentCode: 'EU', name: 'x', countryCodes: 'DE' },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+
+      it('persists description, isActive=false, sortOrder', async () => {
+        prismaRegion.create.mockResolvedValue(makeRegion());
+        await app.inject({
+          method: 'POST',
+          url: '/regions',
+          headers: JSON_HEADERS,
+          payload: {
+            code: 'EU30',
+            parentCode: 'EU',
+            name: 'Europe',
+            countryCodes: ['DE'],
+            description: '  EU canonical 30  ',
+            isActive: false,
+            sortOrder: 7,
+          },
+        });
+        expect(prismaRegion.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            description: 'EU canonical 30',
+            isActive: false,
+            sortOrder: 7,
+          }),
+        });
+      });
+    });
+
+    describe('PATCH /regions/:code', () => {
+      it('updates only provided fields', async () => {
+        prismaRegion.update.mockResolvedValue(makeRegion({ name: 'New Name' }));
+
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { name: 'New Name' },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(prismaRegion.update).toHaveBeenCalledWith({
+          where: { code: 'EU30' },
+          data: { name: 'New Name' },
+        });
+      });
+
+      it('rejects when no updatable fields provided', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: {},
+        });
+        expect(res.statusCode).toBe(400);
+      });
+
+      it('normalizes countryCodes on update', async () => {
+        prismaRegion.update.mockResolvedValue(makeRegion());
+        await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { countryCodes: ['de', 'FR'] },
+        });
+        expect(prismaRegion.update).toHaveBeenCalledWith({
+          where: { code: 'EU30' },
+          data: { countryCodes: ['DE', 'FR'] },
+        });
+      });
+
+      it('404s when region missing', async () => {
+        const { Prisma } = await import('@prisma/client');
+        prismaRegion.update.mockRejectedValue(
+          new Prisma.PrismaClientKnownRequestError('not found', {
+            code: 'P2025',
+            clientVersion: 'x',
+          }),
+        );
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/NOPE',
+          headers: JSON_HEADERS,
+          payload: { name: 'x' },
+        });
+        expect(res.statusCode).toBe(404);
+      });
+
+      it('rejects invalid parentCode', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { parentCode: 'bad-chars-here' },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+
+      it('rejects empty name on update', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { name: '   ' },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+
+      it('rejects non-boolean isActive', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { isActive: 'yes' },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+
+      it('rejects non-numeric sortOrder', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { sortOrder: 'first' },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+
+      it('rejects invalid country code on update', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { countryCodes: ['DE', 'NOT-A-CODE'] },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+
+      it('rejects empty countryCodes array', async () => {
+        const res = await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { countryCodes: [] },
+        });
+        expect(res.statusCode).toBe(400);
+      });
+
+      it('clears description when set to empty string', async () => {
+        prismaRegion.update.mockResolvedValue(makeRegion());
+        await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { description: '   ' },
+        });
+        expect(prismaRegion.update).toHaveBeenCalledWith({
+          where: { code: 'EU30' },
+          data: { description: null },
+        });
+      });
+
+      it('updates parentCode/isActive/sortOrder together', async () => {
+        prismaRegion.update.mockResolvedValue(makeRegion());
+        await app.inject({
+          method: 'PATCH',
+          url: '/regions/EU30',
+          headers: JSON_HEADERS,
+          payload: { parentCode: 'eu', isActive: false, sortOrder: 3 },
+        });
+        expect(prismaRegion.update).toHaveBeenCalledWith({
+          where: { code: 'EU30' },
+          data: { parentCode: 'EU', isActive: false, sortOrder: 3 },
+        });
+      });
+    });
+
+    describe('DELETE /regions/:code', () => {
+      it('deletes by code', async () => {
+        prismaRegion.delete.mockResolvedValue(makeRegion());
+        const res = await app.inject({ method: 'DELETE', url: '/regions/EU30', headers: AUTH });
+        expect(res.statusCode).toBe(200);
+        expect(res.json()).toMatchObject({ ok: true, deleted: 'EU30' });
+        expect(prismaRegion.delete).toHaveBeenCalledWith({ where: { code: 'EU30' } });
+      });
+
+      it('404s when missing', async () => {
+        const { Prisma } = await import('@prisma/client');
+        prismaRegion.delete.mockRejectedValue(
+          new Prisma.PrismaClientKnownRequestError('not found', {
+            code: 'P2025',
+            clientVersion: 'x',
+          }),
+        );
+        const res = await app.inject({ method: 'DELETE', url: '/regions/NOPE', headers: AUTH });
+        expect(res.statusCode).toBe(404);
+      });
     });
   });
 });

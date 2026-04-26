@@ -241,3 +241,73 @@ Run deterministic structured matching (no AI). Parses Shopify SKU metadata and m
 List registered vendors.
 
 **Response:** `{ providers: ["firoam", "tgt"] }`
+
+---
+
+## Regions
+
+Canonical groupings of countries used by region-type Shopify product templates. The `code` is referenced in regional Shopify SKUs (`REGION-<code>-...`); `countryCodes` is the strict canonical coverage advertised to customers. See [`docs/database.md`](database.md#region) for schema.
+
+### GET /admin/regions
+
+List regions.
+
+**Query params:**
+| Param | Description |
+|-------|-------------|
+| `active` | `true` or `false` — filter by `isActive` |
+| `parentCode` | Filter by parent group (e.g. `EU`, `ASIA`); uppercase normalized |
+
+**Response:** `{ total, regions[] }` — each region includes `templateCount`.
+
+---
+
+### GET /admin/regions/:code
+
+Get a single region by code (case-insensitive on input).
+
+**Response:** Region object, or `404` if not found.
+
+---
+
+### POST /admin/regions
+
+Create a region.
+
+**Body:**
+```json
+{
+  "code": "EU30",
+  "parentCode": "EU",
+  "name": "Europe (30 countries)",
+  "description": "EEA + UK + CH",
+  "countryCodes": ["DE", "FR", "AT", "..."],
+  "isActive": true,
+  "sortOrder": 0
+}
+```
+
+Validation:
+- `code`: uppercase A–Z / 0–9 / `-`, length 2–32 (auto-uppercased)
+- `parentCode`: uppercase A–Z / 0–9, length 2–16 (auto-uppercased)
+- `name`: non-empty string
+- `countryCodes`: non-empty array of ISO 3166-1 alpha-2 codes (auto-uppercased + deduped); each must be exactly 2 letters
+- `isActive`, `sortOrder`: optional (defaults `true`, `0`)
+
+**Response:** `201` + region object, or `400` for validation errors, or `409` if `code` already exists.
+
+---
+
+### PATCH /admin/regions/:code
+
+Partial update. Region `code` is immutable (it's referenced by SKUs). Other fields accept the same validation as POST.
+
+**Response:** Updated region, or `400` for validation errors / no fields, or `404` if not found.
+
+---
+
+### DELETE /admin/regions/:code
+
+Hard-delete a region. Templates referencing it (via `regionCode`) are not cascaded — their `regionCode` is set to `NULL` (orphaned), so the admin can reassign or delete them.
+
+**Response:** `{ ok: true, deleted: "EU30" }`, or `404` if not found.

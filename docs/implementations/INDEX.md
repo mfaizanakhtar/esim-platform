@@ -11,5 +11,6 @@ Status vocabulary: `in-progress`, `shipped`, `deprecated`, `planned`.
 | ID | Feature | Status | Summary | Detail |
 |----|---------|--------|---------|--------|
 | 0001 | Implementation Log + Enforcement | shipped | Per-feature record system at `docs/implementations/` with three-layer enforcement (CLAUDE.md rule, `create-pr` skill gate, CI guardrail) | [0001-implementation-log.md](0001-implementation-log.md) |
+| 0002 | Region schema + CRUD | in-progress | First-class `Region` entity (EU30, ASIA4, GCC6) + admin CRUD; templates can now be COUNTRY or REGION. Foundation for regional SKUs | [0002-region-schema-crud.md](0002-region-schema-crud.md) |
 
 > Backfill of existing shipped features (multi-eSIM orders, vector embeddings + SSE, smart pricing, FiRoam/TGT integrations, Shopify extensions, AI mapping, etc.) is tracked as a follow-up plan and will populate this table.

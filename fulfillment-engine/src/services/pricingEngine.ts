@@ -285,6 +285,11 @@ export async function calculateCostFloors(
       skipped++;
       continue;
     }
+    // Country-only pricing path; region templates have no countryCode.
+    if (!variant.template.countryCode) {
+      skipped++;
+      continue;
+    }
 
     try {
       const cheapest = await findCheapestProviderCost(
@@ -376,6 +381,11 @@ export async function generateSuggestions(
 
     const parsed = parseShopifySku(variant.sku);
     if (!parsed) {
+      skipped++;
+      continue;
+    }
+    // Country-only pricing path; region templates have no countryCode.
+    if (!variant.template.countryCode) {
       skipped++;
       continue;
     }
