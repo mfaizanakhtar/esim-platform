@@ -1,286 +1,298 @@
-{% doc %}
-  @prompt
-    i want to buld these buttons selector or you can say tabs like this shown in image
-    
-    i want number of tabs control option like 2-5 also i want to link that specific tab with my product selection or you can collections, products per collection should not be limited , they can appear as many as there are products in specific collection, moreover give option how products should be appeared as in alphabetical order or should they appear  as they have been setup in the collection to get visibility tabs should appear like this shown in image separate from the below linked , tab headers , such as new arrivals, best sellers , they should have the space between the area where products of specific collection will be showed and that tab are should be visible buttons showing separate having gap between them does not show any connection
-{% enddoc %}
 {% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
 
-{% style %}
-  .ai-tabbed-collections-{{ ai_gen_id }} {
-    display: block;
-    width: {{ block.settings.desktop_width_percent }}%;
-    max-width: 100%;
-    margin: 0 auto;
-  }
-
-  .ai-tabbed-collections__tabs-{{ ai_gen_id }} {
-    display: flex;
-    gap: {{ block.settings.tab_spacing }}px;
-    justify-content: {{ block.settings.tab_alignment }};
-    margin-bottom: {{ block.settings.tabs_bottom_spacing }}px;
-    flex-wrap: wrap;
-  }
-
-  .ai-tabbed-collections__tab-{{ ai_gen_id }} {
-    background-color: {{ block.settings.tab_background_color }};
-    border: {{ block.settings.tab_border_thickness }}px solid {{ block.settings.tab_border_color }};
-    padding: {{ block.settings.tab_padding_vertical }}px {{ block.settings.tab_padding_horizontal }}px;
-    cursor: pointer;
-    font-size: {{ block.settings.tab_font_size }}px;
-    color: {{ block.settings.tab_text_color }};
-    border-radius: {{ block.settings.tab_border_radius }}px;
-    transition: all 0.3s ease;
-  }
-
-  .ai-tabbed-collections__tab-{{ ai_gen_id }}:hover {
-    background-color: {{ block.settings.tab_hover_background_color }};
-    color: {{ block.settings.tab_hover_color }};
-    border-color: {{ block.settings.tab_hover_border_color }};
-  }
-
-  .ai-tabbed-collections__tab-{{ ai_gen_id }}.active {
-    background-color: {{ block.settings.tab_active_background_color }};
-    color: {{ block.settings.tab_active_color }};
-    border-color: {{ block.settings.tab_active_border_color }};
-  }
-
-  .ai-tabbed-collections__content-{{ ai_gen_id }} {
-    display: none;
-  }
-
-  .ai-tabbed-collections__content-{{ ai_gen_id }}.active {
-    display: block;
-  }
-
-  .ai-tabbed-collections__products-{{ ai_gen_id }} {
-    display: grid;
-    grid-template-columns: repeat({{ block.settings.products_per_row_desktop }}, 1fr);
-    gap: {{ block.settings.product_grid_gap }}px;
-  }
-
-  .ai-tabbed-collections__product-card-{{ ai_gen_id }} {
-    display: flex;
-    flex-direction: column;
-    text-decoration: none;
-    color: inherit;
-  }
-
-  .ai-tabbed-collections__product-image-wrapper-{{ ai_gen_id }} {
-    position: relative;
-    width: 100%;
-    padding-bottom: 100%;
-    overflow: hidden;
-    background-color: #f4f4f4;
-    margin-bottom: 12px;
-  }
-
-  .ai-tabbed-collections__product-image-{{ ai_gen_id }} {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }} {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }} svg {
-    width: 60%;
-    height: 60%;
-  }
-
-  .ai-tabbed-collections__product-title-{{ ai_gen_id }} {
-    font-size: 14px;
-    margin-bottom: 8px;
-    font-weight: 500;
-  }
-
-  .ai-tabbed-collections__product-price-{{ ai_gen_id }} {
-    font-size: 14px;
-    color: {{ block.settings.price_color }};
-  }
-
-  .ai-tabbed-collections__empty-state-{{ ai_gen_id }} {
-    text-align: center;
-    padding: 60px 20px;
-    color: #666;
-    font-size: 14px;
-  }
-
-  @media screen and (max-width: 749px) {
-    .ai-tabbed-collections__products-{{ ai_gen_id }} {
-      grid-template-columns: repeat({{ block.settings.products_per_row_mobile }}, 1fr);
+{% if template.name == 'index' %}
+  {% style %}
+    .ai-tabbed-collections-{{ ai_gen_id }} {
+      display: block;
+      width: {{ block.settings.desktop_width_percent }}%;
+      max-width: 100%;
+      margin: 0 auto;
     }
 
     .ai-tabbed-collections__tabs-{{ ai_gen_id }} {
-      gap: {{ block.settings.tab_spacing | times: 0.7 }}px;
+      display: flex;
+      gap: {{ block.settings.tab_spacing }}px;
+      justify-content: {{ block.settings.tab_alignment }};
+      margin-bottom: {{ block.settings.tabs_bottom_spacing }}px;
+      flex-wrap: wrap;
     }
 
     .ai-tabbed-collections__tab-{{ ai_gen_id }} {
-      font-size: {{ block.settings.tab_font_size | times: 0.9 }}px;
-      padding: {{ block.settings.tab_padding_vertical | times: 0.8 }}px {{ block.settings.tab_padding_horizontal | times: 0.8 }}px;
+      background-color: {{ block.settings.tab_background_color }};
+      border: {{ block.settings.tab_border_thickness }}px solid {{ block.settings.tab_border_color }};
+      padding: {{ block.settings.tab_padding_vertical }}px {{ block.settings.tab_padding_horizontal }}px;
+      cursor: pointer;
+      font-size: {{ block.settings.tab_font_size }}px;
+      color: {{ block.settings.tab_text_color }};
+      border-radius: {{ block.settings.tab_border_radius }}px;
+      transition: all 0.3s ease;
+      min-width: {{ block.settings.tab_min_width }}px;
+      min-height: {{ block.settings.tab_min_height }}px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.2;
     }
-  }
-{% endstyle %}
 
-<tabbed-collections-{{ ai_gen_id }} class="ai-tabbed-collections-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
-  <div class="ai-tabbed-collections__tabs-{{ ai_gen_id }}">
+    .ai-tabbed-collections__tab-{{ ai_gen_id }}:hover {
+      background-color: {{ block.settings.tab_hover_background_color }};
+      color: {{ block.settings.tab_hover_color }};
+      border-color: {{ block.settings.tab_hover_border_color }};
+    }
+
+    .ai-tabbed-collections__tab-{{ ai_gen_id }}.active {
+      background-color: {{ block.settings.tab_active_background_color }};
+      color: {{ block.settings.tab_active_color }};
+      border-color: {{ block.settings.tab_active_border_color }};
+    }
+
+    .ai-tabbed-collections__content-{{ ai_gen_id }} {
+      display: none;
+    }
+
+    .ai-tabbed-collections__content-{{ ai_gen_id }}.active {
+      display: block;
+    }
+
+    .ai-tabbed-collections__products-{{ ai_gen_id }} {
+      display: grid;
+      grid-template-columns: repeat({{ block.settings.products_per_row_desktop }}, minmax(0, 1fr));
+      gap: {{ block.settings.product_grid_gap }}px;
+    }
+
+    .ai-tabbed-collections__product-card-{{ ai_gen_id }} {
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      color: inherit;
+      min-width: 0;
+    }
+
+    .ai-tabbed-collections__product-image-wrapper-{{ ai_gen_id }} {
+      position: relative;
+      width: 100%;
+      padding-bottom: {{ block.settings.product_image_ratio }}%;
+      overflow: hidden;
+      background-color: #f4f4f4;
+      margin-bottom: 12px;
+      border-radius: {{ block.settings.product_image_border_radius }}px;
+    }
+
+    .ai-tabbed-collections__product-image-{{ ai_gen_id }} {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: {{ block.settings.product_image_fit }};
+    }
+
+    .ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }} {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }} svg {
+      width: 60%;
+      height: 60%;
+    }
+
+    .ai-tabbed-collections__product-title-{{ ai_gen_id }} {
+      font-size: 14px;
+      margin-bottom: 8px;
+      font-weight: 500;
+      word-break: break-word;
+    }
+
+    .ai-tabbed-collections__product-price-{{ ai_gen_id }} {
+      font-size: 14px;
+      color: {{ block.settings.price_color }};
+    }
+
+    .ai-tabbed-collections__empty-state-{{ ai_gen_id }} {
+      text-align: center;
+      padding: 60px 20px;
+      color: #666;
+      font-size: 14px;
+    }
+
+    @media screen and (max-width: 749px) {
+      .ai-tabbed-collections__products-{{ ai_gen_id }} {
+        grid-template-columns: repeat({{ block.settings.products_per_row_mobile }}, minmax(0, 1fr));
+      }
+
+      .ai-tabbed-collections__tabs-{{ ai_gen_id }} {
+        gap: {{ block.settings.tab_spacing | times: 0.7 }}px;
+      }
+
+      .ai-tabbed-collections__tab-{{ ai_gen_id }} {
+        font-size: {{ block.settings.tab_font_size | times: 0.9 }}px;
+        padding: {{ block.settings.tab_padding_vertical | times: 0.8 }}px {{ block.settings.tab_padding_horizontal | times: 0.8 }}px;
+        min-width: {{ block.settings.tab_min_width | times: 0.8 }}px;
+        min-height: {{ block.settings.tab_min_height | times: 0.85 }}px;
+      }
+    }
+  {% endstyle %}
+
+  <tabbed-collections-{{ ai_gen_id }} class="ai-tabbed-collections-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+    <div class="ai-tabbed-collections__tabs-{{ ai_gen_id }}">
+      {% assign first_active_tab = blank %}
+
+      {% for i in (1..5) %}
+        {% liquid
+          assign tab_enabled_key = 'tab_' | append: i | append: '_enabled'
+          assign tab_title_key = 'tab_' | append: i | append: '_title'
+          assign tab_enabled = block.settings[tab_enabled_key]
+          assign tab_title = block.settings[tab_title_key]
+        %}
+
+        {% if tab_enabled and i <= block.settings.number_of_tabs %}
+          {% if first_active_tab == blank %}
+            {% assign first_active_tab = i %}
+          {% endif %}
+
+          <button
+            class="ai-tabbed-collections__tab-{{ ai_gen_id }} {% if first_active_tab == i %}active{% endif %}"
+            data-tab="{{ i }}"
+            aria-selected="{% if first_active_tab == i %}true{% else %}false{% endif %}"
+            role="tab"
+            type="button"
+          >
+            {{ tab_title }}
+          </button>
+        {% endif %}
+      {% endfor %}
+    </div>
+
     {% for i in (1..5) %}
       {% liquid
         assign tab_enabled_key = 'tab_' | append: i | append: '_enabled'
-        assign tab_title_key = 'tab_' | append: i | append: '_title'
         assign collection_key = 'tab_' | append: i | append: '_collection'
-        
         assign tab_enabled = block.settings[tab_enabled_key]
-        assign tab_title = block.settings[tab_title_key]
         assign collection = block.settings[collection_key]
       %}
-      
+
       {% if tab_enabled and i <= block.settings.number_of_tabs %}
-        <button 
-          class="ai-tabbed-collections__tab-{{ ai_gen_id }} {% if forloop.first %}active{% endif %}"
-          data-tab="{{ i }}"
-          aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"
-          role="tab"
+        <div
+          class="ai-tabbed-collections__content-{{ ai_gen_id }} {% if first_active_tab == i %}active{% endif %}"
+          data-content="{{ i }}"
+          role="tabpanel"
         >
-          {{ tab_title }}
-        </button>
+          {% if collection != blank %}
+            {% liquid
+              if block.settings.product_sort_order == 'manual'
+                assign products = collection.products
+              elsif block.settings.product_sort_order == 'alphabetical'
+                assign products = collection.products | sort: 'title'
+              elsif block.settings.product_sort_order == 'alphabetical_reverse'
+                assign products = collection.products | sort: 'title' | reverse
+              elsif block.settings.product_sort_order == 'price_ascending'
+                assign products = collection.products | sort: 'price'
+              elsif block.settings.product_sort_order == 'price_descending'
+                assign products = collection.products | sort: 'price' | reverse
+              elsif block.settings.product_sort_order == 'created_ascending'
+                assign products = collection.products | sort: 'created_at'
+              elsif block.settings.product_sort_order == 'created_descending'
+                assign products = collection.products | sort: 'created_at' | reverse
+              else
+                assign products = collection.products
+              endif
+            %}
+
+            <div class="ai-tabbed-collections__products-{{ ai_gen_id }}">
+              {% for product in products %}
+                <a href="{{ product.url }}" class="ai-tabbed-collections__product-card-{{ ai_gen_id }}">
+                  <div class="ai-tabbed-collections__product-image-wrapper-{{ ai_gen_id }}">
+                    {% if product.featured_image %}
+                      <img
+                        src="{{ product.featured_image | image_url: width: 600 }}"
+                        alt="{{ product.featured_image.alt | escape }}"
+                        class="ai-tabbed-collections__product-image-{{ ai_gen_id }}"
+                        loading="lazy"
+                        width="600"
+                        height="600"
+                      >
+                    {% else %}
+                      <div class="ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }}">
+                        {{ 'product-1' | placeholder_svg_tag }}
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div class="ai-tabbed-collections__product-title-{{ ai_gen_id }}">
+                    {{ product.title }}
+                  </div>
+                  <div class="ai-tabbed-collections__product-price-{{ ai_gen_id }}">
+                    {{ product.price | money }}
+                  </div>
+                </a>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="ai-tabbed-collections__empty-state-{{ ai_gen_id }}">
+              Next, select a collection for this tab
+            </div>
+          {% endif %}
+        </div>
       {% endif %}
     {% endfor %}
-  </div>
+  </tabbed-collections-{{ ai_gen_id }}>
 
-  {% for i in (1..5) %}
-    {% liquid
-      assign tab_enabled_key = 'tab_' | append: i | append: '_enabled'
-      assign collection_key = 'tab_' | append: i | append: '_collection'
-      
-      assign tab_enabled = block.settings[tab_enabled_key]
-      assign collection = block.settings[collection_key]
-    %}
-    
-    {% if tab_enabled and i <= block.settings.number_of_tabs %}
-      <div 
-        class="ai-tabbed-collections__content-{{ ai_gen_id }} {% if forloop.first %}active{% endif %}"
-        data-content="{{ i }}"
-        role="tabpanel"
-      >
-        {% if collection != blank %}
-          {% liquid
-            if block.settings.product_sort_order == 'manual'
-              assign products = collection.products
-            elsif block.settings.product_sort_order == 'alphabetical'
-              assign products = collection.products | sort: 'title'
-            elsif block.settings.product_sort_order == 'alphabetical_reverse'
-              assign products = collection.products | sort: 'title' | reverse
-            elsif block.settings.product_sort_order == 'price_ascending'
-              assign products = collection.products | sort: 'price'
-            elsif block.settings.product_sort_order == 'price_descending'
-              assign products = collection.products | sort: 'price' | reverse
-            elsif block.settings.product_sort_order == 'created_ascending'
-              assign products = collection.products | sort: 'created_at'
-            elsif block.settings.product_sort_order == 'created_descending'
-              assign products = collection.products | sort: 'created_at' | reverse
-            else
-              assign products = collection.products
-            endif
-          %}
-          
-          <div class="ai-tabbed-collections__products-{{ ai_gen_id }}">
-            {% for product in products %}
-              <a href="{{ product.url }}" class="ai-tabbed-collections__product-card-{{ ai_gen_id }}">
-                <div class="ai-tabbed-collections__product-image-wrapper-{{ ai_gen_id }}">
-                  {% if product.featured_image %}
-                    <img 
-                      src="{{ product.featured_image | image_url: width: 600 }}"
-                      alt="{{ product.featured_image.alt | escape }}"
-                      class="ai-tabbed-collections__product-image-{{ ai_gen_id }}"
-                      loading="lazy"
-                      width="600"
-                      height="600"
-                    >
-                  {% else %}
-                    <div class="ai-tabbed-collections__product-image-placeholder-{{ ai_gen_id }}">
-                      {{ 'product-1' | placeholder_svg_tag }}
-                    </div>
-                  {% endif %}
-                </div>
-                <div class="ai-tabbed-collections__product-title-{{ ai_gen_id }}">
-                  {{ product.title }}
-                </div>
-                <div class="ai-tabbed-collections__product-price-{{ ai_gen_id }}">
-                  {{ product.price | money }}
-                </div>
-              </a>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="ai-tabbed-collections__empty-state-{{ ai_gen_id }}">
-            Next, select a collection for this tab
-          </div>
-        {% endif %}
-      </div>
-    {% endif %}
-  {% endfor %}
-</tabbed-collections-{{ ai_gen_id }}>
+  <script>
+    (function() {
+      class TabbedCollections{{ ai_gen_id }} extends HTMLElement {
+        constructor() {
+          super();
+        }
 
-<script>
-  (function() {
-    class TabbedCollections{{ ai_gen_id }} extends HTMLElement {
-      constructor() {
-        super();
-      }
+        connectedCallback() {
+          this.tabs = this.querySelectorAll('.ai-tabbed-collections__tab-{{ ai_gen_id }}');
+          this.contents = this.querySelectorAll('.ai-tabbed-collections__content-{{ ai_gen_id }}');
+          this.setupEventListeners();
+        }
 
-      connectedCallback() {
-        this.tabs = this.querySelectorAll('.ai-tabbed-collections__tab-{{ ai_gen_id }}');
-        this.contents = this.querySelectorAll('.ai-tabbed-collections__content-{{ ai_gen_id }}');
-        
-        this.setupEventListeners();
-      }
-
-      setupEventListeners() {
-        this.tabs.forEach((tab) => {
-          tab.addEventListener('click', () => {
-            const tabId = tab.getAttribute('data-tab');
-            this.switchTab(tabId);
+        setupEventListeners() {
+          this.tabs.forEach((tab) => {
+            tab.addEventListener('click', () => {
+              const tabId = tab.getAttribute('data-tab');
+              this.switchTab(tabId);
+            });
           });
-        });
+        }
+
+        switchTab(tabId) {
+          this.tabs.forEach((tab) => {
+            if (tab.getAttribute('data-tab') === tabId) {
+              tab.classList.add('active');
+              tab.setAttribute('aria-selected', 'true');
+            } else {
+              tab.classList.remove('active');
+              tab.setAttribute('aria-selected', 'false');
+            }
+          });
+
+          this.contents.forEach((content) => {
+            if (content.getAttribute('data-content') === tabId) {
+              content.classList.add('active');
+            } else {
+              content.classList.remove('active');
+            }
+          });
+        }
       }
 
-      switchTab(tabId) {
-        this.tabs.forEach((tab) => {
-          if (tab.getAttribute('data-tab') === tabId) {
-            tab.classList.add('active');
-            tab.setAttribute('aria-selected', 'true');
-          } else {
-            tab.classList.remove('active');
-            tab.setAttribute('aria-selected', 'false');
-          }
-        });
-
-        this.contents.forEach((content) => {
-          if (content.getAttribute('data-content') === tabId) {
-            content.classList.add('active');
-          } else {
-            content.classList.remove('active');
-          }
-        });
+      if (!customElements.get('tabbed-collections-{{ ai_gen_id }}')) {
+        customElements.define('tabbed-collections-{{ ai_gen_id }}', TabbedCollections{{ ai_gen_id }});
       }
-    }
-
-    customElements.define('tabbed-collections-{{ ai_gen_id }}', TabbedCollections{{ ai_gen_id }});
-  })();
-</script>
+    })();
+  </script>
+{% endif %}
 
 {% schema %}
 {
@@ -368,6 +380,26 @@
       "step": 4,
       "unit": "px",
       "default": 12
+    },
+    {
+      "type": "range",
+      "id": "tab_min_width",
+      "label": "Tab minimum width",
+      "min": 60,
+      "max": 300,
+      "step": 10,
+      "unit": "px",
+      "default": 120
+    },
+    {
+      "type": "range",
+      "id": "tab_min_height",
+      "label": "Tab minimum height",
+      "min": 30,
+      "max": 100,
+      "step": 2,
+      "unit": "px",
+      "default": 48
     },
     {
       "type": "range",
@@ -597,7 +629,7 @@
       "id": "products_per_row_desktop",
       "label": "Products per row (desktop)",
       "min": 2,
-      "max": 6,
+      "max": 10,
       "step": 1,
       "default": 4
     },
@@ -626,6 +658,42 @@
       "step": 4,
       "unit": "px",
       "default": 16
+    },
+    {
+      "type": "range",
+      "id": "product_image_ratio",
+      "label": "Product image height ratio",
+      "min": 60,
+      "max": 150,
+      "step": 5,
+      "unit": "%",
+      "default": 100
+    },
+    {
+      "type": "range",
+      "id": "product_image_border_radius",
+      "label": "Product image corner radius",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 0
+    },
+    {
+      "type": "select",
+      "id": "product_image_fit",
+      "label": "Product image fit",
+      "options": [
+        {
+          "value": "cover",
+          "label": "Cover"
+        },
+        {
+          "value": "contain",
+          "label": "Contain"
+        }
+      ],
+      "default": "cover"
     },
     {
       "type": "color",

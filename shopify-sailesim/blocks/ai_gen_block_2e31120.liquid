@@ -1,0 +1,649 @@
+{% doc %}
+  @prompt
+    Regenerate the Tabbed product grid block with these exact requirements: (1) Product images must use a 3:2 landscape aspect ratio with object-fit: cover — absolutely zero blank/grey padding or whitespace above or below the image, image fills the container edge to edge, (2) NO View Details button, (3) Add to Cart button must be a sleek horizontal pill shape — border-radius: 999px, padding: 8px 24px, max-height: 36px, text on ONE single line saying Add to Cart, white-space: nowrap so text never wraps, NO heavy shadows, NO large square borders — PLUS expose these as editable settings in the theme editor: button font size, button font weight, button text color, button background color, button border color, (4) Product name bold below image, price below name, (5) Tab navigation centered at top to switch between collections, (6) Entire block centered on page with equal margins, (7) Responsive grid adjustable per row for desktop up to 12 and mobile up to 6, (8) Heading and subheading at top with fade-in animation and editable font size and alignment, (9) Clean modern card with minimal gap between elements suitable for a futuristic eSIM store, text of add to cart button font doesnt align or sticked or locked with button size accrodingly
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-tabbed-grid-{{ ai_gen_id }} {
+    display: block;
+    width: 100%;
+    max-width: {{ block.settings.max_width }}px;
+    margin: 0 auto;
+    padding: {{ block.settings.section_padding }}px;
+  }
+
+  .ai-tabbed-grid-header-{{ ai_gen_id }} {
+    text-align: {{ block.settings.text_alignment }};
+    margin-bottom: 32px;
+    opacity: 0;
+    animation: ai-fade-in-{{ ai_gen_id }} 0.8s ease-out forwards;
+  }
+
+  @keyframes ai-fade-in-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .ai-tabbed-grid-heading-{{ ai_gen_id }} {
+    font-size: {{ block.settings.heading_size }}px;
+    margin: 0 0 8px;
+    font-weight: 700;
+  }
+
+  .ai-tabbed-grid-subheading-{{ ai_gen_id }} {
+    font-size: {{ block.settings.subheading_size }}px;
+    margin: 0;
+    opacity: 0.8;
+  }
+
+  .ai-tabbed-grid-tabs-{{ ai_gen_id }} {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+
+  .ai-tabbed-grid-tab-{{ ai_gen_id }} {
+    padding: 10px 24px;
+    background: transparent;
+    border: 1px solid {{ block.settings.tab_border_color }};
+    color: {{ block.settings.tab_text_color }};
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    border-radius: 4px;
+  }
+
+  .ai-tabbed-grid-tab-{{ ai_gen_id }}:hover {
+    background: {{ block.settings.tab_hover_bg }};
+    border-color: {{ block.settings.tab_hover_border }};
+  }
+
+  .ai-tabbed-grid-tab-{{ ai_gen_id }}.active {
+    background: {{ block.settings.tab_active_bg }};
+    color: {{ block.settings.tab_active_text }};
+    border-color: {{ block.settings.tab_active_border }};
+  }
+
+  .ai-tabbed-grid-content-{{ ai_gen_id }} {
+    display: none;
+  }
+
+  .ai-tabbed-grid-content-{{ ai_gen_id }}.active {
+    display: block;
+  }
+
+  .ai-tabbed-grid-products-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: repeat({{ block.settings.products_per_row_desktop }}, 1fr);
+    gap: {{ block.settings.grid_gap }}px;
+  }
+
+  @media screen and (max-width: 749px) {
+    .ai-tabbed-grid-products-{{ ai_gen_id }} {
+      grid-template-columns: repeat({{ block.settings.products_per_row_mobile }}, 1fr);
+    }
+  }
+
+  .ai-tabbed-grid-card-{{ ai_gen_id }} {
+    background: {{ block.settings.card_bg_color }};
+    border-radius: {{ block.settings.card_border_radius }}px;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+  }
+
+  .ai-tabbed-grid-card-{{ ai_gen_id }}:hover {
+    transform: translateY(-4px);
+  }
+
+  .ai-tabbed-grid-image-wrapper-{{ ai_gen_id }} {
+    position: relative;
+    width: 100%;
+    padding-bottom: 66.67%;
+    overflow: hidden;
+    background: #f4f4f4;
+  }
+
+  .ai-tabbed-grid-image-{{ ai_gen_id }} {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .ai-tabbed-grid-info-{{ ai_gen_id }} {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .ai-tabbed-grid-title-{{ ai_gen_id }} {
+    font-weight: 700;
+    font-size: 14px;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .ai-tabbed-grid-price-{{ ai_gen_id }} {
+    font-size: 14px;
+    margin: 0;
+    color: {{ block.settings.price_color }};
+  }
+
+  .ai-tabbed-grid-button-{{ ai_gen_id }} {
+    margin-top: 8px;
+    padding: 0 24px;
+    background: {{ block.settings.button_bg_color }};
+    color: {{ block.settings.button_text_color }};
+    border: 1px solid {{ block.settings.button_border_color }};
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: {{ block.settings.button_font_size }}px;
+    font-weight: {{ block.settings.button_font_weight }};
+    height: 36px;
+    line-height: 34px;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  .ai-tabbed-grid-button-{{ ai_gen_id }}:hover {
+    background: {{ block.settings.button_hover_bg }};
+    color: {{ block.settings.button_hover_text }};
+    border-color: {{ block.settings.button_hover_border }};
+  }
+
+  .ai-tabbed-grid-empty-{{ ai_gen_id }} {
+    text-align: center;
+    padding: 60px 20px;
+    color: #999;
+    font-size: 14px;
+  }
+{% endstyle %}
+
+<tabbed-product-grid-{{ ai_gen_id }} class="ai-tabbed-grid-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  {% if block.settings.heading != blank or block.settings.subheading != blank %}
+    <div class="ai-tabbed-grid-header-{{ ai_gen_id }}">
+      {% if block.settings.heading != blank %}
+        <h2 class="ai-tabbed-grid-heading-{{ ai_gen_id }}">{{ block.settings.heading }}</h2>
+      {% endif %}
+      {% if block.settings.subheading != blank %}
+        <p class="ai-tabbed-grid-subheading-{{ ai_gen_id }}">{{ block.settings.subheading }}</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <div class="ai-tabbed-grid-tabs-{{ ai_gen_id }}">
+    {% for i in (1..6) %}
+      {% liquid
+        assign tab_label_key = 'tab_' | append: i | append: '_label'
+        assign collection_key = 'tab_' | append: i | append: '_collection'
+        assign tab_label = block.settings[tab_label_key]
+        assign collection = block.settings[collection_key]
+      %}
+      {% if tab_label != blank and collection != blank %}
+        <button
+          class="ai-tabbed-grid-tab-{{ ai_gen_id }} {% if forloop.first %}active{% endif %}"
+          data-tab="{{ i }}"
+        >
+          {{ tab_label }}
+        </button>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  {% for i in (1..6) %}
+    {% liquid
+      assign tab_label_key = 'tab_' | append: i | append: '_label'
+      assign collection_key = 'tab_' | append: i | append: '_collection'
+      assign tab_label = block.settings[tab_label_key]
+      assign collection = block.settings[collection_key]
+    %}
+    {% if tab_label != blank and collection != blank %}
+      <div
+        class="ai-tabbed-grid-content-{{ ai_gen_id }} {% if forloop.first %}active{% endif %}"
+        data-content="{{ i }}"
+      >
+        {% if collection.products.size > 0 %}
+          <div class="ai-tabbed-grid-products-{{ ai_gen_id }}">
+            {% for product in collection.products %}
+              <div class="ai-tabbed-grid-card-{{ ai_gen_id }}">
+                <a href="{{ product.url }}">
+                  <div class="ai-tabbed-grid-image-wrapper-{{ ai_gen_id }}">
+                    {% if product.featured_image %}
+                      <img
+                        src="{{ product.featured_image | image_url: width: 600 }}"
+                        alt="{{ product.featured_image.alt | escape }}"
+                        class="ai-tabbed-grid-image-{{ ai_gen_id }}"
+                        loading="lazy"
+                        width="600"
+                        height="400"
+                      >
+                    {% else %}
+                      <div class="ai-tabbed-grid-image-placeholder-{{ ai_gen_id }}">
+                        {{ 'product-1' | placeholder_svg_tag }}
+                      </div>
+                    {% endif %}
+                  </div>
+                </a>
+                <div class="ai-tabbed-grid-info-{{ ai_gen_id }}">
+                  <h3 class="ai-tabbed-grid-title-{{ ai_gen_id }}">
+                    <a href="{{ product.url }}">{{ product.title }}</a>
+                  </h3>
+                  <p class="ai-tabbed-grid-price-{{ ai_gen_id }}">{{ product.price | money }}</p>
+                  <a href="{{ product.url }}" class="ai-tabbed-grid-button-{{ ai_gen_id }}">
+                    Add to Cart
+                  </a>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="ai-tabbed-grid-empty-{{ ai_gen_id }}">
+            No products found in this collection.
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% endfor %}
+</tabbed-product-grid-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class TabbedProductGrid{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+      }
+
+      connectedCallback() {
+        this.tabs = this.querySelectorAll('.ai-tabbed-grid-tab-{{ ai_gen_id }}');
+        this.contents = this.querySelectorAll('.ai-tabbed-grid-content-{{ ai_gen_id }}');
+        this.setupEventListeners();
+      }
+
+      setupEventListeners() {
+        this.tabs.forEach((tab) => {
+          tab.addEventListener('click', () => {
+            const tabId = tab.getAttribute('data-tab');
+            this.switchTab(tabId);
+          });
+        });
+      }
+
+      switchTab(tabId) {
+        this.tabs.forEach((tab) => {
+          if (tab.getAttribute('data-tab') === tabId) {
+            tab.classList.add('active');
+          } else {
+            tab.classList.remove('active');
+          }
+        });
+
+        this.contents.forEach((content) => {
+          if (content.getAttribute('data-content') === tabId) {
+            content.classList.add('active');
+          } else {
+            content.classList.remove('active');
+          }
+        });
+      }
+    }
+
+    customElements.define('tabbed-product-grid-{{ ai_gen_id }}', TabbedProductGrid{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Tabbed product grid",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Heading"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Shop by Region"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size",
+      "min": 16,
+      "max": 60,
+      "step": 2,
+      "unit": "px",
+      "default": 32
+    },
+    {
+      "type": "text",
+      "id": "subheading",
+      "label": "Subheading",
+      "default": "Explore our regional collections"
+    },
+    {
+      "type": "range",
+      "id": "subheading_size",
+      "label": "Subheading size",
+      "min": 12,
+      "max": 32,
+      "step": 2,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "select",
+      "id": "text_alignment",
+      "label": "Text alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "max_width",
+      "label": "Maximum width",
+      "min": 800,
+      "max": 1600,
+      "step": 100,
+      "unit": "px",
+      "default": 1200
+    },
+    {
+      "type": "range",
+      "id": "section_padding",
+      "label": "Section padding",
+      "min": 0,
+      "max": 100,
+      "step": 10,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_desktop",
+      "label": "Products per row (desktop)",
+      "min": 2,
+      "max": 12,
+      "step": 1,
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_mobile",
+      "label": "Products per row (mobile)",
+      "min": 1,
+      "max": 6,
+      "step": 1,
+      "default": 2
+    },
+    {
+      "type": "range",
+      "id": "grid_gap",
+      "label": "Grid gap",
+      "min": 8,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "header",
+      "content": "Tab 1"
+    },
+    {
+      "type": "text",
+      "id": "tab_1_label",
+      "label": "Tab label",
+      "default": "Asia"
+    },
+    {
+      "type": "collection",
+      "id": "tab_1_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 2"
+    },
+    {
+      "type": "text",
+      "id": "tab_2_label",
+      "label": "Tab label",
+      "default": "Europe"
+    },
+    {
+      "type": "collection",
+      "id": "tab_2_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 3"
+    },
+    {
+      "type": "text",
+      "id": "tab_3_label",
+      "label": "Tab label",
+      "default": "Global"
+    },
+    {
+      "type": "collection",
+      "id": "tab_3_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 4"
+    },
+    {
+      "type": "text",
+      "id": "tab_4_label",
+      "label": "Tab label",
+      "default": "Middle East"
+    },
+    {
+      "type": "collection",
+      "id": "tab_4_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 5"
+    },
+    {
+      "type": "text",
+      "id": "tab_5_label",
+      "label": "Tab label"
+    },
+    {
+      "type": "collection",
+      "id": "tab_5_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 6"
+    },
+    {
+      "type": "text",
+      "id": "tab_6_label",
+      "label": "Tab label"
+    },
+    {
+      "type": "collection",
+      "id": "tab_6_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab style"
+    },
+    {
+      "type": "color",
+      "id": "tab_text_color",
+      "label": "Text color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "tab_border_color",
+      "label": "Border color",
+      "default": "#cccccc"
+    },
+    {
+      "type": "color",
+      "id": "tab_hover_bg",
+      "label": "Hover background",
+      "default": "#f4f4f4"
+    },
+    {
+      "type": "color",
+      "id": "tab_hover_border",
+      "label": "Hover border",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_bg",
+      "label": "Active background",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_text",
+      "label": "Active text",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_border",
+      "label": "Active border",
+      "default": "#121212"
+    },
+    {
+      "type": "header",
+      "content": "Card style"
+    },
+    {
+      "type": "color",
+      "id": "card_bg_color",
+      "label": "Background",
+      "default": "#ffffff"
+    },
+    {
+      "type": "range",
+      "id": "card_border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 8
+    },
+    {
+      "type": "color",
+      "id": "price_color",
+      "label": "Price color",
+      "default": "#121212"
+    },
+    {
+      "type": "header",
+      "content": "Button style"
+    },
+    {
+      "type": "range",
+      "id": "button_font_size",
+      "label": "Font size",
+      "min": 10,
+      "max": 20,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "range",
+      "id": "button_font_weight",
+      "label": "Font weight",
+      "min": 400,
+      "max": 700,
+      "step": 100,
+      "default": 600
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "button_bg_color",
+      "label": "Background color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "button_border_color",
+      "label": "Border color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_text",
+      "label": "Hover text color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_bg",
+      "label": "Hover background",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_border",
+      "label": "Hover border",
+      "default": "#121212"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Tabbed product grid"
+    }
+  ]
+}
+{% endschema %}
