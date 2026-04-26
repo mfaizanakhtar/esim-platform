@@ -121,4 +121,10 @@ describe('parseShopifySku', () => {
   it('returns null for arbitrary string', () => {
     expect(parseShopifySku('SOME-RANDOM-SKU')).toBeNull();
   });
+
+  it('rejects unsupported type suffixes (only FIXED/DAYPASS allowed)', () => {
+    expect(parseShopifySku('SA-2GB-7D-TRIAL')).toBeNull();
+    expect(parseShopifySku('REGION-EU30-5GB-30D-BETA')).toBeNull();
+    expect(parseShopifySku('ESIM-EU-1GB-7D-CUSTOM')).toBeNull();
+  });
 });

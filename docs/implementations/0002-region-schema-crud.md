@@ -1,7 +1,7 @@
 # Region Schema + CRUD + Discovery + Templates + Mapping
 
 **ID:** 0002 · **Status:** shipped · **Owner:** faizanakh
-**Shipped:** 2026-04-26 · **PRs:** #226 (schema + CRUD), #227 (discovery), #228 (template generation), #_TBD_ (region-aware mapping)
+**Shipped:** 2026-04-26 · **PRs:** #226 (schema + CRUD), #227 (discovery), #228 (template generation), #229 (region-aware mapping)
 
 ## What it does
 
