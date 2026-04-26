@@ -1,0 +1,1856 @@
+{% doc %}
+  @prompt
+    Upgrade the existing regional eSIM tabbed product grid into a premium app-like shopping experience using a hybrid layout:
+    
+    MOBILE VIEW:
+    Use a Slide-Up Bottom Sheet instead of a centered popup modal.
+    
+    DESKTOP + TABLET VIEW:
+    Use a Right-Side Slide Drawer instead of a popup modal.
+    
+    Do NOT redirect users to the full product page when clicking “Choose Plan”.
+    The goal is a fast, premium, mobile-first app-like checkout experience with minimal friction and maximum conversion.
+    
+    IMPORTANT:
+    Keep the existing tabbed grid section exactly as it is (Asia, Europe, Global, Middle East tabs with product cards).
+    Only replace the current popup/modal experience with this new Bottom Sheet + Side Drawer hybrid system.
+    
+    ==================================================
+    SECTION REQUIREMENTS
+    ==================================================
+    
+    Each product card must contain:
+    - Country flag image
+    - Product title
+    - Starting price
+    - “Choose Plan” button
+    
+    Product image + Product title:
+    - Must be clickable links to the actual product page
+    
+    Choose Plan button:
+    - Must open Bottom Sheet on mobile
+    - Must open Right-Side Drawer on desktop
+    - Must NOT redirect to product page
+    
+    ==================================================
+    MOBILE UX — BOTTOM SHEET
+    ==================================================
+    
+    On mobile, clicking Choose Plan opens a smooth slide-up Bottom Sheet from the bottom of the screen.
+    
+    Requirements:
+    - Full-width bottom sheet
+    - Rounded top corners
+    - Drag handle at top
+    - Close button (X)
+    - Close on outside click
+    - Close on swipe down (if possible)
+    - Prevent background scrolling while open
+    - Smooth open/close animation
+    - Lightweight and fast loading
+    - Mobile-first optimized for travelers using limited mobile data
+    
+    ==================================================
+    DESKTOP UX — RIGHT SIDE DRAWER
+    ==================================================
+    
+    On desktop/tablet, clicking Choose Plan opens a smooth Right-Side Drawer.
+    
+    Requirements:
+    - Slide in from right side
+    - Width around 420–500px
+    - Full height
+    - Sticky/fixed panel
+    - Background page remains visible
+    - Close button (X)
+    - Close on outside click
+    - Smooth transition
+    - Premium minimal design
+    
+    ==================================================
+    INSIDE BOTTOM SHEET / DRAWER CONTENT
+    ==================================================
+    
+    TOP HEADER:
+    - Product flag image top-left
+    - Product title beside image
+    - Product price below title
+    - Close button top-right
+    
+    Theme editor settings for popup image:
+    - Popup image width
+    - Popup image height
+    - Popup image object-fit
+    - Popup image border radius
+    
+    --------------------------------------------------
+    
+    PRODUCT DESCRIPTION:
+    - Show clean short description
+    - No broken code
+    - No [object Object]
+    - No raw Liquid objects
+    - No JSON output
+    
+    Theme settings:
+    - Show/hide description
+    - Description placement:
+      - Above variants
+      - Below variants
+    - Max description height
+    
+    --------------------------------------------------
+    
+    VARIANT SELECTOR:
+    Map Shopify product options by option name:
+    
+    - “Plan Type” → Plan Type row
+    - “Validity” → Validity row
+    - “Volume” OR “Data” → Data row
+    
+    Display variants as premium selectable buttons:
+    
+    SELECTED:
+    - Black background
+    - White text
+    
+    AVAILABLE:
+    - White background
+    - Black border
+    
+    OUT OF STOCK:
+    - Greyed out
+    - Disabled
+    - Strikethrough text
+    
+    Examples:
+    
+    Plan Type:
+    - Day-Pass
+    - Total Data
+    
+    Validity:
+    - 1-Day
+    - 2-Days
+    - 3-Days
+    - 5-Days
+    - 7-Days
+    - 10-Days
+    - 15-Days
+    - 30-Days
+    
+    Volume:
+    - 1 GB
+    - 2 GB
+    - 3 GB
+    - 5 GB
+    - 10GB
+    - 15GB
+    - 20GB
+    - 30GB
+    
+    Requirements:
+    - Selecting options updates selected variant
+    - Selecting options updates live price
+    - Invalid combinations disabled automatically
+    - Out-of-stock variants disabled properly
+    - No broken labels like [object Object]
+    
+    --------------------------------------------------
+    
+    QUANTITY SELECTOR:
+    Inline quantity stepper:
+    
+    [-] [1] [+]
+    
+    Requirements:
+    - Minus button
+    - Number input
+    - Plus button
+    - Minimum quantity = 1
+    
+    --------------------------------------------------
+    
+    CTA BUTTONS:
+    
+    1. Add to Cart
+    - Full width
+    - Black background
+    - White text
+    - Use Shopify Ajax Cart API
+    - No page reload
+    
+    2. Buy Now
+    - Full width
+    - Blue/Navy background
+    - White text
+    - Add selected variant
+    - Redirect directly to checkout
+    
+    Fast + lightweight required
+    
+    --------------------------------------------------
+    
+    TRUST BADGES SECTION:
+    
+    Below buttons add premium trust badge section:
+    
+    Heading:
+    “Secure Checkout”
+    
+    4 badges default:
+    - Secure Payment
+    - SSL Encrypted
+    - Money Back
+    - Verified
+    
+    Theme settings:
+    - Show/hide trust badges
+    - Badge heading text
+    - Badge icons
+    - Badge text
+    - Badge background color
+    - Badge text color
+    
+    Fully customizable
+    
+    --------------------------------------------------
+    
+    REVIEWS:
+    
+    Theme settings:
+    - Show/hide reviews
+    - Reviews placement:
+      - Above variants
+      - Below variants
+      - Below buttons
+      - Hidden
+    
+    Use existing review app block only if available
+    Never show broken review code
+    
+    ==================================================
+    THEME EDITOR SETTINGS
+    ==================================================
+    
+    GRID CONTROLS:
+    - Desktop p
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-regional-esim-grid-{{ ai_gen_id }} {
+    display: block;
+    width: 100%;
+    padding: {{ block.settings.section_padding_top }}px 0 {{ block.settings.section_padding_bottom }}px;
+  }
+
+  .ai-regional-esim-container-{{ ai_gen_id }} {
+    max-width: {{ block.settings.container_width }}px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+
+  .ai-regional-esim-tabs-{{ ai_gen_id }} {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 32px;
+    border-bottom: 1px solid #e0e0e0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ai-regional-esim-tab-{{ ai_gen_id }} {
+    padding: 12px 24px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    color: #666;
+    white-space: nowrap;
+    transition: all 0.3s ease;
+  }
+
+  .ai-regional-esim-tab-{{ ai_gen_id }}.active {
+    color: {{ block.settings.tab_active_color }};
+    border-bottom-color: {{ block.settings.tab_active_color }};
+  }
+
+  .ai-regional-esim-tab-content-{{ ai_gen_id }} {
+    display: none;
+  }
+
+  .ai-regional-esim-tab-content-{{ ai_gen_id }}.active {
+    display: block;
+  }
+
+  .ai-regional-esim-products-grid-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: repeat({{ block.settings.products_per_row_desktop }}, 1fr);
+    gap: {{ block.settings.grid_gap }}px;
+  }
+
+  @media screen and (max-width: 749px) {
+    .ai-regional-esim-products-grid-{{ ai_gen_id }} {
+      grid-template-columns: repeat({{ block.settings.products_per_row_mobile }}, 1fr);
+    }
+  }
+
+  .ai-regional-esim-product-card-{{ ai_gen_id }} {
+    background: {{ block.settings.card_background }};
+    border: 1px solid {{ block.settings.card_border_color }};
+    border-radius: {{ block.settings.card_border_radius }}px;
+    padding: {{ block.settings.card_padding }}px;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .ai-regional-esim-product-card-{{ ai_gen_id }}:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  }
+
+  .ai-regional-esim-product-image-wrapper-{{ ai_gen_id }} {
+    position: relative;
+    margin-bottom: 12px;
+  }
+
+  .ai-regional-esim-product-flag-{{ ai_gen_id }} {
+    width: {{ block.settings.flag_width }}px;
+    height: {{ block.settings.flag_height }}px;
+    object-fit: {{ block.settings.flag_object_fit }};
+    border-radius: {{ block.settings.flag_border_radius }}px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .ai-regional-esim-product-title-{{ ai_gen_id }} {
+    font-size: {{ block.settings.product_title_size }}px;
+    font-weight: 600;
+    color: {{ block.settings.product_title_color }};
+    margin: 12px 0 8px;
+    text-align: center;
+    text-decoration: none;
+    display: block;
+  }
+
+  .ai-regional-esim-product-title-{{ ai_gen_id }}:hover {
+    color: {{ block.settings.tab_active_color }};
+  }
+
+  .ai-regional-esim-product-price-{{ ai_gen_id }} {
+    font-size: {{ block.settings.product_price_size }}px;
+    color: {{ block.settings.product_price_color }};
+    text-align: center;
+    margin-bottom: 12px;
+  }
+
+  .ai-regional-esim-choose-plan-btn-{{ ai_gen_id }} {
+    width: 100%;
+    padding: 12px 24px;
+    background-color: {{ block.settings.button_background }};
+    color: {{ block.settings.button_text_color }};
+    border: none;
+    border-radius: {{ block.settings.button_border_radius }}px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .ai-regional-esim-choose-plan-btn-{{ ai_gen_id }}:hover {
+    background-color: {{ block.settings.button_hover_background }};
+  }
+
+  .ai-regional-esim-overlay-{{ ai_gen_id }} {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 9998;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+
+  .ai-regional-esim-overlay-{{ ai_gen_id }}.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .ai-regional-esim-bottom-sheet-{{ ai_gen_id }} {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-height: 90vh;
+    background-color: {{ block.settings.drawer_background }};
+    border-radius: 20px 20px 0 0;
+    z-index: 9999;
+    transform: translateY(100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .ai-regional-esim-bottom-sheet-{{ ai_gen_id }}.active {
+    transform: translateY(0);
+  }
+
+  .ai-regional-esim-side-drawer-{{ ai_gen_id }} {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: {{ block.settings.drawer_width }}px;
+    max-width: 90vw;
+    height: 100%;
+    background-color: {{ block.settings.drawer_background }};
+    z-index: 9999;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    overflow-y: auto;
+    display: none;
+  }
+
+  .ai-regional-esim-side-drawer-{{ ai_gen_id }}.active {
+    transform: translateX(0);
+  }
+
+  @media screen and (max-width: 749px) {
+    .ai-regional-esim-bottom-sheet-{{ ai_gen_id }} {
+      display: block;
+    }
+  }
+
+  @media screen and (min-width: 750px) {
+    .ai-regional-esim-side-drawer-{{ ai_gen_id }} {
+      display: block;
+    }
+  }
+
+  .ai-regional-esim-drawer-handle-{{ ai_gen_id }} {
+    width: 40px;
+    height: 4px;
+    background-color: #d0d0d0;
+    border-radius: 2px;
+    margin: 12px auto;
+  }
+
+  .ai-regional-esim-drawer-content-{{ ai_gen_id }} {
+    padding: 24px;
+  }
+
+  .ai-regional-esim-drawer-header-{{ ai_gen_id }} {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+
+  .ai-regional-esim-drawer-flag-{{ ai_gen_id }} {
+    width: {{ block.settings.popup_image_width }}px;
+    height: {{ block.settings.popup_image_height }}px;
+    object-fit: {{ block.settings.popup_image_object_fit }};
+    border-radius: {{ block.settings.popup_image_border_radius }}px;
+    flex-shrink: 0;
+  }
+
+  .ai-regional-esim-drawer-info-{{ ai_gen_id }} {
+    flex-grow: 1;
+  }
+
+  .ai-regional-esim-drawer-title-{{ ai_gen_id }} {
+    font-size: 20px;
+    font-weight: 600;
+    color: {{ block.settings.drawer_text_color }};
+    margin: 0 0 8px;
+  }
+
+  .ai-regional-esim-drawer-price-{{ ai_gen_id }} {
+    font-size: 18px;
+    font-weight: 700;
+    color: {{ block.settings.tab_active_color }};
+  }
+
+  .ai-regional-esim-drawer-close-{{ ai_gen_id }} {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    color: {{ block.settings.drawer_text_color }};
+  }
+
+  .ai-regional-esim-drawer-close-{{ ai_gen_id }} svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .ai-regional-esim-description-{{ ai_gen_id }} {
+    margin-bottom: 24px;
+    color: {{ block.settings.drawer_text_color }};
+    font-size: 14px;
+    line-height: 1.6;
+    max-height: {{ block.settings.description_max_height }}px;
+    overflow-y: auto;
+  }
+
+  .ai-regional-esim-variants-{{ ai_gen_id }} {
+    margin-bottom: 24px;
+  }
+
+  .ai-regional-esim-variant-group-{{ ai_gen_id }} {
+    margin-bottom: 20px;
+  }
+
+  .ai-regional-esim-variant-label-{{ ai_gen_id }} {
+    font-size: 14px;
+    font-weight: 600;
+    color: {{ block.settings.drawer_text_color }};
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .ai-regional-esim-variant-options-{{ ai_gen_id }} {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ai-regional-esim-variant-option-{{ ai_gen_id }} {
+    padding: 10px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: {{ block.settings.variant_border_radius }}px;
+    background-color: #ffffff;
+    color: #121212;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .ai-regional-esim-variant-option-{{ ai_gen_id }}:hover:not(.disabled) {
+    border-color: {{ block.settings.tab_active_color }};
+  }
+
+  .ai-regional-esim-variant-option-{{ ai_gen_id }}.selected {
+    background-color: #121212;
+    color: #ffffff;
+    border-color: #121212;
+  }
+
+  .ai-regional-esim-variant-option-{{ ai_gen_id }}.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    text-decoration: line-through;
+  }
+
+  .ai-regional-esim-quantity-{{ ai_gen_id }} {
+    margin-bottom: 24px;
+  }
+
+  .ai-regional-esim-quantity-label-{{ ai_gen_id }} {
+    font-size: 14px;
+    font-weight: 600;
+    color: {{ block.settings.drawer_text_color }};
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  .ai-regional-esim-quantity-selector-{{ ai_gen_id }} {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 150px;
+  }
+
+  .ai-regional-esim-quantity-btn-{{ ai_gen_id }} {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background-color: #ffffff;
+    color: #121212;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease;
+  }
+
+  .ai-regional-esim-quantity-btn-{{ ai_gen_id }}:hover:not(:disabled) {
+    background-color: #f0f0f0;
+  }
+
+  .ai-regional-esim-quantity-btn-{{ ai_gen_id }}:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .ai-regional-esim-quantity-input-{{ ai_gen_id }} {
+    width: 50px;
+    height: 36px;
+    text-align: center;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .ai-regional-esim-cta-buttons-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .ai-regional-esim-add-to-cart-btn-{{ ai_gen_id }},
+  .ai-regional-esim-buy-now-btn-{{ ai_gen_id }} {
+    width: 100%;
+    padding: 16px 24px;
+    border: none;
+    border-radius: {{ block.settings.button_border_radius }}px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+
+  .ai-regional-esim-add-to-cart-btn-{{ ai_gen_id }} {
+    background-color: #121212;
+    color: #ffffff;
+  }
+
+  .ai-regional-esim-add-to-cart-btn-{{ ai_gen_id }}:hover {
+    background-color: #000000;
+  }
+
+  .ai-regional-esim-buy-now-btn-{{ ai_gen_id }} {
+    background-color: {{ block.settings.buy_now_background }};
+    color: #ffffff;
+  }
+
+  .ai-regional-esim-buy-now-btn-{{ ai_gen_id }}:hover {
+    background-color: {{ block.settings.buy_now_hover_background }};
+  }
+
+  .ai-regional-esim-trust-badges-{{ ai_gen_id }} {
+    padding: 20px;
+    background-color: {{ block.settings.trust_badge_background }};
+    border-radius: 8px;
+    margin-bottom: 24px;
+  }
+
+  .ai-regional-esim-trust-heading-{{ ai_gen_id }} {
+    font-size: 16px;
+    font-weight: 600;
+    color: {{ block.settings.trust_badge_text_color }};
+    margin-bottom: 16px;
+    text-align: center;
+  }
+
+  .ai-regional-esim-trust-items-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .ai-regional-esim-trust-item-{{ ai_gen_id }} {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: {{ block.settings.trust_badge_text_color }};
+  }
+
+  .ai-regional-esim-trust-icon-{{ ai_gen_id }} {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+
+  .ai-regional-esim-loading-{{ ai_gen_id }} {
+    display: none;
+    text-align: center;
+    padding: 20px;
+    color: {{ block.settings.drawer_text_color }};
+  }
+
+  .ai-regional-esim-error-{{ ai_gen_id }} {
+    display: none;
+    padding: 12px;
+    background-color: #fee;
+    color: #c00;
+    border-radius: 4px;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+{% endstyle %}
+
+<regional-esim-grid-{{ ai_gen_id }} class="ai-regional-esim-grid-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  <div class="ai-regional-esim-container-{{ ai_gen_id }}">
+    <div class="ai-regional-esim-tabs-{{ ai_gen_id }}">
+      {% if block.settings.show_asia_tab %}
+        <button class="ai-regional-esim-tab-{{ ai_gen_id }} active" data-tab="asia">
+          {{ block.settings.asia_tab_label }}
+        </button>
+      {% endif %}
+      {% if block.settings.show_europe_tab %}
+        <button class="ai-regional-esim-tab-{{ ai_gen_id }}" data-tab="europe">
+          {{ block.settings.europe_tab_label }}
+        </button>
+      {% endif %}
+      {% if block.settings.show_global_tab %}
+        <button class="ai-regional-esim-tab-{{ ai_gen_id }}" data-tab="global">
+          {{ block.settings.global_tab_label }}
+        </button>
+      {% endif %}
+      {% if block.settings.show_middle_east_tab %}
+        <button class="ai-regional-esim-tab-{{ ai_gen_id }}" data-tab="middle-east">
+          {{ block.settings.middle_east_tab_label }}
+        </button>
+      {% endif %}
+    </div>
+
+    {% if block.settings.show_asia_tab %}
+      <div class="ai-regional-esim-tab-content-{{ ai_gen_id }} active" data-content="asia">
+        <div class="ai-regional-esim-products-grid-{{ ai_gen_id }}">
+          {% if block.settings.asia_collection != blank %}
+            {% for product in block.settings.asia_collection.products limit: block.settings.products_limit %}
+              <div class="ai-regional-esim-product-card-{{ ai_gen_id }}">
+                <div class="ai-regional-esim-product-image-wrapper-{{ ai_gen_id }}">
+                  <a href="{{ product.url }}">
+                    {% if product.featured_image %}
+                      <img
+                        src="{{ product.featured_image | image_url: width: 400 }}"
+                        alt="{{ product.featured_image.alt | escape }}"
+                        class="ai-regional-esim-product-flag-{{ ai_gen_id }}"
+                        loading="lazy"
+                        width="400"
+                        height="300"
+                      >
+                    {% endif %}
+                  </a>
+                </div>
+                <a href="{{ product.url }}" class="ai-regional-esim-product-title-{{ ai_gen_id }}">
+                  {{ product.title }}
+                </a>
+                <div class="ai-regional-esim-product-price-{{ ai_gen_id }}">
+                  From {{ product.price | money }}
+                </div>
+                <button
+                  class="ai-regional-esim-choose-plan-btn-{{ ai_gen_id }}"
+                  data-product-id="{{ product.id }}"
+                  data-product-handle="{{ product.handle }}"
+                >
+                  {{ block.settings.choose_plan_button_text }}
+                </button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if block.settings.show_europe_tab %}
+      <div class="ai-regional-esim-tab-content-{{ ai_gen_id }}" data-content="europe">
+        <div class="ai-regional-esim-products-grid-{{ ai_gen_id }}">
+          {% if block.settings.europe_collection != blank %}
+            {% for product in block.settings.europe_collection.products limit: block.settings.products_limit %}
+              <div class="ai-regional-esim-product-card-{{ ai_gen_id }}">
+                <div class="ai-regional-esim-product-image-wrapper-{{ ai_gen_id }}">
+                  <a href="{{ product.url }}">
+                    {% if product.featured_image %}
+                      <img
+                        src="{{ product.featured_image | image_url: width: 400 }}"
+                        alt="{{ product.featured_image.alt | escape }}"
+                        class="ai-regional-esim-product-flag-{{ ai_gen_id }}"
+                        loading="lazy"
+                        width="400"
+                        height="300"
+                      >
+                    {% endif %}
+                  </a>
+                </div>
+                <a href="{{ product.url }}" class="ai-regional-esim-product-title-{{ ai_gen_id }}">
+                  {{ product.title }}
+                </a>
+                <div class="ai-regional-esim-product-price-{{ ai_gen_id }}">
+                  From {{ product.price | money }}
+                </div>
+                <button
+                  class="ai-regional-esim-choose-plan-btn-{{ ai_gen_id }}"
+                  data-product-id="{{ product.id }}"
+                  data-product-handle="{{ product.handle }}"
+                >
+                  {{ block.settings.choose_plan_button_text }}
+                </button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if block.settings.show_global_tab %}
+      <div class="ai-regional-esim-tab-content-{{ ai_gen_id }}" data-content="global">
+        <div class="ai-regional-esim-products-grid-{{ ai_gen_id }}">
+          {% if block.settings.global_collection != blank %}
+            {% for product in block.settings.global_collection.products limit: block.settings.products_limit %}
+              <div class="ai-regional-esim-product-card-{{ ai_gen_id }}">
+                <div class="ai-regional-esim-product-image-wrapper-{{ ai_gen_id }}">
+                  <a href="{{ product.url }}">
+                    {% if product.featured_image %}
+                      <img
+                        src="{{ product.featured_image | image_url: width: 400 }}"
+                        alt="{{ product.featured_image.alt | escape }}"
+                        class="ai-regional-esim-product-flag-{{ ai_gen_id }}"
+                        loading="lazy"
+                        width="400"
+                        height="300"
+                      >
+                    {% endif %}
+                  </a>
+                </div>
+                <a href="{{ product.url }}" class="ai-regional-esim-product-title-{{ ai_gen_id }}">
+                  {{ product.title }}
+                </a>
+                <div class="ai-regional-esim-product-price-{{ ai_gen_id }}">
+                  From {{ product.price | money }}
+                </div>
+                <button
+                  class="ai-regional-esim-choose-plan-btn-{{ ai_gen_id }}"
+                  data-product-id="{{ product.id }}"
+                  data-product-handle="{{ product.handle }}"
+                >
+                  {{ block.settings.choose_plan_button_text }}
+                </button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if block.settings.show_middle_east_tab %}
+      <div class="ai-regional-esim-tab-content-{{ ai_gen_id }}" data-content="middle-east">
+        <div class="ai-regional-esim-products-grid-{{ ai_gen_id }}">
+          {% if block.settings.middle_east_collection != blank %}
+            {% for product in block.settings.middle_east_collection.products limit: block.settings.products_limit %}
+              <div class="ai-regional-esim-product-card-{{ ai_gen_id }}">
+                <div class="ai-regional-esim-product-image-wrapper-{{ ai_gen_id }}">
+                  <a href="{{ product.url }}">
+                    {% if product.featured_image %}
+                      <img
+                        src="{{ product.featured_image | image_url: width: 400 }}"
+                        alt="{{ product.featured_image.alt | escape }}"
+                        class="ai-regional-esim-product-flag-{{ ai_gen_id }}"
+                        loading="lazy"
+                        width="400"
+                        height="300"
+                      >
+                    {% endif %}
+                  </a>
+                </div>
+                <a href="{{ product.url }}" class="ai-regional-esim-product-title-{{ ai_gen_id }}">
+                  {{ product.title }}
+                </a>
+                <div class="ai-regional-esim-product-price-{{ ai_gen_id }}">
+                  From {{ product.price | money }}
+                </div>
+                <button
+                  class="ai-regional-esim-choose-plan-btn-{{ ai_gen_id }}"
+                  data-product-id="{{ product.id }}"
+                  data-product-handle="{{ product.handle }}"
+                >
+                  {{ block.settings.choose_plan_button_text }}
+                </button>
+              </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="ai-regional-esim-overlay-{{ ai_gen_id }}"></div>
+
+  <div class="ai-regional-esim-bottom-sheet-{{ ai_gen_id }}">
+    <div class="ai-regional-esim-drawer-handle-{{ ai_gen_id }}"></div>
+    <div class="ai-regional-esim-drawer-content-{{ ai_gen_id }}">
+      <div class="ai-regional-esim-loading-{{ ai_gen_id }}">Loading...</div>
+      <div class="ai-regional-esim-error-{{ ai_gen_id }}"></div>
+      <div class="ai-regional-esim-product-details-{{ ai_gen_id }}"></div>
+    </div>
+  </div>
+
+  <div class="ai-regional-esim-side-drawer-{{ ai_gen_id }}">
+    <div class="ai-regional-esim-drawer-content-{{ ai_gen_id }}">
+      <div class="ai-regional-esim-loading-{{ ai_gen_id }}">Loading...</div>
+      <div class="ai-regional-esim-error-{{ ai_gen_id }}"></div>
+      <div class="ai-regional-esim-product-details-{{ ai_gen_id }}"></div>
+    </div>
+  </div>
+</regional-esim-grid-{{ ai_gen_id }}>
+
+<script>
+(function() {
+  class RegionalEsimGrid{{ ai_gen_id }} extends HTMLElement {
+    constructor() {
+      super();
+      this.tabs = this.querySelectorAll('.ai-regional-esim-tab-{{ ai_gen_id }}');
+      this.tabContents = this.querySelectorAll('.ai-regional-esim-tab-content-{{ ai_gen_id }}');
+      this.choosePlanButtons = this.querySelectorAll('.ai-regional-esim-choose-plan-btn-{{ ai_gen_id }}');
+      this.overlay = this.querySelector('.ai-regional-esim-overlay-{{ ai_gen_id }}');
+      this.bottomSheet = this.querySelector('.ai-regional-esim-bottom-sheet-{{ ai_gen_id }}');
+      this.sideDrawer = this.querySelector('.ai-regional-esim-side-drawer-{{ ai_gen_id }}');
+      this.currentProduct = null;
+      this.selectedVariant = null;
+      this.quantity = 1;
+      this.showDescription = {{ block.settings.show_description }};
+      this.descriptionPlacement = '{{ block.settings.description_placement }}';
+      this.showTrustBadges = {{ block.settings.show_trust_badges }};
+    }
+
+    connectedCallback() {
+      this.setupTabs();
+      this.setupChoosePlanButtons();
+      this.setupOverlay();
+      this.preventBodyScroll();
+    }
+
+    setupTabs() {
+      this.tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          this.tabs.forEach(t => t.classList.remove('active'));
+          this.tabContents.forEach(c => c.classList.remove('active'));
+          tab.classList.add('active');
+          const tabName = tab.getAttribute('data-tab');
+          const content = this.querySelector(`[data-content="${tabName}"]`);
+          if (content) {
+            content.classList.add('active');
+          }
+        });
+      });
+    }
+
+    setupChoosePlanButtons() {
+      this.choosePlanButtons.forEach(button => {
+        button.addEventListener('click', async (e) => {
+          const productHandle = button.getAttribute('data-product-handle');
+          await this.openDrawer(productHandle);
+        });
+      });
+    }
+
+    setupOverlay() {
+      this.overlay.addEventListener('click', () => {
+        this.closeDrawer();
+      });
+    }
+
+    async openDrawer(productHandle) {
+      this.overlay.classList.add('active');
+      const drawer = window.innerWidth < 750 ? this.bottomSheet : this.sideDrawer;
+      drawer.classList.add('active');
+      document.body.style.overflow = 'hidden';
+
+      const loadingEl = drawer.querySelector('.ai-regional-esim-loading-{{ ai_gen_id }}');
+      const errorEl = drawer.querySelector('.ai-regional-esim-error-{{ ai_gen_id }}');
+      const detailsEl = drawer.querySelector('.ai-regional-esim-product-details-{{ ai_gen_id }}');
+
+      loadingEl.style.display = 'block';
+      errorEl.style.display = 'none';
+      detailsEl.innerHTML = '';
+
+      try {
+        const response = await fetch(`/products/${productHandle}.js`);
+        const product = await response.json();
+        this.currentProduct = product;
+        this.selectedVariant = product.variants.find(v => v.available) || product.variants[0];
+        this.quantity = 1;
+        this.renderProductDetails(detailsEl);
+        loadingEl.style.display = 'none';
+      } catch (error) {
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        errorEl.textContent = 'Failed to load product details. Please try again.';
+      }
+    }
+
+    closeDrawer() {
+      this.overlay.classList.remove('active');
+      this.bottomSheet.classList.remove('active');
+      this.sideDrawer.classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    renderProductDetails(container) {
+      const product = this.currentProduct;
+      const variant = this.selectedVariant;
+
+      let html = `
+        <div class="ai-regional-esim-drawer-header-{{ ai_gen_id }}">
+          <img
+            src="${product.featured_image}"
+            alt="${product.title}"
+            class="ai-regional-esim-drawer-flag-{{ ai_gen_id }}"
+          >
+          <div class="ai-regional-esim-drawer-info-{{ ai_gen_id }}">
+            <h2 class="ai-regional-esim-drawer-title-{{ ai_gen_id }}">${product.title}</h2>
+            <div class="ai-regional-esim-drawer-price-{{ ai_gen_id }}" data-price-display>
+              ${this.formatMoney(variant.price)}
+            </div>
+          </div>
+          <button class="ai-regional-esim-drawer-close-{{ ai_gen_id }}" aria-label="Close">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      `;
+
+      if (this.showDescription && this.descriptionPlacement === 'above_variants' && product.description) {
+        html += `
+          <div class="ai-regional-esim-description-{{ ai_gen_id }}">
+            ${product.description}
+          </div>
+        `;
+      }
+
+      html += this.renderVariants(product);
+
+      if (this.showDescription && this.descriptionPlacement === 'below_variants' && product.description) {
+        html += `
+          <div class="ai-regional-esim-description-{{ ai_gen_id }}">
+            ${product.description}
+          </div>
+        `;
+      }
+
+      html += `
+        <div class="ai-regional-esim-quantity-{{ ai_gen_id }}">
+          <label class="ai-regional-esim-quantity-label-{{ ai_gen_id }}">Quantity</label>
+          <div class="ai-regional-esim-quantity-selector-{{ ai_gen_id }}">
+            <button class="ai-regional-esim-quantity-btn-{{ ai_gen_id }}" data-quantity-decrease ${this.quantity <= 1 ? 'disabled' : ''}>−</button>
+            <input
+              type="number"
+              class="ai-regional-esim-quantity-input-{{ ai_gen_id }}"
+              value="${this.quantity}"
+              min="1"
+              data-quantity-input
+            >
+            <button class="ai-regional-esim-quantity-btn-{{ ai_gen_id }}" data-quantity-increase>+</button>
+          </div>
+        </div>
+
+        <div class="ai-regional-esim-cta-buttons-{{ ai_gen_id }}">
+          <button class="ai-regional-esim-add-to-cart-btn-{{ ai_gen_id }}" data-add-to-cart>
+            Add to Cart
+          </button>
+          <button class="ai-regional-esim-buy-now-btn-{{ ai_gen_id }}" data-buy-now>
+            Buy Now
+          </button>
+        </div>
+      `;
+
+      if (this.showTrustBadges) {
+        html += `
+          <div class="ai-regional-esim-trust-badges-{{ ai_gen_id }}">
+            <div class="ai-regional-esim-trust-heading-{{ ai_gen_id }}">{{ block.settings.trust_badge_heading }}</div>
+            <div class="ai-regional-esim-trust-items-{{ ai_gen_id }}">
+              <div class="ai-regional-esim-trust-item-{{ ai_gen_id }}">
+                <svg class="ai-regional-esim-trust-icon-{{ ai_gen_id }}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                <span>{{ block.settings.trust_badge_1_text }}</span>
+              </div>
+              <div class="ai-regional-esim-trust-item-{{ ai_gen_id }}">
+                <svg class="ai-regional-esim-trust-icon-{{ ai_gen_id }}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <span>{{ block.settings.trust_badge_2_text }}</span>
+              </div>
+              <div class="ai-regional-esim-trust-item-{{ ai_gen_id }}">
+                <svg class="ai-regional-esim-trust-icon-{{ ai_gen_id }}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span>{{ block.settings.trust_badge_3_text }}</span>
+              </div>
+              <div class="ai-regional-esim-trust-item-{{ ai_gen_id }}">
+                <svg class="ai-regional-esim-trust-icon-{{ ai_gen_id }}" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                <span>{{ block.settings.trust_badge_4_text }}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+      this.attachDrawerEventListeners(container);
+    }
+
+    renderVariants(product) {
+      const options = {};
+      product.options.forEach((option, index) => {
+        const optionName = option.name || option;
+        options[optionName] = {
+          position: index + 1,
+          values: []
+        };
+      });
+
+      product.variants.forEach(variant => {
+        variant.options.forEach((value, index) => {
+          const optionName = product.options[index].name || product.options[index];
+          if (!options[optionName].values.includes(value)) {
+            options[optionName].values.push(value);
+          }
+        });
+      });
+
+      let html = '<div class="ai-regional-esim-variants-{{ ai_gen_id }}">';
+
+      Object.keys(options).forEach(optionName => {
+        const normalizedName = optionName.toLowerCase();
+        let displayName = optionName;
+
+        if (normalizedName.includes('plan')) {
+          displayName = 'Plan Type';
+        } else if (normalizedName.includes('validity')) {
+          displayName = 'Validity';
+        } else if (normalizedName.includes('volume') || normalizedName.includes('data')) {
+          displayName = 'Data';
+        }
+
+        html += `
+          <div class="ai-regional-esim-variant-group-{{ ai_gen_id }}">
+            <label class="ai-regional-esim-variant-label-{{ ai_gen_id }}">${displayName}</label>
+            <div class="ai-regional-esim-variant-options-{{ ai_gen_id }}" data-option-name="${optionName}">
+        `;
+
+        options[optionName].values.forEach(value => {
+          const isSelected = this.selectedVariant[`option${options[optionName].position}`] === value;
+          const isAvailable = this.isOptionAvailable(product, optionName, value);
+          const classes = ['ai-regional-esim-variant-option-{{ ai_gen_id }}'];
+          if (isSelected) classes.push('selected');
+          if (!isAvailable) classes.push('disabled');
+
+          html += `
+            <button
+              class="${classes.join(' ')}"
+              data-option-value="${value}"
+              ${!isAvailable ? 'disabled' : ''}
+            >
+              ${value}
+            </button>
+          `;
+        });
+
+        html += `
+            </div>
+          </div>
+        `;
+      });
+
+      html += '</div>';
+      return html;
+    }
+
+    isOptionAvailable(product, optionName, value) {
+      const currentOptions = {};
+      product.options.forEach((opt, idx) => {
+        const name = opt.name || opt;
+        currentOptions[name] = this.selectedVariant[`option${idx + 1}`];
+      });
+
+      currentOptions[optionName] = value;
+
+      return product.variants.some(variant => {
+        return product.options.every((opt, idx) => {
+          const name = opt.name || opt;
+          return variant[`option${idx + 1}`] === currentOptions[name];
+        }) && variant.available;
+      });
+    }
+
+    attachDrawerEventListeners(container) {
+      const closeBtn = container.querySelector('.ai-regional-esim-drawer-close-{{ ai_gen_id }}');
+      closeBtn.addEventListener('click', () => this.closeDrawer());
+
+      const variantOptions = container.querySelectorAll('.ai-regional-esim-variant-option-{{ ai_gen_id }}');
+      variantOptions.forEach(option => {
+        option.addEventListener('click', (e) => {
+          if (option.classList.contains('disabled')) return;
+
+          const optionGroup = option.closest('[data-option-name]');
+          const optionName = optionGroup.getAttribute('data-option-name');
+          const value = option.getAttribute('data-option-value');
+
+          this.updateSelectedVariant(optionName, value);
+          this.renderProductDetails(container);
+        });
+      });
+
+      const decreaseBtn = container.querySelector('[data-quantity-decrease]');
+      const increaseBtn = container.querySelector('[data-quantity-increase]');
+      const quantityInput = container.querySelector('[data-quantity-input]');
+
+      decreaseBtn.addEventListener('click', () => {
+        if (this.quantity > 1) {
+          this.quantity--;
+          quantityInput.value = this.quantity;
+          decreaseBtn.disabled = this.quantity <= 1;
+        }
+      });
+
+      increaseBtn.addEventListener('click', () => {
+        this.quantity++;
+        quantityInput.value = this.quantity;
+        decreaseBtn.disabled = false;
+      });
+
+      quantityInput.addEventListener('change', (e) => {
+        const value = parseInt(e.target.value);
+        if (value >= 1) {
+          this.quantity = value;
+          decreaseBtn.disabled = this.quantity <= 1;
+        } else {
+          this.quantity = 1;
+          quantityInput.value = 1;
+        }
+      });
+
+      const addToCartBtn = container.querySelector('[data-add-to-cart]');
+      addToCartBtn.addEventListener('click', () => this.addToCart());
+
+      const buyNowBtn = container.querySelector('[data-buy-now]');
+      buyNowBtn.addEventListener('click', () => this.buyNow());
+    }
+
+    updateSelectedVariant(optionName, value) {
+      const product = this.currentProduct;
+      const optionIndex = product.options.findIndex(opt => {
+        const name = opt.name || opt;
+        return name === optionName;
+      });
+
+      const newOptions = {};
+      product.options.forEach((opt, idx) => {
+        const name = opt.name || opt;
+        if (idx === optionIndex) {
+          newOptions[`option${idx + 1}`] = value;
+        } else {
+          newOptions[`option${idx + 1}`] = this.selectedVariant[`option${idx + 1}`];
+        }
+      });
+
+      const matchingVariant = product.variants.find(variant => {
+        return Object.keys(newOptions).every(key => variant[key] === newOptions[key]);
+      });
+
+      if (matchingVariant) {
+        this.selectedVariant = matchingVariant;
+      }
+    }
+
+    async addToCart() {
+      try {
+        const formData = {
+          items: [{
+            id: this.selectedVariant.id,
+            quantity: this.quantity
+          }]
+        };
+
+        const response = await fetch('/cart/add.js', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData)
+        });
+
+        if (response.ok) {
+          this.closeDrawer();
+          window.dispatchEvent(new Event('cart:refresh'));
+        }
+      } catch (error) {
+        console.error('Error adding to cart:', error);
+      }
+    }
+
+    async buyNow() {
+      try {
+        const formData = {
+          items: [{
+            id: this.selectedVariant.id,
+            quantity: this.quantity
+          }]
+        };
+
+        const response = await fetch('/cart/add.js', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData)
+        });
+
+        if (response.ok) {
+          window.location.href = '/checkout';
+        }
+      } catch (error) {
+        console.error('Error with buy now:', error);
+      }
+    }
+
+    formatMoney(cents) {
+      const amount = cents / 100;
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: '{{ cart.currency.iso_code }}',
+      }).format(amount);
+    }
+
+    preventBodyScroll() {
+      let startY = 0;
+      const drawer = window.innerWidth < 750 ? this.bottomSheet : this.sideDrawer;
+
+      drawer.addEventListener('touchstart', (e) => {
+        startY = e.touches[0].clientY;
+      });
+
+      drawer.addEventListener('touchmove', (e) => {
+        const currentY = e.touches[0].clientY;
+        const scrollTop = drawer.scrollTop;
+        const isAtTop = scrollTop === 0;
+        const isScrollingUp = currentY > startY;
+
+        if (isAtTop && isScrollingUp) {
+          e.preventDefault();
+        }
+      }, { passive: false });
+    }
+  }
+
+  customElements.define('regional-esim-grid-{{ ai_gen_id }}', RegionalEsimGrid{{ ai_gen_id }});
+})();
+</script>
+
+{% schema %}
+{
+  "name": "Regional eSIM grid",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "container_width",
+      "label": "Container width",
+      "min": 1000,
+      "max": 1600,
+      "step": 100,
+      "unit": "px",
+      "default": 1200
+    },
+    {
+      "type": "range",
+      "id": "section_padding_top",
+      "label": "Padding top",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "range",
+      "id": "section_padding_bottom",
+      "label": "Padding bottom",
+      "min": 0,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 40
+    },
+    {
+      "type": "header",
+      "content": "Tabs"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_asia_tab",
+      "label": "Show Asia tab",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "asia_tab_label",
+      "label": "Asia tab label",
+      "default": "Asia"
+    },
+    {
+      "type": "collection",
+      "id": "asia_collection",
+      "label": "Asia collection"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_europe_tab",
+      "label": "Show Europe tab",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "europe_tab_label",
+      "label": "Europe tab label",
+      "default": "Europe"
+    },
+    {
+      "type": "collection",
+      "id": "europe_collection",
+      "label": "Europe collection"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_global_tab",
+      "label": "Show Global tab",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "global_tab_label",
+      "label": "Global tab label",
+      "default": "Global"
+    },
+    {
+      "type": "collection",
+      "id": "global_collection",
+      "label": "Global collection"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_middle_east_tab",
+      "label": "Show Middle East tab",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "middle_east_tab_label",
+      "label": "Middle East tab label",
+      "default": "Middle East"
+    },
+    {
+      "type": "collection",
+      "id": "middle_east_collection",
+      "label": "Middle East collection"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_color",
+      "label": "Active tab color",
+      "default": "#334fb4"
+    },
+    {
+      "type": "header",
+      "content": "Product grid"
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_desktop",
+      "label": "Products per row (desktop)",
+      "min": 2,
+      "max": 12,
+      "step": 1,
+      "default": 12
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_mobile",
+      "label": "Products per row (mobile)",
+      "min": 1,
+      "max": 6,
+      "step": 1,
+      "default": 6
+    },
+    {
+      "type": "range",
+      "id": "products_limit",
+      "label": "Maximum products to show",
+      "min": 4,
+      "max": 50,
+      "step": 1,
+      "default": 24
+    },
+    {
+      "type": "range",
+      "id": "grid_gap",
+      "label": "Grid gap",
+      "min": 8,
+      "max": 40,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "header",
+      "content": "Product cards"
+    },
+    {
+      "type": "color",
+      "id": "card_background",
+      "label": "Card background",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "card_border_color",
+      "label": "Card border color",
+      "default": "#e0e0e0"
+    },
+    {
+      "type": "range",
+      "id": "card_border_radius",
+      "label": "Card border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 8
+    },
+    {
+      "type": "range",
+      "id": "card_padding",
+      "label": "Card padding",
+      "min": 8,
+      "max": 32,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "header",
+      "content": "Flag image"
+    },
+    {
+      "type": "range",
+      "id": "flag_width",
+      "label": "Flag width",
+      "min": 40,
+      "max": 200,
+      "step": 10,
+      "unit": "px",
+      "default": 80
+    },
+    {
+      "type": "range",
+      "id": "flag_height",
+      "label": "Flag height",
+      "min": 30,
+      "max": 150,
+      "step": 10,
+      "unit": "px",
+      "default": 60
+    },
+    {
+      "type": "select",
+      "id": "flag_object_fit",
+      "label": "Flag object fit",
+      "options": [
+        { "value": "contain", "label": "Contain" },
+        { "value": "cover", "label": "Cover" },
+        { "value": "fill", "label": "Fill" }
+      ],
+      "default": "contain"
+    },
+    {
+      "type": "range",
+      "id": "flag_border_radius",
+      "label": "Flag border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Product text"
+    },
+    {
+      "type": "range",
+      "id": "product_title_size",
+      "label": "Title size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "color",
+      "id": "product_title_color",
+      "label": "Title color",
+      "default": "#121212"
+    },
+    {
+      "type": "range",
+      "id": "product_price_size",
+      "label": "Price size",
+      "min": 12,
+      "max": 20,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "color",
+      "id": "product_price_color",
+      "label": "Price color",
+      "default": "#666666"
+    },
+    {
+      "type": "header",
+      "content": "Choose plan button"
+    },
+    {
+      "type": "text",
+      "id": "choose_plan_button_text",
+      "label": "Button text",
+      "default": "Choose Plan"
+    },
+    {
+      "type": "color",
+      "id": "button_background",
+      "label": "Button background",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_background",
+      "label": "Button hover background",
+      "default": "#000000"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Button text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "range",
+      "id": "button_border_radius",
+      "label": "Button border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Drawer settings"
+    },
+    {
+      "type": "range",
+      "id": "drawer_width",
+      "label": "Drawer width (desktop)",
+      "min": 350,
+      "max": 600,
+      "step": 10,
+      "unit": "px",
+      "default": 460
+    },
+    {
+      "type": "color",
+      "id": "drawer_background",
+      "label": "Drawer background",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "drawer_text_color",
+      "label": "Drawer text color",
+      "default": "#121212"
+    },
+    {
+      "type": "header",
+      "content": "Popup image"
+    },
+    {
+      "type": "range",
+      "id": "popup_image_width",
+      "label": "Image width",
+      "min": 40,
+      "max": 120,
+      "step": 10,
+      "unit": "px",
+      "default": 80
+    },
+    {
+      "type": "range",
+      "id": "popup_image_height",
+      "label": "Image height",
+      "min": 30,
+      "max": 100,
+      "step": 10,
+      "unit": "px",
+      "default": 60
+    },
+    {
+      "type": "select",
+      "id": "popup_image_object_fit",
+      "label": "Image object fit",
+      "options": [
+        { "value": "contain", "label": "Contain" },
+        { "value": "cover", "label": "Cover" },
+        { "value": "fill", "label": "Fill" }
+      ],
+      "default": "contain"
+    },
+    {
+      "type": "range",
+      "id": "popup_image_border_radius",
+      "label": "Image border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Description"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_description",
+      "label": "Show description",
+      "default": true
+    },
+    {
+      "type": "select",
+      "id": "description_placement",
+      "label": "Description placement",
+      "options": [
+        { "value": "above_variants", "label": "Above variants" },
+        { "value": "below_variants", "label": "Below variants" }
+      ],
+      "default": "above_variants"
+    },
+    {
+      "type": "range",
+      "id": "description_max_height",
+      "label": "Max description height",
+      "min": 100,
+      "max": 400,
+      "step": 20,
+      "unit": "px",
+      "default": 200
+    },
+    {
+      "type": "header",
+      "content": "Variant buttons"
+    },
+    {
+      "type": "range",
+      "id": "variant_border_radius",
+      "label": "Variant border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Buy now button"
+    },
+    {
+      "type": "color",
+      "id": "buy_now_background",
+      "label": "Buy now background",
+      "default": "#334fb4"
+    },
+    {
+      "type": "color",
+      "id": "buy_now_hover_background",
+      "label": "Buy now hover background",
+      "default": "#2a3d8f"
+    },
+    {
+      "type": "header",
+      "content": "Trust badges"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_trust_badges",
+      "label": "Show trust badges",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "trust_badge_heading",
+      "label": "Heading",
+      "default": "Secure Checkout"
+    },
+    {
+      "type": "color",
+      "id": "trust_badge_background",
+      "label": "Background",
+      "default": "#f9f9f9"
+    },
+    {
+      "type": "color",
+      "id": "trust_badge_text_color",
+      "label": "Text color",
+      "default": "#121212"
+    },
+    {
+      "type": "text",
+      "id": "trust_badge_1_text",
+      "label": "Badge 1 text",
+      "default": "Secure Payment"
+    },
+    {
+      "type": "text",
+      "id": "trust_badge_2_text",
+      "label": "Badge 2 text",
+      "default": "SSL Encrypted"
+    },
+    {
+      "type": "text",
+      "id": "trust_badge_3_text",
+      "label": "Badge 3 text",
+      "default": "Money Back"
+    },
+    {
+      "type": "text",
+      "id": "trust_badge_4_text",
+      "label": "Badge 4 text",
+      "default": "Verified"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Regional eSIM grid"
+    }
+  ]
+}
+{% endschema %}

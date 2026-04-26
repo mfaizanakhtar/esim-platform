@@ -1,0 +1,711 @@
+{% doc %}
+  @prompt
+    Create a Shopify theme section block restricted to the home page only (template: index) called "Regional eSIM Products". Here are the full requirements:
+    
+    **Tab Structure:**
+    - 4 tabs: Asia, Middle East, Europe, Global
+    - Each tab label should be customizable in theme editor
+    - Smooth lightweight tab switching using vanilla CSS/JS only (no frameworks)
+    - Each tab is linked to a separate Shopify collection (collection picker per tab in theme editor)
+    
+    **Product Grid:**
+    - Display all products from the selected collection (no limit)
+    - Desktop: configurable products per row (1–12, default 4)
+    - Mobile: configurable products per row (1–6, default 2)
+    - Lazy load product images
+    - Product image size control (small/medium/large or custom height in px) via theme editor setting
+    
+    **Product Card Details:**
+    - Product title
+    - Price
+    - Data allowance (e.g. "5GB") — toggle show/hide in theme editor, pulled from product metafield (namespace: esim, key: data) or fallback to variant title
+    - Validity/duration (e.g. "30 Days") — toggle show/hide in theme editor, pulled from product metafield (namespace: esim, key: validity) or fallback to variant title
+    - Country/region flag or label — toggle show/hide in theme editor, pulled from product tags or metafield (namespace: esim, key: country)
+    - "View Details" link on each card
+    
+    **Add to Cart Button:**
+    - Toggle show/hide in theme editor (on/off)
+    - Full styling controls in theme editor: border radius (px), height (px), width (px or %), background color, text color
+    - Button label customizable in theme editor (default: "Add to Cart")
+    - Functional add to cart using Shopify AJAX Cart API — no page reload
+    
+    **Performance:**
+    - Vanilla JS + CSS only, no jQuery or heavy libraries
+    - Minimal DOM
+    - Fast tab switching (CSS display toggle, no re-fetch)
+    - Lazy load images
+    
+    **Color/Branding:**
+    - Tab active color and button default colors should reference a clean eSIM/telecom style
+    - Use a professional blue/teal as default accent color
+    
+    **Scope:**
+    - Section must only appear on home page (index template)
+    - Should be added as a standalone section (not a block inside another section)
+    
+    **Theme Editor Settings:**
+    - Section heading text
+    - Tab labels (4x text fields)
+    - Tab collections (4x collection pickers)
+    - Products per row desktop (range 1-12)
+    - Products per row mobile (range 1-6)
+    - Image size (select: small 150px / medium 220px / large 300px)
+    - Show data allowance (toggle)
+    - Show validity (toggle)
+    - Show country label (toggle)
+    - Show add to cart button (toggle)
+    - Add to cart button label (text)
+    - Button background color (color picker)
+    - Button text color (color picker)
+    - Button border radius (range 0-50px)
+    - Button height (range 30-80px)
+    - Button width (range 100-300px)
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-esim-products-{{ ai_gen_id }} {
+    display: block;
+    width: 100%;
+    padding: 40px 20px;
+  }
+
+  .ai-esim-products-container-{{ ai_gen_id }} {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .ai-esim-products-heading-{{ ai_gen_id }} {
+    text-align: center;
+    margin: 0 0 40px;
+    font-size: 32px;
+    font-weight: 600;
+  }
+
+  .ai-esim-tabs-{{ ai_gen_id }} {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+  }
+
+  .ai-esim-tab-{{ ai_gen_id }} {
+    padding: 12px 24px;
+    background-color: #f3f3f3;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.3s ease;
+    border-radius: 4px;
+    color: #121212;
+  }
+
+  .ai-esim-tab-{{ ai_gen_id }}:hover {
+    background-color: #e0e0e0;
+  }
+
+  .ai-esim-tab-{{ ai_gen_id }}.active {
+    background-color: #0891b2;
+    color: #ffffff;
+  }
+
+  .ai-esim-tab-content-{{ ai_gen_id }} {
+    display: none;
+  }
+
+  .ai-esim-tab-content-{{ ai_gen_id }}.active {
+    display: block;
+  }
+
+  .ai-esim-products-grid-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: repeat({{ block.settings.products_per_row_desktop }}, 1fr);
+    gap: 20px;
+  }
+
+  .ai-esim-product-card-{{ ai_gen_id }} {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    background-color: #ffffff;
+  }
+
+  .ai-esim-product-card-{{ ai_gen_id }}:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .ai-esim-product-image-{{ ai_gen_id }} {
+    width: 100%;
+    height: {{ block.settings.image_size }}px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .ai-esim-product-info-{{ ai_gen_id }} {
+    padding: 16px;
+  }
+
+  .ai-esim-product-title-{{ ai_gen_id }} {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 8px;
+    color: #121212;
+  }
+
+  .ai-esim-product-title-{{ ai_gen_id }} a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .ai-esim-product-title-{{ ai_gen_id }} a:hover {
+    color: #0891b2;
+  }
+
+  .ai-esim-product-price-{{ ai_gen_id }} {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: #121212;
+  }
+
+  .ai-esim-product-meta-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .ai-esim-product-meta-item-{{ ai_gen_id }} {
+    font-size: 14px;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .ai-esim-product-meta-label-{{ ai_gen_id }} {
+    font-weight: 600;
+    color: #121212;
+  }
+
+  .ai-esim-product-actions-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ai-esim-view-details-{{ ai_gen_id }} {
+    display: inline-block;
+    text-align: center;
+    padding: 10px 16px;
+    background-color: transparent;
+    color: #0891b2;
+    text-decoration: none;
+    border: 1px solid #0891b2;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+  }
+
+  .ai-esim-view-details-{{ ai_gen_id }}:hover {
+    background-color: #0891b2;
+    color: #ffffff;
+  }
+
+  .ai-esim-add-to-cart-{{ ai_gen_id }} {
+    padding: 10px 16px;
+    background-color: {{ block.settings.button_bg_color }};
+    color: {{ block.settings.button_text_color }};
+    border: none;
+    border-radius: {{ block.settings.button_border_radius }}px;
+    height: {{ block.settings.button_height }}px;
+    width: {{ block.settings.button_width }}px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: opacity 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ai-esim-add-to-cart-{{ ai_gen_id }}:hover {
+    opacity: 0.9;
+  }
+
+  .ai-esim-add-to-cart-{{ ai_gen_id }}:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .ai-esim-empty-state-{{ ai_gen_id }} {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+  }
+
+  @media screen and (max-width: 749px) {
+    .ai-esim-products-grid-{{ ai_gen_id }} {
+      grid-template-columns: repeat({{ block.settings.products_per_row_mobile }}, 1fr);
+      gap: 16px;
+    }
+
+    .ai-esim-products-heading-{{ ai_gen_id }} {
+      font-size: 24px;
+      margin-bottom: 24px;
+    }
+
+    .ai-esim-tabs-{{ ai_gen_id }} {
+      margin-bottom: 24px;
+    }
+
+    .ai-esim-tab-{{ ai_gen_id }} {
+      padding: 10px 16px;
+      font-size: 14px;
+    }
+
+    .ai-esim-add-to-cart-{{ ai_gen_id }} {
+      width: 100%;
+    }
+  }
+{% endstyle %}
+
+<regional-esim-products-{{ ai_gen_id }} class="ai-esim-products-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  <div class="ai-esim-products-container-{{ ai_gen_id }}">
+    {% if block.settings.section_heading != blank %}
+      <h2 class="ai-esim-products-heading-{{ ai_gen_id }}">{{ block.settings.section_heading }}</h2>
+    {% endif %}
+
+    <div class="ai-esim-tabs-{{ ai_gen_id }}">
+      <button class="ai-esim-tab-{{ ai_gen_id }} active" data-tab="tab1">
+        {{ block.settings.tab_1_label }}
+      </button>
+      <button class="ai-esim-tab-{{ ai_gen_id }}" data-tab="tab2">
+        {{ block.settings.tab_2_label }}
+      </button>
+      <button class="ai-esim-tab-{{ ai_gen_id }}" data-tab="tab3">
+        {{ block.settings.tab_3_label }}
+      </button>
+      <button class="ai-esim-tab-{{ ai_gen_id }}" data-tab="tab4">
+        {{ block.settings.tab_4_label }}
+      </button>
+    </div>
+
+    {% for i in (1..4) %}
+      {% liquid
+        assign tab_collection_key = 'tab_' | append: i | append: '_collection'
+        assign tab_collection = block.settings[tab_collection_key]
+      %}
+
+      <div class="ai-esim-tab-content-{{ ai_gen_id }} {% if i == 1 %}active{% endif %}" data-tab-content="tab{{ i }}">
+        {% if tab_collection != blank and tab_collection.products.size > 0 %}
+          <div class="ai-esim-products-grid-{{ ai_gen_id }}">
+            {% for product in tab_collection.products %}
+              <div class="ai-esim-product-card-{{ ai_gen_id }}">
+                <a href="{{ product.url }}">
+                  {% if product.featured_image %}
+                    <img
+                      src="{{ product.featured_image | image_url: width: 600 }}"
+                      alt="{{ product.featured_image.alt | escape }}"
+                      class="ai-esim-product-image-{{ ai_gen_id }}"
+                      loading="lazy"
+                      width="600"
+                      height="{{ block.settings.image_size }}"
+                    >
+                  {% else %}
+                    <div style="width: 100%; height: {{ block.settings.image_size }}px; background-color: #f3f3f3; display: flex; align-items: center; justify-content: center;">
+                      {{ 'product-1' | placeholder_svg_tag }}
+                    </div>
+                  {% endif %}
+                </a>
+
+                <div class="ai-esim-product-info-{{ ai_gen_id }}">
+                  <h3 class="ai-esim-product-title-{{ ai_gen_id }}">
+                    <a href="{{ product.url }}">{{ product.title }}</a>
+                  </h3>
+
+                  <div class="ai-esim-product-price-{{ ai_gen_id }}">
+                    {{ product.price | money }}
+                  </div>
+
+                  <div class="ai-esim-product-meta-{{ ai_gen_id }}">
+                    {% if block.settings.show_data_allowance %}
+                      {% liquid
+                        assign data_value = product.metafields.esim.data
+                        if data_value == blank
+                          assign data_value = product.selected_or_first_available_variant.title
+                        endif
+                      %}
+                      {% if data_value != blank %}
+                        <div class="ai-esim-product-meta-item-{{ ai_gen_id }}">
+                          <span class="ai-esim-product-meta-label-{{ ai_gen_id }}">Data:</span>
+                          <span>{{ data_value }}</span>
+                        </div>
+                      {% endif %}
+                    {% endif %}
+
+                    {% if block.settings.show_validity %}
+                      {% liquid
+                        assign validity_value = product.metafields.esim.validity
+                        if validity_value == blank
+                          assign validity_value = product.selected_or_first_available_variant.title
+                        endif
+                      %}
+                      {% if validity_value != blank %}
+                        <div class="ai-esim-product-meta-item-{{ ai_gen_id }}">
+                          <span class="ai-esim-product-meta-label-{{ ai_gen_id }}">Validity:</span>
+                          <span>{{ validity_value }}</span>
+                        </div>
+                      {% endif %}
+                    {% endif %}
+
+                    {% if block.settings.show_country %}
+                      {% liquid
+                        assign country_value = product.metafields.esim.country
+                        if country_value == blank and product.tags.size > 0
+                          assign country_value = product.tags | first
+                        endif
+                      %}
+                      {% if country_value != blank %}
+                        <div class="ai-esim-product-meta-item-{{ ai_gen_id }}">
+                          <span class="ai-esim-product-meta-label-{{ ai_gen_id }}">Region:</span>
+                          <span>{{ country_value }}</span>
+                        </div>
+                      {% endif %}
+                    {% endif %}
+                  </div>
+
+                  <div class="ai-esim-product-actions-{{ ai_gen_id }}">
+                    <a href="{{ product.url }}" class="ai-esim-view-details-{{ ai_gen_id }}">
+                      View Details
+                    </a>
+
+                    {% if block.settings.show_add_to_cart %}
+                      <button
+                        class="ai-esim-add-to-cart-{{ ai_gen_id }}"
+                        data-product-id="{{ product.id }}"
+                        data-variant-id="{{ product.selected_or_first_available_variant.id }}"
+                        {% unless product.available %}disabled{% endunless %}
+                      >
+                        {% if product.available %}
+                          {{ block.settings.add_to_cart_label }}
+                        {% else %}
+                          Sold Out
+                        {% endif %}
+                      </button>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="ai-esim-empty-state-{{ ai_gen_id }}">
+            <p>No products found in this collection. Please select a collection in the theme editor.</p>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</regional-esim-products-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class RegionalEsimProducts{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+      }
+
+      connectedCallback() {
+        this.tabs = this.querySelectorAll('.ai-esim-tab-{{ ai_gen_id }}');
+        this.tabContents = this.querySelectorAll('.ai-esim-tab-content-{{ ai_gen_id }}');
+        this.addToCartButtons = this.querySelectorAll('.ai-esim-add-to-cart-{{ ai_gen_id }}');
+
+        this.setupTabs();
+        this.setupAddToCart();
+      }
+
+      setupTabs() {
+        this.tabs.forEach((tab) => {
+          tab.addEventListener('click', (e) => {
+            const targetTab = e.currentTarget.getAttribute('data-tab');
+
+            this.tabs.forEach((t) => t.classList.remove('active'));
+            this.tabContents.forEach((content) => content.classList.remove('active'));
+
+            e.currentTarget.classList.add('active');
+            const targetContent = this.querySelector(`[data-tab-content="${targetTab}"]`);
+            if (targetContent) {
+              targetContent.classList.add('active');
+            }
+          });
+        });
+      }
+
+      setupAddToCart() {
+        this.addToCartButtons.forEach((button) => {
+          button.addEventListener('click', (e) => {
+            const btn = e.currentTarget;
+            const variantId = btn.getAttribute('data-variant-id');
+            const originalText = btn.textContent;
+
+            if (!variantId || btn.disabled) return;
+
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+
+            fetch('/cart/add.js', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                items: [{
+                  id: variantId,
+                  quantity: 1
+                }]
+              })
+            })
+            .then(response => response.json())
+            .then(data => {
+              btn.textContent = 'Added!';
+              setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+              }, 2000);
+
+              if (window.Shopify && window.Shopify.theme && window.Shopify.theme.cartUpdateCallbacks) {
+                window.Shopify.theme.cartUpdateCallbacks.forEach(callback => callback());
+              }
+
+              fetch('/cart.js')
+                .then(response => response.json())
+                .then(cart => {
+                  document.dispatchEvent(new CustomEvent('cart:updated', { detail: cart }));
+                });
+            })
+            .catch(error => {
+              console.error('Error adding to cart:', error);
+              btn.textContent = 'Error';
+              setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+              }, 2000);
+            });
+          });
+        });
+      }
+    }
+
+    customElements.define('regional-esim-products-{{ ai_gen_id }}', RegionalEsimProducts{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Regional eSIM products",
+  "tag": null,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Section"
+    },
+    {
+      "type": "text",
+      "id": "section_heading",
+      "label": "Section heading",
+      "default": "Shop eSIM by Region"
+    },
+    {
+      "type": "header",
+      "content": "Tab 1"
+    },
+    {
+      "type": "text",
+      "id": "tab_1_label",
+      "label": "Tab label",
+      "default": "Asia"
+    },
+    {
+      "type": "collection",
+      "id": "tab_1_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 2"
+    },
+    {
+      "type": "text",
+      "id": "tab_2_label",
+      "label": "Tab label",
+      "default": "Middle East"
+    },
+    {
+      "type": "collection",
+      "id": "tab_2_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 3"
+    },
+    {
+      "type": "text",
+      "id": "tab_3_label",
+      "label": "Tab label",
+      "default": "Europe"
+    },
+    {
+      "type": "collection",
+      "id": "tab_3_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Tab 4"
+    },
+    {
+      "type": "text",
+      "id": "tab_4_label",
+      "label": "Tab label",
+      "default": "Global"
+    },
+    {
+      "type": "collection",
+      "id": "tab_4_collection",
+      "label": "Collection"
+    },
+    {
+      "type": "header",
+      "content": "Product grid"
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_desktop",
+      "label": "Products per row (desktop)",
+      "min": 1,
+      "max": 12,
+      "step": 1,
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_mobile",
+      "label": "Products per row (mobile)",
+      "min": 1,
+      "max": 6,
+      "step": 1,
+      "default": 2
+    },
+    {
+      "type": "select",
+      "id": "image_size",
+      "label": "Product image size",
+      "options": [
+        {
+          "value": "150",
+          "label": "Small (150px)"
+        },
+        {
+          "value": "220",
+          "label": "Medium (220px)"
+        },
+        {
+          "value": "300",
+          "label": "Large (300px)"
+        }
+      ],
+      "default": "220"
+    },
+    {
+      "type": "header",
+      "content": "Product card details"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_data_allowance",
+      "label": "Show data allowance",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_validity",
+      "label": "Show validity",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_country",
+      "label": "Show country/region",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Add to cart button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_add_to_cart",
+      "label": "Show add to cart button",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "add_to_cart_label",
+      "label": "Button label",
+      "default": "Add to Cart"
+    },
+    {
+      "type": "color",
+      "id": "button_bg_color",
+      "label": "Background color",
+      "default": "#0891b2"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "range",
+      "id": "button_border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 50,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "button_height",
+      "label": "Height",
+      "min": 30,
+      "max": 80,
+      "step": 2,
+      "unit": "px",
+      "default": 44
+    },
+    {
+      "type": "range",
+      "id": "button_width",
+      "label": "Width",
+      "min": 100,
+      "max": 300,
+      "step": 10,
+      "unit": "px",
+      "default": 200
+    }
+  ],
+  "presets": [
+    {
+      "name": "Regional eSIM products"
+    }
+  ]
+}
+{% endschema %}

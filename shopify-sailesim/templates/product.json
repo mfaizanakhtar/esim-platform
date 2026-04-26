@@ -22,18 +22,19 @@
         },
         "title": {
           "type": "title",
-          "settings": {
-          }
+          "settings": {}
         },
         "price": {
           "type": "price",
-          "settings": {
-          }
+          "settings": {}
+        },
+        "avada_product_reviews_app_summary_block_eBgRzC": {
+          "type": "shopify://apps/avada-product-reviews/blocks/app-summary-block/c4e1e9ca-4d46-4e76-bc39-7e42417cb327",
+          "settings": {}
         },
         "description": {
           "type": "description",
-          "settings": {
-          }
+          "settings": {}
         },
         "variant-picker": {
           "type": "variant_picker",
@@ -44,8 +45,7 @@
         },
         "quantity-selector": {
           "type": "quantity_selector",
-          "settings": {
-          }
+          "settings": {}
         },
         "buy_buttons": {
           "type": "buy_buttons",
@@ -54,8 +54,18 @@
             "show_gift_card_recipient": true
           }
         },
+        "avada_product_reviews_app_block_review_list_kFQ68c": {
+          "type": "shopify://apps/avada-product-reviews/blocks/app-block-review-list/c4e1e9ca-4d46-4e76-bc39-7e42417cb327",
+          "settings": {
+            "air_blockreviews_summaryHeading": "Reviews",
+            "air_blockreviews_layout": "list",
+            "air_blockreviews_singleStarColor": "#16A086",
+            "air_blockreviews_primaryColor": "#121212"
+          }
+        },
         "product-inventory": {
           "type": "inventory",
+          "disabled": true,
           "settings": {
             "text_style": "body",
             "inventory_threshold": 10,
@@ -67,10 +77,12 @@
         "vendor",
         "title",
         "price",
+        "avada_product_reviews_app_summary_block_eBgRzC",
         "description",
         "variant-picker",
         "quantity-selector",
         "buy_buttons",
+        "avada_product_reviews_app_block_review_list_kFQ68c",
         "product-inventory"
       ],
       "settings": {
@@ -80,9 +92,9 @@
         "constrain_to_viewport": true,
         "media_fit": "contain",
         "gallery_layout": "stacked",
+        "mobile_thumbnails": "show",
         "media_position": "left",
         "image_zoom": "lightbox",
-        "mobile_thumbnails": "show",
         "hide_variants": true,
         "enable_video_looping": false,
         "padding_top": 36,
@@ -95,6 +107,7 @@
         "collapsible-row-0": {
           "type": "collapsible_row",
           "settings": {
+            "heading": "Collapsible row",
             "icon": "none",
             "row_content": "",
             "page": ""
@@ -103,6 +116,7 @@
         "collapsible-row-1": {
           "type": "collapsible_row",
           "settings": {
+            "heading": "Collapsible row",
             "icon": "none",
             "row_content": "",
             "page": ""
@@ -111,6 +125,7 @@
         "collapsible-row-2": {
           "type": "collapsible_row",
           "settings": {
+            "heading": "Collapsible row",
             "icon": "none",
             "row_content": "",
             "page": ""
@@ -122,13 +137,15 @@
         "collapsible-row-1",
         "collapsible-row-2"
       ],
+      "disabled": true,
       "settings": {
         "caption": "",
+        "heading": "Collapsible content",
         "heading_size": "h1",
         "heading_alignment": "center",
         "layout": "section",
-        "color_scheme": "scheme-1",
         "container_color_scheme": "scheme-1",
+        "color_scheme": "scheme-1",
         "open_first_collapsible_row": true,
         "image_ratio": "adapt",
         "desktop_layout": "image_second",
@@ -139,16 +156,17 @@
     "related-products": {
       "type": "related-products",
       "settings": {
+        "heading": "Popular Nearby Destinations",
         "heading_size": "h2",
         "products_to_show": 4,
         "columns_desktop": 4,
+        "columns_mobile": "2",
         "color_scheme": "scheme-1",
-        "image_ratio": "square",
+        "image_ratio": "adapt",
         "image_shape": "default",
         "show_secondary_image": true,
         "show_vendor": false,
-        "show_rating": false,
-        "columns_mobile": "2",
+        "show_rating": true,
         "padding_top": 36,
         "padding_bottom": 28
       }

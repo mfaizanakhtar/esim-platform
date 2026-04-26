@@ -1,0 +1,890 @@
+{% doc %}
+  @prompt
+    Create a Shopify custom section from scratch for a travel packages search hero block.
+    
+    IMPORTANT:
+    - Keep the layout exactly in a clean minimal 2-column split style like the reference.
+    - Do not redesign the structure.
+    - One side should contain content and search fields.
+    - The other side should contain the image.
+    - Add an option in theme settings to place the image either on the left or on the right.
+    
+    LAYOUT REQUIREMENTS:
+    - 2-column split layout
+    - Content area should include:
+      - main heading
+      - subheading 1
+      - subheading 2
+      - country selector
+      - single travel date range selector
+      - search button
+    - Image area should show one selected image
+    - Keep spacing clean, balanced, and aligned like a premium minimal travel section
+    - Make it responsive on desktop and mobile
+    
+    TEXT SETTINGS:
+    1. Heading:
+    - editable text
+    - font size
+    - color
+    - alignment
+    - spacing
+    - no animation option
+    
+    2. Subheading 1:
+    - editable text
+    - font size
+    - color
+    - alignment
+    - spacing
+    - animation option
+    
+    3. Subheading 2:
+    - editable text
+    - font size
+    - color
+    - alignment
+    - spacing
+    - animation option
+    
+    BUTTON SETTINGS:
+    - editable button text
+    - font size
+    - text color
+    - background color
+    - border color
+    - border radius
+    - alignment
+    - spacing
+    
+    IMAGE SETTINGS:
+    - image 1 upload
+    - image 2 upload
+    - selector to choose which image is displayed
+    - image position selector: left or right
+    - image focal point setting
+    - image should fit cleanly without distortion
+    
+    COUNTRY SELECTOR REQUIREMENTS:
+    - Country options must come from a linked Shopify collection
+    - Admin should be able to select the source collection in theme settings
+    - Country selector should only use values related to that collection setup
+    
+    DATE / DURATION REQUIREMENTS:
+    - Use a single combined travel date range selector
+    - Do not use two visible date fields
+    - Customer should select start date and end date in one minimal UX flow
+    - Travel duration should be automatically calculated from the selected dates
+    
+    PACKAGE MATCHING LOGIC:
+    - Search should work based on selected country + calculated duration
+    - Matching rules:
+      - if customer selects 8 days, show packages for 7 days and 8-10 days
+      - if customer selects 6 days, show packages for 5-7 days
+    - Build this with a maintainable logic system using tags, metafields, or clear duration ranges
+    - Add comments in code explaining the expected product tag/metafield structure
+    
+    SEARCH ACTION:
+    - On button click, redirect to a results/search page with:
+      - selected country
+      - start date
+      - end date
+      - calculated duration
+    - Structure the code so this can be connected to actual product filtering
+    
+    TECHNICAL REQUIREMENTS:
+    - Return complete Shopify Liquid section code
+    - Include HTML, CSS, JavaScript, and schema
+    - Make theme settings clean and usable in Shopify editor
+    - Code should be production-safe and properly structured
+    - Do not use placeholder-only logic
+    - Keep the design minimal and very close to the reference layout
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-travel-hero-{{ ai_gen_id }} {
+    display: block;
+    width: 100%;
+    min-height: 600px;
+  }
+
+  .ai-travel-hero-container-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    min-height: 600px;
+    max-width: 100%;
+  }
+
+  .ai-travel-hero-container-{{ ai_gen_id }}.image-left {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ai-travel-hero-container-{{ ai_gen_id }}.image-right {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .ai-travel-hero-content-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px;
+    background-color: {{ block.settings.content_bg_color }};
+  }
+
+  .ai-travel-hero-container-{{ ai_gen_id }}.image-left .ai-travel-hero-content-{{ ai_gen_id }} {
+    order: 2;
+  }
+
+  .ai-travel-hero-container-{{ ai_gen_id }}.image-right .ai-travel-hero-content-{{ ai_gen_id }} {
+    order: 1;
+  }
+
+  .ai-travel-hero-heading-{{ ai_gen_id }} {
+    font-size: {{ block.settings.heading_font_size }}px;
+    color: {{ block.settings.heading_color }};
+    text-align: {{ block.settings.heading_alignment }};
+    margin: 0 0 {{ block.settings.heading_spacing }}px 0;
+    line-height: 1.2;
+  }
+
+  .ai-travel-hero-subheading1-{{ ai_gen_id }} {
+    font-size: {{ block.settings.subheading1_font_size }}px;
+    color: {{ block.settings.subheading1_color }};
+    text-align: {{ block.settings.subheading1_alignment }};
+    margin: 0 0 {{ block.settings.subheading1_spacing }}px 0;
+    line-height: 1.4;
+  }
+
+  .ai-travel-hero-subheading1-{{ ai_gen_id }}.animate {
+    opacity: 0;
+    animation: ai-travel-hero-fade-in-{{ ai_gen_id }} 0.8s ease-out 0.2s forwards;
+  }
+
+  .ai-travel-hero-subheading2-{{ ai_gen_id }} {
+    font-size: {{ block.settings.subheading2_font_size }}px;
+    color: {{ block.settings.subheading2_color }};
+    text-align: {{ block.settings.subheading2_alignment }};
+    margin: 0 0 {{ block.settings.subheading2_spacing }}px 0;
+    line-height: 1.4;
+  }
+
+  .ai-travel-hero-subheading2-{{ ai_gen_id }}.animate {
+    opacity: 0;
+    animation: ai-travel-hero-fade-in-{{ ai_gen_id }} 0.8s ease-out 0.4s forwards;
+  }
+
+  @keyframes ai-travel-hero-fade-in-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .ai-travel-hero-form-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 32px;
+  }
+
+  .ai-travel-hero-field-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ai-travel-hero-label-{{ ai_gen_id }} {
+    font-size: 14px;
+    font-weight: 500;
+    color: {{ block.settings.heading_color }};
+  }
+
+  .ai-travel-hero-select-{{ ai_gen_id }},
+  .ai-travel-hero-input-{{ ai_gen_id }} {
+    padding: 14px 16px;
+    border: 1px solid {{ block.settings.input_border_color }};
+    border-radius: {{ block.settings.input_border_radius }}px;
+    font-size: 16px;
+    background-color: {{ block.settings.input_bg_color }};
+    color: {{ block.settings.input_text_color }};
+    width: 100%;
+  }
+
+  .ai-travel-hero-select-{{ ai_gen_id }}:focus,
+  .ai-travel-hero-input-{{ ai_gen_id }}:focus {
+    outline: 2px solid {{ block.settings.button_bg_color }};
+    outline-offset: 2px;
+  }
+
+  .ai-travel-hero-date-range-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .ai-travel-hero-button-{{ ai_gen_id }} {
+    padding: 16px 32px;
+    background-color: {{ block.settings.button_bg_color }};
+    color: {{ block.settings.button_text_color }};
+    border: 1px solid {{ block.settings.button_border_color }};
+    border-radius: {{ block.settings.button_border_radius }}px;
+    font-size: {{ block.settings.button_font_size }}px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: {{ block.settings.button_alignment }};
+    margin-top: {{ block.settings.button_spacing }}px;
+  }
+
+  .ai-travel-hero-button-{{ ai_gen_id }}:hover {
+    background-color: {{ block.settings.button_hover_bg_color }};
+    transform: translateY(-2px);
+  }
+
+  .ai-travel-hero-image-{{ ai_gen_id }} {
+    position: relative;
+    min-height: 600px;
+    overflow: hidden;
+  }
+
+  .ai-travel-hero-container-{{ ai_gen_id }}.image-left .ai-travel-hero-image-{{ ai_gen_id }} {
+    order: 1;
+  }
+
+  .ai-travel-hero-container-{{ ai_gen_id }}.image-right .ai-travel-hero-image-{{ ai_gen_id }} {
+    order: 2;
+  }
+
+  .ai-travel-hero-image-{{ ai_gen_id }} img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: {{ block.settings.image_focal_point }};
+  }
+
+  .ai-travel-hero-image-placeholder-{{ ai_gen_id }} {
+    width: 100%;
+    height: 100%;
+    background-color: #f4f4f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  .ai-travel-hero-image-placeholder-{{ ai_gen_id }} svg {
+    width: 100%;
+    height: 100%;
+    max-width: 400px;
+    max-height: 400px;
+  }
+
+  .ai-travel-hero-empty-state-{{ ai_gen_id }} {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 20px;
+    font-size: 14px;
+    color: #666;
+    text-align: center;
+    pointer-events: none;
+  }
+
+  @media screen and (max-width: 768px) {
+    .ai-travel-hero-container-{{ ai_gen_id }} {
+      grid-template-columns: 1fr;
+      min-height: auto;
+    }
+
+    .ai-travel-hero-container-{{ ai_gen_id }}.image-left .ai-travel-hero-content-{{ ai_gen_id }},
+    .ai-travel-hero-container-{{ ai_gen_id }}.image-right .ai-travel-hero-content-{{ ai_gen_id }} {
+      order: 2;
+    }
+
+    .ai-travel-hero-container-{{ ai_gen_id }}.image-left .ai-travel-hero-image-{{ ai_gen_id }},
+    .ai-travel-hero-container-{{ ai_gen_id }}.image-right .ai-travel-hero-image-{{ ai_gen_id }} {
+      order: 1;
+    }
+
+    .ai-travel-hero-content-{{ ai_gen_id }} {
+      padding: 40px 24px;
+    }
+
+    .ai-travel-hero-image-{{ ai_gen_id }} {
+      min-height: 400px;
+    }
+
+    .ai-travel-hero-heading-{{ ai_gen_id }} {
+      font-size: {{ block.settings.heading_font_size | times: 0.7 }}px;
+    }
+
+    .ai-travel-hero-date-range-{{ ai_gen_id }} {
+      grid-template-columns: 1fr;
+    }
+  }
+{% endstyle %}
+
+<travel-hero-{{ ai_gen_id }} class="ai-travel-hero-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  <div class="ai-travel-hero-container-{{ ai_gen_id }} image-{{ block.settings.image_position }}">
+    <div class="ai-travel-hero-content-{{ ai_gen_id }}">
+      {% if block.settings.heading != blank %}
+        <h1 class="ai-travel-hero-heading-{{ ai_gen_id }}">{{ block.settings.heading }}</h1>
+      {% endif %}
+
+      {% if block.settings.subheading1 != blank %}
+        <p class="ai-travel-hero-subheading1-{{ ai_gen_id }} {% if block.settings.subheading1_animate %}animate{% endif %}">
+          {{ block.settings.subheading1 }}
+        </p>
+      {% endif %}
+
+      {% if block.settings.subheading2 != blank %}
+        <p class="ai-travel-hero-subheading2-{{ ai_gen_id }} {% if block.settings.subheading2_animate %}animate{% endif %}">
+          {{ block.settings.subheading2 }}
+        </p>
+      {% endif %}
+
+      <form class="ai-travel-hero-form-{{ ai_gen_id }}" data-travel-search-form>
+        <div class="ai-travel-hero-field-{{ ai_gen_id }}">
+          <label class="ai-travel-hero-label-{{ ai_gen_id }}" for="country-{{ ai_gen_id }}">Country</label>
+          <select
+            id="country-{{ ai_gen_id }}"
+            name="country"
+            class="ai-travel-hero-select-{{ ai_gen_id }}"
+            required
+          >
+            <option value="">Select a country</option>
+            {% if block.settings.country_collection != blank %}
+              {% for product in block.settings.country_collection.products %}
+                <option value="{{ product.handle }}">{{ product.title }}</option>
+              {% endfor %}
+            {% else %}
+              <option value="france">France</option>
+              <option value="italy">Italy</option>
+              <option value="spain">Spain</option>
+              <option value="greece">Greece</option>
+            {% endif %}
+          </select>
+        </div>
+
+        <div class="ai-travel-hero-field-{{ ai_gen_id }}">
+          <label class="ai-travel-hero-label-{{ ai_gen_id }}">Travel dates</label>
+          <div class="ai-travel-hero-date-range-{{ ai_gen_id }}">
+            <input
+              type="date"
+              name="start_date"
+              class="ai-travel-hero-input-{{ ai_gen_id }}"
+              placeholder="Start date"
+              required
+            >
+            <input
+              type="date"
+              name="end_date"
+              class="ai-travel-hero-input-{{ ai_gen_id }}"
+              placeholder="End date"
+              required
+            >
+          </div>
+        </div>
+
+        <button type="submit" class="ai-travel-hero-button-{{ ai_gen_id }}">
+          {{ block.settings.button_text }}
+        </button>
+      </form>
+    </div>
+
+    <div class="ai-travel-hero-image-{{ ai_gen_id }}">
+      {% liquid
+        assign selected_image = null
+        if block.settings.image_selector == 'image1'
+          assign selected_image = block.settings.image1
+        elsif block.settings.image_selector == 'image2'
+          assign selected_image = block.settings.image2
+        endif
+      %}
+
+      {% if selected_image %}
+        <img
+          src="{{ selected_image | image_url: width: 1200 }}"
+          alt="{{ selected_image.alt | escape }}"
+          loading="lazy"
+          width="{{ selected_image.width }}"
+          height="{{ selected_image.height }}"
+        >
+      {% else %}
+        <div class="ai-travel-hero-image-placeholder-{{ ai_gen_id }}">
+          {{ 'hero-apparel-1' | placeholder_svg_tag }}
+          <div class="ai-travel-hero-empty-state-{{ ai_gen_id }}">
+            Next, add a travel image
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</travel-hero-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class TravelHero{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+      }
+
+      connectedCallback() {
+        this.form = this.querySelector('[data-travel-search-form]');
+        if (this.form) {
+          this.form.addEventListener('submit', this.handleSubmit.bind(this));
+        }
+      }
+
+      handleSubmit(event) {
+        event.preventDefault();
+
+        const formData = new FormData(this.form);
+        const country = formData.get('country');
+        const startDate = formData.get('start_date');
+        const endDate = formData.get('end_date');
+
+        if (!country || !startDate || !endDate) {
+          alert('Please fill in all fields');
+          return;
+        }
+
+        const duration = this.calculateDuration(startDate, endDate);
+        const searchUrl = this.buildSearchUrl(country, startDate, endDate, duration);
+
+        window.location.href = searchUrl;
+      }
+
+      calculateDuration(startDate, endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays;
+      }
+
+      buildSearchUrl(country, startDate, endDate, duration) {
+        const params = new URLSearchParams({
+          q: country,
+          start_date: startDate,
+          end_date: endDate,
+          duration: duration
+        });
+
+        return `/search?${params.toString()}`;
+      }
+    }
+
+    customElements.define('travel-hero-{{ ai_gen_id }}', TravelHero{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Travel search hero",
+  "tag": null,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "select",
+      "id": "image_position",
+      "label": "Image position",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "right"
+    },
+    {
+      "type": "color",
+      "id": "content_bg_color",
+      "label": "Content background",
+      "default": "#ffffff"
+    },
+    {
+      "type": "header",
+      "content": "Heading"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Text",
+      "default": "Discover Your Next Adventure"
+    },
+    {
+      "type": "range",
+      "id": "heading_font_size",
+      "label": "Font size",
+      "min": 24,
+      "max": 72,
+      "step": 2,
+      "unit": "px",
+      "default": 48
+    },
+    {
+      "type": "color",
+      "id": "heading_color",
+      "label": "Color",
+      "default": "#121212"
+    },
+    {
+      "type": "select",
+      "id": "heading_alignment",
+      "label": "Alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "heading_spacing",
+      "label": "Bottom spacing",
+      "min": 0,
+      "max": 60,
+      "step": 4,
+      "unit": "px",
+      "default": 24
+    },
+    {
+      "type": "header",
+      "content": "Subheading 1"
+    },
+    {
+      "type": "text",
+      "id": "subheading1",
+      "label": "Text",
+      "default": "Explore curated travel packages to your dream destinations"
+    },
+    {
+      "type": "range",
+      "id": "subheading1_font_size",
+      "label": "Font size",
+      "min": 12,
+      "max": 32,
+      "step": 2,
+      "unit": "px",
+      "default": 18
+    },
+    {
+      "type": "color",
+      "id": "subheading1_color",
+      "label": "Color",
+      "default": "#666666"
+    },
+    {
+      "type": "select",
+      "id": "subheading1_alignment",
+      "label": "Alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "subheading1_spacing",
+      "label": "Bottom spacing",
+      "min": 0,
+      "max": 60,
+      "step": 4,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "checkbox",
+      "id": "subheading1_animate",
+      "label": "Enable animation",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Subheading 2"
+    },
+    {
+      "type": "text",
+      "id": "subheading2",
+      "label": "Text",
+      "default": "Find the perfect package for your travel dates"
+    },
+    {
+      "type": "range",
+      "id": "subheading2_font_size",
+      "label": "Font size",
+      "min": 12,
+      "max": 32,
+      "step": 2,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "color",
+      "id": "subheading2_color",
+      "label": "Color",
+      "default": "#999999"
+    },
+    {
+      "type": "select",
+      "id": "subheading2_alignment",
+      "label": "Alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "subheading2_spacing",
+      "label": "Bottom spacing",
+      "min": 0,
+      "max": 60,
+      "step": 4,
+      "unit": "px",
+      "default": 12
+    },
+    {
+      "type": "checkbox",
+      "id": "subheading2_animate",
+      "label": "Enable animation",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "Search form"
+    },
+    {
+      "type": "collection",
+      "id": "country_collection",
+      "label": "Country collection"
+    },
+    {
+      "type": "paragraph",
+      "content": "Select a collection where each product represents a country. Product titles will be used as country names in the dropdown."
+    },
+    {
+      "type": "color",
+      "id": "input_bg_color",
+      "label": "Input background",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "input_text_color",
+      "label": "Input text color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "input_border_color",
+      "label": "Input border color",
+      "default": "#cccccc"
+    },
+    {
+      "type": "range",
+      "id": "input_border_radius",
+      "label": "Input border radius",
+      "min": 0,
+      "max": 20,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Button"
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Text",
+      "default": "Search packages"
+    },
+    {
+      "type": "range",
+      "id": "button_font_size",
+      "label": "Font size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "button_bg_color",
+      "label": "Background color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "button_hover_bg_color",
+      "label": "Hover background",
+      "default": "#334fb4"
+    },
+    {
+      "type": "color",
+      "id": "button_border_color",
+      "label": "Border color",
+      "default": "#121212"
+    },
+    {
+      "type": "range",
+      "id": "button_border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "select",
+      "id": "button_alignment",
+      "label": "Alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "left"
+    },
+    {
+      "type": "range",
+      "id": "button_spacing",
+      "label": "Top spacing",
+      "min": 0,
+      "max": 60,
+      "step": 4,
+      "unit": "px",
+      "default": 8
+    },
+    {
+      "type": "header",
+      "content": "Image"
+    },
+    {
+      "type": "image_picker",
+      "id": "image1",
+      "label": "Image 1"
+    },
+    {
+      "type": "image_picker",
+      "id": "image2",
+      "label": "Image 2"
+    },
+    {
+      "type": "select",
+      "id": "image_selector",
+      "label": "Display image",
+      "options": [
+        {
+          "value": "image1",
+          "label": "Image 1"
+        },
+        {
+          "value": "image2",
+          "label": "Image 2"
+        }
+      ],
+      "default": "image1"
+    },
+    {
+      "type": "select",
+      "id": "image_focal_point",
+      "label": "Focal point",
+      "options": [
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "top",
+          "label": "Top"
+        },
+        {
+          "value": "bottom",
+          "label": "Bottom"
+        },
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "center"
+    }
+  ],
+  "presets": [
+    {
+      "name": "Travel search hero"
+    }
+  ]
+}
+{% endschema %}

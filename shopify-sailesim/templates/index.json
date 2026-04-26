@@ -11,35 +11,13 @@
   "sections": {
     "hero-slideshow": {
       "type": "slideshow",
-      "blocks": {
-        "slide-0": {
-          "type": "slide",
-          "settings": {
-            "image_overlay_opacity": 0,
-            "heading": "Image slide",
-            "heading_size": "h1",
-            "subheading": "",
-            "button_label": "Button label",
-            "link": "shopify://collections",
-            "button_style_secondary": false,
-            "show_text_box": false,
-            "box_align": "middle-right",
-            "text_alignment": "left",
-            "text_alignment_mobile": "center",
-            "color_scheme": "scheme-1"
-          }
-        }
-      },
-      "block_order": [
-        "slide-0"
-      ],
       "disabled": true,
       "settings": {
         "layout": "full_bleed",
-        "slide_height": "small",
+        "slide_height": "large",
         "slider_visual": "dots",
-        "auto_rotate": false,
-        "change_slides_speed": 5,
+        "auto_rotate": true,
+        "change_slides_speed": 7,
         "image_behavior": "none",
         "show_text_below": true,
         "accessibility_info": "Slideshow about our brand"
@@ -50,13 +28,13 @@
       "disabled": true,
       "settings": {
         "collection": "all",
-        "products_to_show": 24,
-        "title": "Featured collection",
+        "products_to_show": 8,
+        "title": "Popular eSIM Plans",
         "heading_size": "h2",
         "description": "",
         "show_description": true,
         "description_style": "subtitle",
-        "columns_desktop": 6,
+        "columns_desktop": 4,
         "enable_desktop_slider": false,
         "full_width": false,
         "show_view_all": true,
@@ -120,9 +98,10 @@
         "collection_EQVxa7",
         "collection_UaU6nR"
       ],
+      "disabled": true,
       "name": "Collection Circles",
       "settings": {
-        "heading": "Regions",
+        "heading": "Shop by Region",
         "heading_size": "24",
         "heading_style": "regular",
         "heading_alignment": "center",
@@ -145,11 +124,43 @@
     },
     "image-banner": {
       "type": "image-banner",
+      "blocks": {
+        "buttons_yWhLJV": {
+          "type": "buttons",
+          "settings": {
+            "button_label_1": "Get Started Now",
+            "button_link_1": "",
+            "button_style_secondary_1": false,
+            "button_label_2": "Button label",
+            "button_link_2": "",
+            "button_style_secondary_2": false
+          }
+        },
+        "text_j8yCaz": {
+          "type": "text",
+          "settings": {
+            "text": "Buy → Download → Connect. It's that simple.",
+            "text_style": "body"
+          }
+        },
+        "heading_6GBgBT": {
+          "type": "heading",
+          "settings": {
+            "heading": "Activate Your eSIM in Minutes",
+            "heading_size": "h1"
+          }
+        }
+      },
+      "block_order": [
+        "buttons_yWhLJV",
+        "text_j8yCaz",
+        "heading_6GBgBT"
+      ],
       "settings": {
         "image_overlay_opacity": 0,
-        "image_height": "small",
+        "image_height": "medium",
         "image_behavior": "none",
-        "desktop_content_position": "top-left",
+        "desktop_content_position": "middle-center",
         "desktop_content_alignment": "center",
         "show_text_box": false,
         "color_scheme": "",
@@ -157,12 +168,250 @@
         "mobile_content_alignment": "center",
         "show_text_below": true
       }
+    },
+    "17769806710e9f70b1": {
+      "type": "_blocks",
+      "blocks": {
+        "ai_gen_block_7f64a2c_UY4zKe": {
+          "type": "ai_gen_block_7f64a2c",
+          "settings": {
+            "title": "Choose Your Regional eSIM",
+            "subtitle": "Stay connected across multiple countries with our premium data plans",
+            "title_size": 36,
+            "subtitle_size": 16,
+            "title_animation": "fade",
+            "products_per_row_desktop": 6,
+            "products_per_row_mobile": 3,
+            "asia_collection": "asia-1",
+            "asia_tab_label": "Asia",
+            "europe_collection": "",
+            "europe_tab_label": "Europe",
+            "global_collection": "",
+            "global_tab_label": "Global",
+            "middle_east_collection": "",
+            "middle_east_tab_label": "Middle East",
+            "product_title_size": 16,
+            "product_price_size": 18,
+            "image_width": 80,
+            "image_height": 80,
+            "image_object_fit": "contain",
+            "image_object_position": "center",
+            "image_border_radius": 8,
+            "button_text": "Choose Plan",
+            "button_animation": "shimmer",
+            "button_border_radius": 4,
+            "background_color": "#ffffff",
+            "title_color": "#1a1a2e",
+            "subtitle_color": "#666666",
+            "accent_color": "#d4af37",
+            "tab_bg_color": "#ffffff",
+            "tab_text_color": "#1a1a2e",
+            "tab_border_color": "#e0e0e0",
+            "tab_hover_bg_color": "#f5f5f5",
+            "tab_hover_text_color": "#1a1a2e",
+            "tab_active_bg_color": "#1a1a2e",
+            "tab_active_text_color": "#ffffff",
+            "tab_active_border_color": "#d4af37",
+            "tab_border_radius": 8,
+            "card_bg_color": "#ffffff",
+            "card_border_color": "#e0e0e0",
+            "product_title_color": "#1a1a2e",
+            "product_price_color": "#d4af37",
+            "card_border_radius": 12,
+            "button_bg_color": "#1a1a2e",
+            "button_text_color": "#ffffff",
+            "button_hover_bg_color": "#d4af37",
+            "button_hover_text_color": "#1a1a2e",
+            "modal_bg_color": "#ffffff",
+            "modal_text_color": "#1a1a2e",
+            "modal_price_color": "#d4af37",
+            "modal_close_bg": "#f5f5f5",
+            "modal_close_color": "#1a1a2e",
+            "modal_close_hover_bg": "#e0e0e0",
+            "modal_input_bg": "#ffffff",
+            "modal_input_border": "#e0e0e0",
+            "modal_add_cart_bg": "#1a1a2e",
+            "modal_add_cart_text": "#ffffff",
+            "modal_add_cart_hover_bg": "#2a2a3e",
+            "modal_buy_now_bg": "#d4af37",
+            "modal_buy_now_text": "#1a1a2e",
+            "modal_buy_now_hover_bg": "#c49d2f",
+            "modal_border_radius": 12
+          },
+          "blocks": {}
+        }
+      },
+      "block_order": [
+        "ai_gen_block_7f64a2c_UY4zKe"
+      ],
+      "disabled": true,
+      "settings": {}
+    },
+    "177698618450fdace7": {
+      "type": "_blocks",
+      "blocks": {
+        "ai_gen_block_2582c1e_xpPzCk": {
+          "type": "ai_gen_block_2582c1e",
+          "settings": {
+            "title": "Regional eSIM Plans",
+            "subtitle": "Choose your region",
+            "title_font_size": 32,
+            "subtitle_font_size": 16,
+            "title_animation": "slide-up",
+            "subtitle_animation": "slide-up",
+            "animation_duration": 0.5,
+            "animation_delay": 2,
+            "tab_1_label": "Asia",
+            "tab_1_collection": "asia-1",
+            "tab_2_label": "Europe",
+            "tab_2_collection": "europe-1",
+            "tab_3_label": "Global",
+            "tab_3_collection": "global",
+            "tab_4_label": "Middle East",
+            "tab_4_collection": "middle-east-1",
+            "image_width": 150,
+            "image_height": 100,
+            "image_object_fit": "contain",
+            "image_object_position": "center",
+            "image_border_radius": 8,
+            "desktop_products_per_row": 6,
+            "mobile_products_per_row": 3,
+            "product_title_font_size": 14,
+            "price_font_size": 16,
+            "button_animation": "none",
+            "show_trust_badges": true,
+            "trust_badge_title": "Secure Checkout",
+            "trust_badge_1_text": "Secure Payment",
+            "trust_badge_2_text": "SSL Encrypted",
+            "trust_badge_3_text": "Money Back",
+            "trust_badge_4_text": "Verified"
+          },
+          "blocks": {}
+        }
+      },
+      "block_order": [
+        "ai_gen_block_2582c1e_xpPzCk"
+      ],
+      "disabled": true,
+      "settings": {}
+    },
+    "17769879913aa7a547": {
+      "type": "_blocks",
+      "blocks": {
+        "ai_gen_block_4fcd70b_eWd3PF": {
+          "type": "ai_gen_block_4fcd70b",
+          "settings": {
+            "container_width": 1000,
+            "section_padding_top": 40,
+            "section_padding_bottom": 40,
+            "show_asia_tab": true,
+            "asia_tab_label": "Asia",
+            "asia_collection": "asia-1",
+            "show_europe_tab": true,
+            "europe_tab_label": "Europe",
+            "europe_collection": "europe-1",
+            "show_global_tab": true,
+            "global_tab_label": "Global",
+            "global_collection": "global",
+            "show_middle_east_tab": true,
+            "middle_east_tab_label": "Middle East",
+            "middle_east_collection": "middle-east-1",
+            "tab_active_color": "#334fb4",
+            "products_per_row_desktop": 6,
+            "products_per_row_mobile": 3,
+            "products_limit": 50,
+            "grid_gap": 12,
+            "card_background": "#ffffff",
+            "card_border_color": "#e0e0e0",
+            "card_border_radius": 8,
+            "card_padding": 16,
+            "flag_width": 150,
+            "flag_height": 100,
+            "flag_object_fit": "contain",
+            "flag_border_radius": 8,
+            "product_title_size": 18,
+            "product_title_color": "#121212",
+            "product_price_size": 18,
+            "product_price_color": "#666666",
+            "choose_plan_button_text": "Choose Plan",
+            "button_background": "#121212",
+            "button_hover_background": "#000000",
+            "button_text_color": "#ffffff",
+            "button_border_radius": 4,
+            "drawer_width": 460,
+            "drawer_background": "#ffffff",
+            "drawer_text_color": "#121212",
+            "popup_image_width": 90,
+            "popup_image_height": 60,
+            "popup_image_object_fit": "contain",
+            "popup_image_border_radius": 4,
+            "show_description": true,
+            "description_placement": "above_variants",
+            "description_max_height": 200,
+            "variant_border_radius": 4,
+            "buy_now_background": "#334fb4",
+            "buy_now_hover_background": "#2a3d8f",
+            "show_trust_badges": true,
+            "trust_badge_heading": "Secure Checkout",
+            "trust_badge_background": "#f9f9f9",
+            "trust_badge_text_color": "#121212",
+            "trust_badge_1_text": "Secure Payment",
+            "trust_badge_2_text": "SSL Encrypted",
+            "trust_badge_3_text": "Instant Connectivity",
+            "trust_badge_4_text": "Verified"
+          },
+          "blocks": {}
+        },
+        "ai_gen_block_9e6162c_TGMNLn": {
+          "type": "ai_gen_block_9e6162c",
+          "disabled": true,
+          "settings": {
+            "asia_collection": "asia-1",
+            "europe_collection": "europe-1",
+            "global_collection": "global",
+            "middle_east_collection": "middle-east-1",
+            "desktop_grid_width": 80,
+            "mobile_grid_width": 80,
+            "desktop_products_per_row": 6,
+            "mobile_products_per_row": 2,
+            "card_image_width": 120,
+            "card_image_height": 80,
+            "card_image_object_fit": "contain",
+            "card_image_object_position": "center",
+            "card_image_border_radius": 8,
+            "popup_image_width": 100,
+            "popup_image_height": 100,
+            "popup_image_object_fit": "contain",
+            "popup_image_border_radius": 8,
+            "show_description": true,
+            "description_placement": "above",
+            "description_max_height": 160,
+            "show_trust_badges": true,
+            "trust_badge_heading": "",
+            "trust_badge_1_text": "Secure Payment",
+            "trust_badge_2_text": "SSL Encrypted",
+            "trust_badge_3_text": "Money Back",
+            "trust_badge_4_text": "Verified",
+            "trust_badge_bg_color": "#f3f3f3",
+            "trust_badge_text_color": "#121212"
+          },
+          "blocks": {}
+        }
+      },
+      "block_order": [
+        "ai_gen_block_4fcd70b_eWd3PF",
+        "ai_gen_block_9e6162c_TGMNLn"
+      ],
+      "settings": {}
     }
   },
   "order": [
     "hero-slideshow",
     "all-products",
     "tsapb_ca577056_c6TYCA",
-    "image-banner"
+    "image-banner",
+    "17769806710e9f70b1",
+    "177698618450fdace7",
+    "17769879913aa7a547"
   ]
 }

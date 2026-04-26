@@ -1,0 +1,960 @@
+{% doc %}
+  @prompt
+    Update and improve the existing "Regional eSIM Products" section on the home page (index template). Do NOT remove or break any existing functionality. Only add and fix the following:
+    
+    **1. Section Heading Improvements:**
+    - Add font family selector (system fonts + common web fonts) for the section heading
+    - Add font size control (range 16–60px)
+    - Add font weight control (normal / bold / light)
+    - Add text color picker for section heading
+    - Add text alignment control (left / center / right)
+    - Add entrance animation option for section heading (none / fade-in / slide-up / slide-down) using CSS animations only, no libraries
+    
+    **2. Sub Heading (NEW - add below main heading):**
+    - Add a sub heading text field in theme editor settings
+    - Add font family selector for sub heading
+    - Add font size control (range 12–40px)
+    - Add font weight control
+    - Add text color picker for sub heading
+    - Add text alignment control (left / center / right)
+    - Add entrance animation option (none / fade-in / slide-up) using CSS only
+    
+    **3. Fix Product Images:**
+    - Product images must display in their original aspect ratio — do not crop or distort
+    - Use object-fit: contain so the full image is always visible
+    - Image container should respect the image size setting (small 150px / medium 220px / large 300px height) but show the full image within that space
+    - Add a background color setting for the image container area (default white)
+    
+    **4. Fix View Details & Add to Cart Button Scaling:**
+    - The "View Details" link and "Add to Cart" button font size, padding, and overall size must scale responsively based on the number of products per row
+    - When more products per row are selected (e.g. 6–12), buttons should be smaller and more compact
+    - When fewer products per row (1–3), buttons can be larger and more spacious
+    - Use CSS custom properties or calculated values tied to the columns setting to achieve this scaling
+    - Ensure buttons never overflow or wrap awkwardly regardless of column count
+    
+    **5. Tab Styling Controls (NEW):**
+    - Add color picker for tab background color (inactive state)
+    - Add color picker for tab text color (inactive state)
+    - Add color picker for active tab background color
+    - Add color picker for active tab text color
+    - Add border radius control for tabs (range 0–30px)
+    - Add font size control for tab labels (range 12–24px)
+    - Add font weight control for tab labels (normal / bold)
+    - Add tab underline/indicator style option (none / underline / filled background)
+    
+    **Important constraints:**
+    - Keep all existing settings and functionality fully intact (collection pickers, products per row desktop/mobile, image size, data allowance toggle, validity toggle, country label toggle, add to cart toggle, button styling controls, AJAX add to cart, lazy loading, vanilla JS only)
+    - Section restricted to home page (index template) only
+    - All new animations must be CSS only, lightweight, no JS animation libraries
+    - Maintain fast performance — no additional network requests
+{% enddoc %}
+{% assign ai_gen_id = section.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .regional-esim-section-{{ ai_gen_id }} {
+    padding: 40px 20px;
+    width: 100%;
+  }
+
+  .regional-esim-container-{{ ai_gen_id }} {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .regional-esim-heading-wrapper-{{ ai_gen_id }} {
+    margin-bottom: 30px;
+    text-align: {{ section.settings.heading_alignment }};
+  }
+
+  .regional-esim-heading-{{ ai_gen_id }} {
+    font-family: {{ section.settings.heading_font_family }};
+    font-size: {{ section.settings.heading_font_size }}px;
+    font-weight: {{ section.settings.heading_font_weight }};
+    color: {{ section.settings.heading_color }};
+    margin: 0 0 10px 0;
+    opacity: 0;
+  }
+
+  {% if section.settings.heading_animation == 'fade-in' %}
+    @keyframes regional-esim-fade-in-{{ ai_gen_id }} {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    .regional-esim-heading-{{ ai_gen_id }}.animate {
+      animation: regional-esim-fade-in-{{ ai_gen_id }} 0.8s ease-out forwards;
+    }
+  {% elsif section.settings.heading_animation == 'slide-up' %}
+    @keyframes regional-esim-slide-up-{{ ai_gen_id }} {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .regional-esim-heading-{{ ai_gen_id }}.animate {
+      animation: regional-esim-slide-up-{{ ai_gen_id }} 0.8s ease-out forwards;
+    }
+  {% elsif section.settings.heading_animation == 'slide-down' %}
+    @keyframes regional-esim-slide-down-{{ ai_gen_id }} {
+      from {
+        opacity: 0;
+        transform: translateY(-30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .regional-esim-heading-{{ ai_gen_id }}.animate {
+      animation: regional-esim-slide-down-{{ ai_gen_id }} 0.8s ease-out forwards;
+    }
+  {% else %}
+    .regional-esim-heading-{{ ai_gen_id }} {
+      opacity: 1;
+    }
+  {% endif %}
+
+  .regional-esim-subheading-{{ ai_gen_id }} {
+    font-family: {{ section.settings.subheading_font_family }};
+    font-size: {{ section.settings.subheading_font_size }}px;
+    font-weight: {{ section.settings.subheading_font_weight }};
+    color: {{ section.settings.subheading_color }};
+    margin: 0;
+    opacity: 0;
+  }
+
+  {% if section.settings.subheading_animation == 'fade-in' %}
+    @keyframes regional-esim-sub-fade-in-{{ ai_gen_id }} {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+    .regional-esim-subheading-{{ ai_gen_id }}.animate {
+      animation: regional-esim-sub-fade-in-{{ ai_gen_id }} 0.8s ease-out 0.2s forwards;
+    }
+  {% elsif section.settings.subheading_animation == 'slide-up' %}
+    @keyframes regional-esim-sub-slide-up-{{ ai_gen_id }} {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .regional-esim-subheading-{{ ai_gen_id }}.animate {
+      animation: regional-esim-sub-slide-up-{{ ai_gen_id }} 0.8s ease-out 0.2s forwards;
+    }
+  {% else %}
+    .regional-esim-subheading-{{ ai_gen_id }} {
+      opacity: 1;
+    }
+  {% endif %}
+
+  .regional-esim-tabs-{{ ai_gen_id }} {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 30px;
+    justify-content: center;
+  }
+
+  .regional-esim-tab-{{ ai_gen_id }} {
+    background-color: {{ section.settings.tab_bg_color }};
+    color: {{ section.settings.tab_text_color }};
+    border: none;
+    padding: 12px 24px;
+    cursor: pointer;
+    border-radius: {{ section.settings.tab_border_radius }}px;
+    font-size: {{ section.settings.tab_font_size }}px;
+    font-weight: {{ section.settings.tab_font_weight }};
+    transition: all 0.3s ease;
+    position: relative;
+  }
+
+  {% if section.settings.tab_indicator_style == 'underline' %}
+    .regional-esim-tab-{{ ai_gen_id }}::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background-color: {{ section.settings.tab_active_bg_color }};
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+    .regional-esim-tab-{{ ai_gen_id }}.active::after {
+      transform: scaleX(1);
+    }
+  {% endif %}
+
+  .regional-esim-tab-{{ ai_gen_id }}.active {
+    {% if section.settings.tab_indicator_style == 'filled' %}
+      background-color: {{ section.settings.tab_active_bg_color }};
+    {% endif %}
+    color: {{ section.settings.tab_active_text_color }};
+  }
+
+  .regional-esim-tab-{{ ai_gen_id }}:hover {
+    opacity: 0.8;
+  }
+
+  .regional-esim-products-grid-{{ ai_gen_id }} {
+    display: grid;
+    grid-template-columns: repeat({{ section.settings.products_per_row_desktop }}, 1fr);
+    gap: 20px;
+    --column-count: {{ section.settings.products_per_row_desktop }};
+  }
+
+  @media screen and (max-width: 749px) {
+    .regional-esim-products-grid-{{ ai_gen_id }} {
+      grid-template-columns: repeat({{ section.settings.products_per_row_mobile }}, 1fr);
+      --column-count: {{ section.settings.products_per_row_mobile }};
+    }
+  }
+
+  .regional-esim-product-card-{{ ai_gen_id }} {
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    background-color: #fff;
+    transition: box-shadow 0.3s ease;
+  }
+
+  .regional-esim-product-card-{{ ai_gen_id }}:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  .regional-esim-image-container-{{ ai_gen_id }} {
+    width: 100%;
+    {% if section.settings.image_size == 'small' %}
+      height: 150px;
+    {% elsif section.settings.image_size == 'medium' %}
+      height: 220px;
+    {% else %}
+      height: 300px;
+    {% endif %}
+    background-color: {{ section.settings.image_bg_color }};
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 15px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .regional-esim-image-{{ ai_gen_id }} {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .regional-esim-product-title-{{ ai_gen_id }} {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 10px 0;
+    color: #121212;
+  }
+
+  .regional-esim-product-meta-{{ ai_gen_id }} {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 10px;
+  }
+
+  .regional-esim-product-price-{{ ai_gen_id }} {
+    font-size: 18px;
+    font-weight: 700;
+    color: #121212;
+    margin-bottom: 15px;
+  }
+
+  .regional-esim-product-actions-{{ ai_gen_id }} {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .regional-esim-view-details-{{ ai_gen_id }} {
+    display: inline-block;
+    text-align: center;
+    text-decoration: none;
+    color: {{ section.settings.view_details_text_color }};
+    background-color: {{ section.settings.view_details_bg_color }};
+    border: 1px solid {{ section.settings.view_details_border_color }};
+    border-radius: {{ section.settings.button_border_radius }}px;
+    transition: all 0.3s ease;
+    font-size: calc(14px - (var(--column-count) - 3) * 1px);
+    padding: calc(10px - (var(--column-count) - 3) * 1px) calc(16px - (var(--column-count) - 3) * 2px);
+  }
+
+  .regional-esim-view-details-{{ ai_gen_id }}:hover {
+    background-color: {{ section.settings.view_details_hover_bg_color }};
+    color: {{ section.settings.view_details_hover_text_color }};
+  }
+
+  .regional-esim-add-to-cart-{{ ai_gen_id }} {
+    background-color: {{ section.settings.add_to_cart_bg_color }};
+    color: {{ section.settings.add_to_cart_text_color }};
+    border: none;
+    border-radius: {{ section.settings.button_border_radius }}px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: calc(14px - (var(--column-count) - 3) * 1px);
+    padding: calc(10px - (var(--column-count) - 3) * 1px) calc(16px - (var(--column-count) - 3) * 2px);
+  }
+
+  .regional-esim-add-to-cart-{{ ai_gen_id }}:hover {
+    background-color: {{ section.settings.add_to_cart_hover_bg_color }};
+  }
+
+  .regional-esim-add-to-cart-{{ ai_gen_id }}:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .regional-esim-hidden-{{ ai_gen_id }} {
+    display: none;
+  }
+
+  .regional-esim-loading-{{ ai_gen_id }} {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+  }
+{% endstyle %}
+
+<regional-esim-products-{{ ai_gen_id }} class="regional-esim-section-{{ ai_gen_id }}">
+  <div class="regional-esim-container-{{ ai_gen_id }}">
+    <div class="regional-esim-heading-wrapper-{{ ai_gen_id }}">
+      {% if section.settings.heading != blank %}
+        <h2 class="regional-esim-heading-{{ ai_gen_id }}" style="text-align: {{ section.settings.heading_alignment }};">
+          {{ section.settings.heading }}
+        </h2>
+      {% endif %}
+      {% if section.settings.subheading != blank %}
+        <p class="regional-esim-subheading-{{ ai_gen_id }}" style="text-align: {{ section.settings.subheading_alignment }};">
+          {{ section.settings.subheading }}
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="regional-esim-tabs-{{ ai_gen_id }}">
+      {% for i in (1..5) %}
+        {% assign collection_key = 'collection_' | append: i %}
+        {% assign collection = section.settings[collection_key] %}
+        {% if collection != blank %}
+          <button 
+            class="regional-esim-tab-{{ ai_gen_id }} {% if forloop.first %}active{% endif %}"
+            data-collection-handle="{{ collection.handle }}"
+            data-tab-index="{{ forloop.index }}"
+          >
+            {{ collection.title }}
+          </button>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="regional-esim-products-grid-{{ ai_gen_id }}" data-products-container>
+      <div class="regional-esim-loading-{{ ai_gen_id }}">Loading products...</div>
+    </div>
+  </div>
+</regional-esim-products-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class RegionalEsimProducts{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+        this.tabs = this.querySelectorAll('.regional-esim-tab-{{ ai_gen_id }}');
+        this.productsContainer = this.querySelector('[data-products-container]');
+        this.currentCollection = null;
+        this.settings = {
+          showDataAllowance: {{ section.settings.show_data_allowance }},
+          showValidity: {{ section.settings.show_validity }},
+          showCountryLabel: {{ section.settings.show_country_label }},
+          showAddToCart: {{ section.settings.show_add_to_cart }},
+          imageSize: '{{ section.settings.image_size }}',
+          imageBgColor: '{{ section.settings.image_bg_color }}'
+        };
+      }
+
+      connectedCallback() {
+        this.setupTabs();
+        this.setupAnimations();
+        if (this.tabs.length > 0) {
+          this.loadCollection(this.tabs[0].dataset.collectionHandle);
+        }
+      }
+
+      setupAnimations() {
+        const heading = this.querySelector('.regional-esim-heading-{{ ai_gen_id }}');
+        const subheading = this.querySelector('.regional-esim-subheading-{{ ai_gen_id }}');
+        
+        if (heading) {
+          setTimeout(function() {
+            heading.classList.add('animate');
+          }, 100);
+        }
+        
+        if (subheading) {
+          setTimeout(function() {
+            subheading.classList.add('animate');
+          }, 100);
+        }
+      }
+
+      setupTabs() {
+        this.tabs.forEach(function(tab) {
+          tab.addEventListener('click', function(e) {
+            const clickedTab = e.currentTarget;
+            const handle = clickedTab.dataset.collectionHandle;
+            
+            this.tabs.forEach(function(t) {
+              t.classList.remove('active');
+            });
+            clickedTab.classList.add('active');
+            
+            this.loadCollection(handle);
+          }.bind(this));
+        }.bind(this));
+      }
+
+      loadCollection(handle) {
+        if (this.currentCollection === handle) return;
+        this.currentCollection = handle;
+        
+        this.productsContainer.innerHTML = '<div class="regional-esim-loading-{{ ai_gen_id }}">Loading products...</div>';
+        
+        fetch('/collections/' + handle + '/products.json')
+          .then(function(response) {
+            return response.json();
+          })
+          .then(function(data) {
+            this.renderProducts(data.products);
+          }.bind(this))
+          .catch(function(error) {
+            console.error('Error loading products:', error);
+            this.productsContainer.innerHTML = '<div class="regional-esim-loading-{{ ai_gen_id }}">Error loading products</div>';
+          }.bind(this));
+      }
+
+      renderProducts(products) {
+        if (!products || products.length === 0) {
+          this.productsContainer.innerHTML = '<div class="regional-esim-loading-{{ ai_gen_id }}">No products found</div>';
+          return;
+        }
+
+        const html = products.map(function(product) {
+          return this.createProductCard(product);
+        }.bind(this)).join('');
+
+        this.productsContainer.innerHTML = html;
+        this.setupAddToCartButtons();
+      }
+
+      createProductCard(product) {
+        const variant = product.variants[0];
+        const imageUrl = product.images[0] || '';
+        const price = this.formatMoney(variant.price);
+        
+        let metaHtml = '';
+        if (this.settings.showDataAllowance && product.metafields && product.metafields.custom && product.metafields.custom.data_allowance) {
+          metaHtml += '<div>Data: ' + product.metafields.custom.data_allowance + '</div>';
+        }
+        if (this.settings.showValidity && product.metafields && product.metafields.custom && product.metafields.custom.validity) {
+          metaHtml += '<div>Validity: ' + product.metafields.custom.validity + '</div>';
+        }
+        if (this.settings.showCountryLabel && product.metafields && product.metafields.custom && product.metafields.custom.country) {
+          metaHtml += '<div>Country: ' + product.metafields.custom.country + '</div>';
+        }
+
+        const addToCartButton = this.settings.showAddToCart 
+          ? '<button class="regional-esim-add-to-cart-{{ ai_gen_id }}" data-variant-id="' + variant.id + '" ' + (!variant.available ? 'disabled' : '') + '>' +
+            (variant.available ? 'Add to Cart' : 'Sold Out') +
+            '</button>'
+          : '';
+
+        return '<div class="regional-esim-product-card-{{ ai_gen_id }}">' +
+          '<div class="regional-esim-image-container-{{ ai_gen_id }}">' +
+            (imageUrl ? '<img src="' + imageUrl + '" alt="' + product.title + '" class="regional-esim-image-{{ ai_gen_id }}" loading="lazy">' : '') +
+          '</div>' +
+          '<h3 class="regional-esim-product-title-{{ ai_gen_id }}">' + product.title + '</h3>' +
+          (metaHtml ? '<div class="regional-esim-product-meta-{{ ai_gen_id }}">' + metaHtml + '</div>' : '') +
+          '<div class="regional-esim-product-price-{{ ai_gen_id }}">' + price + '</div>' +
+          '<div class="regional-esim-product-actions-{{ ai_gen_id }}">' +
+            '<a href="/products/' + product.handle + '" class="regional-esim-view-details-{{ ai_gen_id }}">View Details</a>' +
+            addToCartButton +
+          '</div>' +
+        '</div>';
+      }
+
+      setupAddToCartButtons() {
+        const buttons = this.querySelectorAll('.regional-esim-add-to-cart-{{ ai_gen_id }}');
+        buttons.forEach(function(button) {
+          button.addEventListener('click', function(e) {
+            const btn = e.currentTarget;
+            const variantId = btn.dataset.variantId;
+            
+            if (btn.disabled) return;
+            
+            btn.disabled = true;
+            btn.textContent = 'Adding...';
+            
+            fetch('/cart/add.js', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                id: variantId,
+                quantity: 1
+              })
+            })
+            .then(function(response) {
+              return response.json();
+            })
+            .then(function(data) {
+              btn.textContent = 'Added!';
+              setTimeout(function() {
+                btn.textContent = 'Add to Cart';
+                btn.disabled = false;
+              }, 2000);
+              
+              if (window.theme && window.theme.cart) {
+                window.theme.cart.refresh();
+              }
+            })
+            .catch(function(error) {
+              console.error('Error adding to cart:', error);
+              btn.textContent = 'Error';
+              setTimeout(function() {
+                btn.textContent = 'Add to Cart';
+                btn.disabled = false;
+              }, 2000);
+            });
+          });
+        });
+      }
+
+      formatMoney(cents) {
+        const amount = cents / 100;
+        return '{{ cart.currency.symbol }}' + amount.toFixed(2);
+      }
+    }
+
+    customElements.define('regional-esim-products-{{ ai_gen_id }}', RegionalEsimProducts{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Regional eSIM Products",
+  "tag": "section",
+  "class": "section-regional-esim-products",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Section heading"
+    },
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Regional eSIM Products"
+    },
+    {
+      "type": "select",
+      "id": "heading_font_family",
+      "label": "Font family",
+      "options": [
+        { "value": "system-ui, -apple-system, sans-serif", "label": "System" },
+        { "value": "Arial, sans-serif", "label": "Arial" },
+        { "value": "Helvetica, sans-serif", "label": "Helvetica" },
+        { "value": "Georgia, serif", "label": "Georgia" },
+        { "value": "Times New Roman, serif", "label": "Times New Roman" },
+        { "value": "Courier New, monospace", "label": "Courier New" },
+        { "value": "Verdana, sans-serif", "label": "Verdana" },
+        { "value": "Trebuchet MS, sans-serif", "label": "Trebuchet MS" }
+      ],
+      "default": "system-ui, -apple-system, sans-serif"
+    },
+    {
+      "type": "range",
+      "id": "heading_font_size",
+      "label": "Font size",
+      "min": 16,
+      "max": 60,
+      "step": 2,
+      "unit": "px",
+      "default": 32
+    },
+    {
+      "type": "select",
+      "id": "heading_font_weight",
+      "label": "Font weight",
+      "options": [
+        { "value": "300", "label": "Light" },
+        { "value": "400", "label": "Normal" },
+        { "value": "700", "label": "Bold" }
+      ],
+      "default": "700"
+    },
+    {
+      "type": "color",
+      "id": "heading_color",
+      "label": "Text color",
+      "default": "#121212"
+    },
+    {
+      "type": "select",
+      "id": "heading_alignment",
+      "label": "Text alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "select",
+      "id": "heading_animation",
+      "label": "Entrance animation",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "fade-in", "label": "Fade in" },
+        { "value": "slide-up", "label": "Slide up" },
+        { "value": "slide-down", "label": "Slide down" }
+      ],
+      "default": "fade-in"
+    },
+    {
+      "type": "header",
+      "content": "Sub heading"
+    },
+    {
+      "type": "text",
+      "id": "subheading",
+      "label": "Sub heading text"
+    },
+    {
+      "type": "select",
+      "id": "subheading_font_family",
+      "label": "Font family",
+      "options": [
+        { "value": "system-ui, -apple-system, sans-serif", "label": "System" },
+        { "value": "Arial, sans-serif", "label": "Arial" },
+        { "value": "Helvetica, sans-serif", "label": "Helvetica" },
+        { "value": "Georgia, serif", "label": "Georgia" },
+        { "value": "Times New Roman, serif", "label": "Times New Roman" },
+        { "value": "Courier New, monospace", "label": "Courier New" },
+        { "value": "Verdana, sans-serif", "label": "Verdana" },
+        { "value": "Trebuchet MS, sans-serif", "label": "Trebuchet MS" }
+      ],
+      "default": "system-ui, -apple-system, sans-serif"
+    },
+    {
+      "type": "range",
+      "id": "subheading_font_size",
+      "label": "Font size",
+      "min": 12,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "default": 16
+    },
+    {
+      "type": "select",
+      "id": "subheading_font_weight",
+      "label": "Font weight",
+      "options": [
+        { "value": "300", "label": "Light" },
+        { "value": "400", "label": "Normal" },
+        { "value": "700", "label": "Bold" }
+      ],
+      "default": "400"
+    },
+    {
+      "type": "color",
+      "id": "subheading_color",
+      "label": "Text color",
+      "default": "#666666"
+    },
+    {
+      "type": "select",
+      "id": "subheading_alignment",
+      "label": "Text alignment",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" },
+        { "value": "right", "label": "Right" }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "select",
+      "id": "subheading_animation",
+      "label": "Entrance animation",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "fade-in", "label": "Fade in" },
+        { "value": "slide-up", "label": "Slide up" }
+      ],
+      "default": "fade-in"
+    },
+    {
+      "type": "header",
+      "content": "Collections"
+    },
+    {
+      "type": "collection",
+      "id": "collection_1",
+      "label": "Collection 1"
+    },
+    {
+      "type": "collection",
+      "id": "collection_2",
+      "label": "Collection 2"
+    },
+    {
+      "type": "collection",
+      "id": "collection_3",
+      "label": "Collection 3"
+    },
+    {
+      "type": "collection",
+      "id": "collection_4",
+      "label": "Collection 4"
+    },
+    {
+      "type": "collection",
+      "id": "collection_5",
+      "label": "Collection 5"
+    },
+    {
+      "type": "header",
+      "content": "Tab styling"
+    },
+    {
+      "type": "color",
+      "id": "tab_bg_color",
+      "label": "Background color",
+      "default": "#f3f3f3"
+    },
+    {
+      "type": "color",
+      "id": "tab_text_color",
+      "label": "Text color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_bg_color",
+      "label": "Active background color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "tab_active_text_color",
+      "label": "Active text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "range",
+      "id": "tab_border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 30,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "tab_font_size",
+      "label": "Font size",
+      "min": 12,
+      "max": 24,
+      "step": 1,
+      "unit": "px",
+      "default": 14
+    },
+    {
+      "type": "select",
+      "id": "tab_font_weight",
+      "label": "Font weight",
+      "options": [
+        { "value": "400", "label": "Normal" },
+        { "value": "700", "label": "Bold" }
+      ],
+      "default": "400"
+    },
+    {
+      "type": "select",
+      "id": "tab_indicator_style",
+      "label": "Indicator style",
+      "options": [
+        { "value": "none", "label": "None" },
+        { "value": "underline", "label": "Underline" },
+        { "value": "filled", "label": "Filled background" }
+      ],
+      "default": "filled"
+    },
+    {
+      "type": "header",
+      "content": "Product grid"
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_desktop",
+      "label": "Products per row (desktop)",
+      "min": 1,
+      "max": 12,
+      "step": 1,
+      "default": 4
+    },
+    {
+      "type": "range",
+      "id": "products_per_row_mobile",
+      "label": "Products per row (mobile)",
+      "min": 1,
+      "max": 3,
+      "step": 1,
+      "default": 2
+    },
+    {
+      "type": "header",
+      "content": "Product images"
+    },
+    {
+      "type": "select",
+      "id": "image_size",
+      "label": "Image size",
+      "options": [
+        { "value": "small", "label": "Small (150px)" },
+        { "value": "medium", "label": "Medium (220px)" },
+        { "value": "large", "label": "Large (300px)" }
+      ],
+      "default": "medium"
+    },
+    {
+      "type": "color",
+      "id": "image_bg_color",
+      "label": "Background color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "header",
+      "content": "Product information"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_data_allowance",
+      "label": "Show data allowance",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_validity",
+      "label": "Show validity",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_country_label",
+      "label": "Show country label",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_add_to_cart",
+      "label": "Show add to cart button",
+      "default": true
+    },
+    {
+      "type": "header",
+      "content": "View details button"
+    },
+    {
+      "type": "color",
+      "id": "view_details_bg_color",
+      "label": "Background color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "view_details_text_color",
+      "label": "Text color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "view_details_border_color",
+      "label": "Border color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "view_details_hover_bg_color",
+      "label": "Hover background color",
+      "default": "#f3f3f3"
+    },
+    {
+      "type": "color",
+      "id": "view_details_hover_text_color",
+      "label": "Hover text color",
+      "default": "#121212"
+    },
+    {
+      "type": "header",
+      "content": "Add to cart button"
+    },
+    {
+      "type": "color",
+      "id": "add_to_cart_bg_color",
+      "label": "Background color",
+      "default": "#121212"
+    },
+    {
+      "type": "color",
+      "id": "add_to_cart_text_color",
+      "label": "Text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "add_to_cart_hover_bg_color",
+      "label": "Hover background color",
+      "default": "#000000"
+    },
+    {
+      "type": "range",
+      "id": "button_border_radius",
+      "label": "Button border radius",
+      "min": 0,
+      "max": 30,
+      "step": 2,
+      "unit": "px",
+      "default": 4
+    }
+  ],
+  "presets": [
+    {
+      "name": "Regional eSIM Products"
+    }
+  ]
+}
+{% endschema %}

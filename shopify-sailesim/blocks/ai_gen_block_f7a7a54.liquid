@@ -1,0 +1,703 @@
+{% doc %}
+  @prompt
+    Create a premium hero banner section for a Shopify eSIM store homepage (index template) called "Animated Hero Banner". This replaces the default slideshow with a fully customizable animated hero.
+    
+    Layout: Full-width hero with background image support, overlay color + opacity control, centered content.
+    
+    Content:
+    - Main heading: "Stay Connected Anywhere in the World"
+    - Subheading: "Instant eSIM activation for 190+ countries. No physical SIM needed."
+    - Primary CTA button: "Find My eSIM Plan"
+    - Secondary CTA button (optional, toggle show/hide): "Learn More"
+    
+    ANIMATION SETTINGS (most important - all CSS keyframe animations, no JS libraries):
+    Heading animation options (theme editor select): none / fade-in / slide-up / slide-down / slide-left / slide-right / zoom-in
+    Subheading animation options (theme editor select): none / fade-in / slide-up / slide-down / slide-left / slide-right / zoom-in
+    Button animation options (theme editor select): none / fade-in / slide-up / zoom-in
+    Animation duration control: range 300ms to 2000ms
+    Animation delay for subheading: range 0 to 1000ms
+    Animation delay for button: range 0 to 2000ms
+    
+    STYLING SETTINGS:
+    - Heading font size (range 24-80px)
+    - Heading font weight (normal/bold)
+    - Heading color picker (default white)
+    - Subheading font size (range 14-40px)
+    - Subheading color picker (default white)
+    - Min height of hero (range 300-900px, default 600px)
+    - Background color picker (fallback if no image)
+    - Overlay color picker (default black)
+    - Overlay opacity (range 0-90%, default 40%)
+    - Text alignment (left/center/right)
+    - Content vertical position (top/middle/bottom)
+    - Primary button bg color, text color, border radius
+    - Secondary button style (outline)
+    
+    Brand defaults: navy #0A1F5C overlay, white text, gold #C9A84C button accent.
+    
+    Vanilla JS only for any interactions. CSS keyframes for all animations.
+{% enddoc %}
+{% assign ai_gen_id = block.id | replace: '_', '' | downcase %}
+
+{% style %}
+  .ai-hero-banner-{{ ai_gen_id }} {
+    position: relative;
+    width: 100%;
+    min-height: {{ block.settings.min_height }}px;
+    display: flex;
+    align-items: {{ block.settings.vertical_position }};
+    justify-content: center;
+    overflow: hidden;
+    background-color: {{ block.settings.background_color }};
+  }
+
+  .ai-hero-banner-bg-{{ ai_gen_id }} {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+  }
+
+  .ai-hero-banner-overlay-{{ ai_gen_id }} {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: {{ block.settings.overlay_color }};
+    opacity: {{ block.settings.overlay_opacity | divided_by: 100.0 }};
+    z-index: 2;
+  }
+
+  .ai-hero-banner-content-{{ ai_gen_id }} {
+    position: relative;
+    z-index: 3;
+    max-width: 1200px;
+    padding: 40px 20px;
+    text-align: {{ block.settings.text_alignment }};
+    width: 100%;
+  }
+
+  .ai-hero-banner-heading-{{ ai_gen_id }} {
+    font-size: {{ block.settings.heading_font_size }}px;
+    font-weight: {{ block.settings.heading_font_weight }};
+    color: {{ block.settings.heading_color }};
+    margin: 0 0 20px;
+    line-height: 1.2;
+    {% if block.settings.heading_animation != 'none' %}
+      opacity: 0;
+      animation: ai-hero-{{ block.settings.heading_animation }}-{{ ai_gen_id }} {{ block.settings.animation_duration }}ms ease-out forwards;
+    {% endif %}
+  }
+
+  .ai-hero-banner-subheading-{{ ai_gen_id }} {
+    font-size: {{ block.settings.subheading_font_size }}px;
+    color: {{ block.settings.subheading_color }};
+    margin: 0 0 30px;
+    line-height: 1.5;
+    {% if block.settings.subheading_animation != 'none' %}
+      opacity: 0;
+      animation: ai-hero-{{ block.settings.subheading_animation }}-{{ ai_gen_id }} {{ block.settings.animation_duration }}ms ease-out forwards;
+      animation-delay: {{ block.settings.subheading_delay }}ms;
+    {% endif %}
+  }
+
+  .ai-hero-banner-buttons-{{ ai_gen_id }} {
+    display: flex;
+    gap: 15px;
+    {% if block.settings.text_alignment == 'center' %}
+      justify-content: center;
+    {% elsif block.settings.text_alignment == 'right' %}
+      justify-content: flex-end;
+    {% else %}
+      justify-content: flex-start;
+    {% endif %}
+    flex-wrap: wrap;
+    {% if block.settings.button_animation != 'none' %}
+      opacity: 0;
+      animation: ai-hero-{{ block.settings.button_animation }}-{{ ai_gen_id }} {{ block.settings.animation_duration }}ms ease-out forwards;
+      animation-delay: {{ block.settings.button_delay }}ms;
+    {% endif %}
+  }
+
+  .ai-hero-banner-btn-primary-{{ ai_gen_id }} {
+    display: inline-block;
+    padding: 15px 35px;
+    background-color: {{ block.settings.primary_btn_bg }};
+    color: {{ block.settings.primary_btn_text }};
+    text-decoration: none;
+    border-radius: {{ block.settings.primary_btn_radius }}px;
+    font-size: 16px;
+    font-weight: 600;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border: none;
+    cursor: pointer;
+  }
+
+  .ai-hero-banner-btn-primary-{{ ai_gen_id }}:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  .ai-hero-banner-btn-secondary-{{ ai_gen_id }} {
+    display: inline-block;
+    padding: 15px 35px;
+    background-color: transparent;
+    color: {{ block.settings.secondary_btn_text }};
+    text-decoration: none;
+    border-radius: {{ block.settings.secondary_btn_radius }}px;
+    font-size: 16px;
+    font-weight: 600;
+    border: 2px solid {{ block.settings.secondary_btn_text }};
+    transition: background-color 0.3s ease, color 0.3s ease;
+    cursor: pointer;
+  }
+
+  .ai-hero-banner-btn-secondary-{{ ai_gen_id }}:hover {
+    background-color: {{ block.settings.secondary_btn_text }};
+    color: {{ block.settings.overlay_color }};
+  }
+
+  @keyframes ai-hero-fade-in-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes ai-hero-slide-up-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: translateY(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes ai-hero-slide-down-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: translateY(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes ai-hero-slide-left-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: translateX(30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes ai-hero-slide-right-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: translateX(-30px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes ai-hero-zoom-in-{{ ai_gen_id }} {
+    from {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @media screen and (max-width: 749px) {
+    .ai-hero-banner-{{ ai_gen_id }} {
+      min-height: {{ block.settings.min_height | times: 0.7 }}px;
+    }
+
+    .ai-hero-banner-heading-{{ ai_gen_id }} {
+      font-size: {{ block.settings.heading_font_size | times: 0.6 }}px;
+    }
+
+    .ai-hero-banner-subheading-{{ ai_gen_id }} {
+      font-size: {{ block.settings.subheading_font_size | times: 0.8 }}px;
+    }
+
+    .ai-hero-banner-buttons-{{ ai_gen_id }} {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .ai-hero-banner-btn-primary-{{ ai_gen_id }},
+    .ai-hero-banner-btn-secondary-{{ ai_gen_id }} {
+      text-align: center;
+    }
+  }
+{% endstyle %}
+
+<animated-hero-banner-{{ ai_gen_id }} class="ai-hero-banner-{{ ai_gen_id }}" {{ block.shopify_attributes }}>
+  {% if block.settings.background_image %}
+    <img
+      src="{{ block.settings.background_image | image_url: width: 2000 }}"
+      alt="{{ block.settings.background_image.alt | escape }}"
+      class="ai-hero-banner-bg-{{ ai_gen_id }}"
+      loading="eager"
+      width="{{ block.settings.background_image.width }}"
+      height="{{ block.settings.background_image.height }}"
+    >
+  {% endif %}
+
+  <div class="ai-hero-banner-overlay-{{ ai_gen_id }}"></div>
+
+  <div class="ai-hero-banner-content-{{ ai_gen_id }}">
+    {% if block.settings.heading != blank %}
+      <h1 class="ai-hero-banner-heading-{{ ai_gen_id }}">
+        {{ block.settings.heading }}
+      </h1>
+    {% endif %}
+
+    {% if block.settings.subheading != blank %}
+      <p class="ai-hero-banner-subheading-{{ ai_gen_id }}">
+        {{ block.settings.subheading }}
+      </p>
+    {% endif %}
+
+    <div class="ai-hero-banner-buttons-{{ ai_gen_id }}">
+      {% if block.settings.primary_btn_label != blank %}
+        <a
+          href="{{ block.settings.primary_btn_link }}"
+          class="ai-hero-banner-btn-primary-{{ ai_gen_id }}"
+        >
+          {{ block.settings.primary_btn_label }}
+        </a>
+      {% endif %}
+
+      {% if block.settings.show_secondary_button and block.settings.secondary_btn_label != blank %}
+        <a
+          href="{{ block.settings.secondary_btn_link }}"
+          class="ai-hero-banner-btn-secondary-{{ ai_gen_id }}"
+        >
+          {{ block.settings.secondary_btn_label }}
+        </a>
+      {% endif %}
+    </div>
+  </div>
+</animated-hero-banner-{{ ai_gen_id }}>
+
+<script>
+  (function() {
+    class AnimatedHeroBanner{{ ai_gen_id }} extends HTMLElement {
+      constructor() {
+        super();
+      }
+
+      connectedCallback() {
+        this.style.display = 'block';
+      }
+    }
+
+    customElements.define('animated-hero-banner-{{ ai_gen_id }}', AnimatedHeroBanner{{ ai_gen_id }});
+  })();
+</script>
+
+{% schema %}
+{
+  "name": "Animated hero banner",
+  "tag": null,
+  "settings": [
+    {
+      "type": "header",
+      "content": "Content"
+    },
+    {
+      "type": "inline_richtext",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Stay Connected Anywhere in the World"
+    },
+    {
+      "type": "inline_richtext",
+      "id": "subheading",
+      "label": "Subheading",
+      "default": "Instant eSIM activation for 190+ countries. No physical SIM needed."
+    },
+    {
+      "type": "header",
+      "content": "Primary button"
+    },
+    {
+      "type": "text",
+      "id": "primary_btn_label",
+      "label": "Text",
+      "default": "Find My eSIM Plan"
+    },
+    {
+      "type": "url",
+      "id": "primary_btn_link",
+      "label": "Link"
+    },
+    {
+      "type": "color",
+      "id": "primary_btn_bg",
+      "label": "Background",
+      "default": "#C9A84C"
+    },
+    {
+      "type": "color",
+      "id": "primary_btn_text",
+      "label": "Text",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "range",
+      "id": "primary_btn_radius",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "label": "Border radius",
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Secondary button"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_secondary_button",
+      "label": "Show secondary button",
+      "default": true
+    },
+    {
+      "type": "text",
+      "id": "secondary_btn_label",
+      "label": "Text",
+      "default": "Learn More"
+    },
+    {
+      "type": "url",
+      "id": "secondary_btn_link",
+      "label": "Link"
+    },
+    {
+      "type": "color",
+      "id": "secondary_btn_text",
+      "label": "Text and border",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "range",
+      "id": "secondary_btn_radius",
+      "min": 0,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "label": "Border radius",
+      "default": 4
+    },
+    {
+      "type": "header",
+      "content": "Background"
+    },
+    {
+      "type": "image_picker",
+      "id": "background_image",
+      "label": "Image"
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Fallback color",
+      "default": "#0A1F5C"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "Overlay color",
+      "default": "#0A1F5C"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "min": 0,
+      "max": 90,
+      "step": 5,
+      "unit": "%",
+      "label": "Overlay opacity",
+      "default": 40
+    },
+    {
+      "type": "header",
+      "content": "Layout"
+    },
+    {
+      "type": "range",
+      "id": "min_height",
+      "min": 300,
+      "max": 900,
+      "step": 50,
+      "unit": "px",
+      "label": "Minimum height",
+      "default": 600
+    },
+    {
+      "type": "select",
+      "id": "text_alignment",
+      "label": "Text alignment",
+      "options": [
+        {
+          "value": "left",
+          "label": "Left"
+        },
+        {
+          "value": "center",
+          "label": "Center"
+        },
+        {
+          "value": "right",
+          "label": "Right"
+        }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "select",
+      "id": "vertical_position",
+      "label": "Content vertical position",
+      "options": [
+        {
+          "value": "flex-start",
+          "label": "Top"
+        },
+        {
+          "value": "center",
+          "label": "Middle"
+        },
+        {
+          "value": "flex-end",
+          "label": "Bottom"
+        }
+      ],
+      "default": "center"
+    },
+    {
+      "type": "header",
+      "content": "Heading style"
+    },
+    {
+      "type": "range",
+      "id": "heading_font_size",
+      "min": 24,
+      "max": 80,
+      "step": 2,
+      "unit": "px",
+      "label": "Font size",
+      "default": 56
+    },
+    {
+      "type": "select",
+      "id": "heading_font_weight",
+      "label": "Font weight",
+      "options": [
+        {
+          "value": "normal",
+          "label": "Normal"
+        },
+        {
+          "value": "bold",
+          "label": "Bold"
+        }
+      ],
+      "default": "bold"
+    },
+    {
+      "type": "color",
+      "id": "heading_color",
+      "label": "Color",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "header",
+      "content": "Subheading style"
+    },
+    {
+      "type": "range",
+      "id": "subheading_font_size",
+      "min": 14,
+      "max": 40,
+      "step": 2,
+      "unit": "px",
+      "label": "Font size",
+      "default": 20
+    },
+    {
+      "type": "color",
+      "id": "subheading_color",
+      "label": "Color",
+      "default": "#FFFFFF"
+    },
+    {
+      "type": "header",
+      "content": "Heading animation"
+    },
+    {
+      "type": "select",
+      "id": "heading_animation",
+      "label": "Animation type",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade-in",
+          "label": "Fade in"
+        },
+        {
+          "value": "slide-up",
+          "label": "Slide up"
+        },
+        {
+          "value": "slide-down",
+          "label": "Slide down"
+        },
+        {
+          "value": "slide-left",
+          "label": "Slide left"
+        },
+        {
+          "value": "slide-right",
+          "label": "Slide right"
+        },
+        {
+          "value": "zoom-in",
+          "label": "Zoom in"
+        }
+      ],
+      "default": "slide-up"
+    },
+    {
+      "type": "header",
+      "content": "Subheading animation"
+    },
+    {
+      "type": "select",
+      "id": "subheading_animation",
+      "label": "Animation type",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade-in",
+          "label": "Fade in"
+        },
+        {
+          "value": "slide-up",
+          "label": "Slide up"
+        },
+        {
+          "value": "slide-down",
+          "label": "Slide down"
+        },
+        {
+          "value": "slide-left",
+          "label": "Slide left"
+        },
+        {
+          "value": "slide-right",
+          "label": "Slide right"
+        },
+        {
+          "value": "zoom-in",
+          "label": "Zoom in"
+        }
+      ],
+      "default": "fade-in"
+    },
+    {
+      "type": "range",
+      "id": "subheading_delay",
+      "min": 0,
+      "max": 1000,
+      "step": 100,
+      "unit": "ms",
+      "label": "Animation delay",
+      "default": 200
+    },
+    {
+      "type": "header",
+      "content": "Button animation"
+    },
+    {
+      "type": "select",
+      "id": "button_animation",
+      "label": "Animation type",
+      "options": [
+        {
+          "value": "none",
+          "label": "None"
+        },
+        {
+          "value": "fade-in",
+          "label": "Fade in"
+        },
+        {
+          "value": "slide-up",
+          "label": "Slide up"
+        },
+        {
+          "value": "zoom-in",
+          "label": "Zoom in"
+        }
+      ],
+      "default": "slide-up"
+    },
+    {
+      "type": "range",
+      "id": "button_delay",
+      "min": 0,
+      "max": 2000,
+      "step": 100,
+      "unit": "ms",
+      "label": "Animation delay",
+      "default": 400
+    },
+    {
+      "type": "header",
+      "content": "Animation timing"
+    },
+    {
+      "type": "range",
+      "id": "animation_duration",
+      "min": 300,
+      "max": 2000,
+      "step": 100,
+      "unit": "ms",
+      "label": "Duration",
+      "default": 800
+    }
+  ],
+  "presets": [
+    {
+      "name": "Animated hero banner"
+    }
+  ]
+}
+{% endschema %}
