@@ -1411,9 +1411,7 @@ export default function adminRoutes(
         : null;
 
       const regions = await prisma.region.findMany({
-        where: regionCodesUpper
-          ? { code: { in: regionCodesUpper } }
-          : { isActive: true },
+        where: regionCodesUpper ? { code: { in: regionCodesUpper } } : { isActive: true },
         orderBy: [{ parentCode: 'asc' }, { sortOrder: 'asc' }, { code: 'asc' }],
       });
 
