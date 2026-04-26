@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, Loader2, Pencil, Trash2, Globe } from 'lucide-react';
+import { Check, Loader2, Pencil, Trash2, Globe, Sparkles, RefreshCw } from 'lucide-react';
 import {
   useRegions,
   useRegionSuggestions,
@@ -19,6 +19,8 @@ export function Regions() {
     [regionsQ.data?.regions],
   );
 
+  const hasDiscovered = suggestionsQ.isFetched || suggestionsQ.isFetching;
+
   return (
     <div className="space-y-8">
       <header>
@@ -30,16 +32,19 @@ export function Regions() {
           Group countries into canonical regional bundles (e.g.{' '}
           <span className="font-mono">EU30</span>, <span className="font-mono">ASIA4</span>,{' '}
           <span className="font-mono">GCC6</span>) that you can sell as multi-country eSIMs.
-          Suggestions come from your live provider catalog — accept the ones you want, then run
-          "Generate All Templates" on the Products page.
+          Click <span className="font-medium">Discover</span> to scan your provider catalog for
+          candidates, accept the ones you want, then run "Generate All Templates" on the Products
+          page.
         </p>
       </header>
 
       <SuggestionsSection
-        loading={suggestionsQ.isPending}
+        hasDiscovered={hasDiscovered}
+        loading={suggestionsQ.isFetching}
         error={suggestionsQ.error as Error | null}
         groups={suggestionsQ.data?.groups ?? []}
         savedCodes={savedCodes}
+        onDiscover={() => void suggestionsQ.refetch()}
       />
 
       <SavedRegionsSection
@@ -56,34 +61,61 @@ export function Regions() {
 // ────────────────────────────────────────────────────────────────────────────
 
 function SuggestionsSection({
+  hasDiscovered,
   loading,
   error,
   groups,
   savedCodes,
+  onDiscover,
 }: {
+  hasDiscovered: boolean;
   loading: boolean;
   error: Error | null;
   groups: import('@/hooks/useRegions').RegionGroup[];
   savedCodes: Set<string>;
+  onDiscover: () => void;
 }) {
   return (
     <section>
-      <h2 className="text-lg font-semibold mb-3">Suggestions from provider catalog</h2>
-      {loading && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" /> Discovering…
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold">Suggestions from provider catalog</h2>
+        <button
+          onClick={onDiscover}
+          disabled={loading}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-muted disabled:opacity-50 transition-colors"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : hasDiscovered ? (
+            <RefreshCw className="h-4 w-4" />
+          ) : (
+            <Sparkles className="h-4 w-4" />
+          )}
+          {loading ? 'Discovering…' : hasDiscovered ? 'Re-run discovery' : 'Discover suggestions'}
+        </button>
+      </div>
+
+      {!hasDiscovered && !loading && (
+        <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground text-center">
+          Click <span className="font-medium">Discover suggestions</span> to scan the active
+          provider catalog for multi-country plans we can group into regions.
         </div>
       )}
+
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           Failed to load suggestions: {error.message}
         </div>
       )}
-      {!loading && !error && groups.length === 0 && (
+
+      {hasDiscovered && !loading && !error && groups.length === 0 && (
         <div className="rounded-md border border-dashed p-6 text-sm text-muted-foreground text-center">
-          No suggestions yet. Sync provider catalogs first (Catalog page) so we have data to group.
+          No suggestions found. Make sure your provider catalogs are synced and parsed (Catalog
+          page) — discovery looks for catalog rows with 2+ countries in their{' '}
+          <span className="font-mono">countryCodes</span> list.
         </div>
       )}
+
       <div className="grid gap-3 md:grid-cols-2">
         {groups.map((g) => (
           <SuggestionCard key={`${g.parentCode}::${g.label}`} group={g} savedCodes={savedCodes} />
