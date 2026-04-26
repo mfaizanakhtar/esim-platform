@@ -65,6 +65,12 @@ npm run pr:create-simple "feat: add retry logic"
    npm run pr:merge <PR_NUMBER> "<original commit message>"
    ```
 
+**What happens when the implementation log is missing (exit code 2):**
+1. Script detects substantive code changed (`fulfillment-engine/src/`, `fulfillment-engine/extensions/`, `dashboard/src/`) but `docs/implementations/` was not touched
+2. Prints which files triggered the check + required action
+3. Exits with code **2** with no commit made and the working tree restored — the agent must add an `implementations/<NNNN>-<slug>.md` entry (and a row in `INDEX.md`), then re-run `npm run pr:create`
+4. Skip clause: include `[skip-impl-log]` anywhere in the commit message for pure refactors / fixes / CI tweaks with no behaviour change
+
 ### Merge an existing PR after a fix push
 
 ```bash
@@ -147,6 +153,7 @@ Slug rules: lowercase, spaces → hyphens, non-alphanumeric stripped, max 40 cha
 |-----------|-----------|
 | No commit message provided | Prints usage and exits 1 |
 | Nothing to commit (clean tree) | Prints warning, exits 0 (safe no-op) |
+| **Implementation log missing for substantive change** | **Prints required action, restores tree, exits 2 — agent adds `implementations/` entry and re-runs (or adds `[skip-impl-log]` to the commit message)** |
 | CI checks fail | Prints each failed check name + link, exits 1 |
 | CI timeout (>10 min) | Prints PR URL for manual review, exits 1 |
 | Already on a feature branch | Uses existing branch, ignores derived name |
