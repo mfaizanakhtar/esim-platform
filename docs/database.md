@@ -98,6 +98,47 @@ Synced vendor product catalog. Source of truth for AI mapping.
 
 ---
 
+## Region
+
+Canonical groupings of countries used by region-type Shopify product templates (e.g. `EU30`, `ASIA4`, `GCC6`). The `code` is referenced in regional Shopify SKUs (`REGION-<code>-...`); the `countryCodes` list is the **strict canonical coverage** advertised to customers and used to filter eligible provider SKUs (provider catalog must cover every code).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | String (cuid) | Primary key |
+| `code` | String (unique) | Stable region code, e.g. `EU30`, `ASIA4`, `GCC6` (uppercase A–Z, 0–9, `-`; 2–32 chars) |
+| `parentCode` | String | Groups variants of the same region family, e.g. `EU`, `ASIA` |
+| `name` | String | Human-readable name (e.g. `"Europe (30 countries)"`) |
+| `description` | String? | Optional notes |
+| `countryCodes` | Json | Array of ISO 3166-1 alpha-2 codes (uppercase, deduped) |
+| `isActive` | Boolean | Default `true` — soft-disable without deletion |
+| `sortOrder` | Int | Default `0` — display order within `parentCode` |
+| `createdAt` / `updatedAt` | DateTime | |
+
+`ShopifyProductTemplate.regionCode` references `Region.code` with `ON DELETE SET NULL`.
+
+---
+
+## ShopifyProductTemplate
+
+Per-product template that drives Shopify product creation. Coexists in two flavours:
+
+- **COUNTRY** — `templateType = "COUNTRY"`, `countryCode` populated, `regionCode` NULL. One template per country.
+- **REGION** — `templateType = "REGION"`, `regionCode` populated (FK to `Region.code`), `countryCode` NULL. One template per region.
+
+Both `countryCode` and `regionCode` are nullable + `@unique`; Postgres treats NULLs as distinct in unique indexes, so populated values are globally unique without forcing every row to set both. Application code is responsible for ensuring exactly one of the two is set per row, matching `templateType`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | String (cuid) | Primary key |
+| `templateType` | String | `"COUNTRY"` or `"REGION"` (default `"COUNTRY"`) |
+| `countryCode` | String? (unique) | Set on COUNTRY rows |
+| `regionCode` | String? (unique) | Set on REGION rows; FK to `Region.code` |
+| `title`, `handle` (unique), `descriptionHtml`, `status`, `productType`, `vendor`, `tags`, `imageUrl`, `seoTitle`, `seoDescription` | — | Standard product fields |
+| `shopifyProductId` (unique), `shopifyPushedAt` | — | Track Shopify push state |
+| `createdAt` / `updatedAt` | DateTime | |
+
+---
+
 ## ShopifyVariant
 
 Cache of Shopify product variants. Populated via `POST /admin/shopify-skus/sync`.

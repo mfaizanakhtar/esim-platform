@@ -2134,7 +2134,7 @@ Countries: ${countryList}`,
           if (!v.lastPricedAt) return latest;
           return !latest || v.lastPricedAt > latest ? v.lastPricedAt : latest;
         }, null),
-        lastScrapedAt: scrapeMap.get(t.countryCode) ?? null,
+        lastScrapedAt: t.countryCode ? (scrapeMap.get(t.countryCode) ?? null) : null,
       };
     });
 
@@ -4280,6 +4280,265 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       return reply.send({ ok: true, embedded });
     },
   );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Region CRUD
+  //
+  // Regions are canonical groupings of countries (e.g. EU30, ASIA4, GCC6)
+  // used by region-type ShopifyProductTemplates. The `code` is stable and
+  // used in SKUs (REGION-<code>-...); the `countryCodes` list is the
+  // canonical coverage we advertise to customers and use for strict-coverage
+  // matching against provider SKUs.
+  //
+  // See docs/implementations/INDEX.md for the broader region SKU work.
+  // ────────────────────────────────────────────────────────────────────────
+
+  /** Validate + normalize a country code into uppercase 2-letter form. */
+  function normalizeCountryCode(input: unknown): string | null {
+    if (typeof input !== 'string') return null;
+    const trimmed = input.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(trimmed)) return null;
+    return trimmed;
+  }
+
+  /** Region code: uppercase letters, digits, and dashes; 2–32 chars. */
+  function isValidRegionCode(input: unknown): input is string {
+    return typeof input === 'string' && /^[A-Z0-9-]{2,32}$/.test(input);
+  }
+
+  /** Parent code: uppercase letters and digits; 2–16 chars (no dashes). */
+  function isValidParentCode(input: unknown): input is string {
+    return typeof input === 'string' && /^[A-Z0-9]{2,16}$/.test(input);
+  }
+
+  /**
+   * GET /admin/regions
+   * List regions. Filters: active=true|false, parentCode=EU.
+   */
+  app.get('/regions', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const query = (request.query || {}) as { active?: string; parentCode?: string };
+    const where: Record<string, unknown> = {};
+    if (query.active === 'true') where.isActive = true;
+    if (query.active === 'false') where.isActive = false;
+    if (query.parentCode) where.parentCode = query.parentCode.toUpperCase();
+
+    const regions = await prisma.region.findMany({
+      where,
+      include: { _count: { select: { templates: true } } },
+      orderBy: [{ parentCode: 'asc' }, { sortOrder: 'asc' }, { code: 'asc' }],
+    });
+
+    return reply.send({
+      total: regions.length,
+      regions: regions.map((r) => ({
+        id: r.id,
+        code: r.code,
+        parentCode: r.parentCode,
+        name: r.name,
+        description: r.description,
+        countryCodes: r.countryCodes,
+        isActive: r.isActive,
+        sortOrder: r.sortOrder,
+        templateCount: (r as unknown as { _count: { templates: number } })._count.templates,
+        createdAt: r.createdAt,
+        updatedAt: r.updatedAt,
+      })),
+    });
+  });
+
+  /**
+   * GET /admin/regions/:code
+   * Get a single region by code.
+   */
+  app.get('/regions/:code', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { code } = request.params as { code: string };
+    const region = await prisma.region.findUnique({
+      where: { code: code.toUpperCase() },
+    });
+
+    if (!region) {
+      return reply.code(404).send({ error: 'Region not found' });
+    }
+
+    return reply.send(region);
+  });
+
+  /**
+   * POST /admin/regions
+   * Create a new region. Body: { code, parentCode, name, countryCodes[], description?, isActive?, sortOrder? }
+   */
+  app.post('/regions', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const body = (request.body || {}) as Record<string, unknown>;
+
+    const codeRaw = typeof body.code === 'string' ? body.code.trim().toUpperCase() : '';
+    if (!isValidRegionCode(codeRaw)) {
+      return reply
+        .code(400)
+        .send({ error: 'code is required (uppercase A-Z, 0-9, -, length 2-32)' });
+    }
+
+    const parentRaw =
+      typeof body.parentCode === 'string' ? body.parentCode.trim().toUpperCase() : '';
+    if (!isValidParentCode(parentRaw)) {
+      return reply
+        .code(400)
+        .send({ error: 'parentCode is required (uppercase A-Z, 0-9, length 2-16)' });
+    }
+
+    if (typeof body.name !== 'string' || body.name.trim().length === 0) {
+      return reply.code(400).send({ error: 'name is required' });
+    }
+
+    if (!Array.isArray(body.countryCodes) || body.countryCodes.length === 0) {
+      return reply
+        .code(400)
+        .send({ error: 'countryCodes is required (non-empty array of ISO 3166-1 alpha-2 codes)' });
+    }
+
+    const normalizedCountries: string[] = [];
+    for (const cc of body.countryCodes) {
+      const norm = normalizeCountryCode(cc);
+      if (!norm) {
+        return reply
+          .code(400)
+          .send({ error: `Invalid country code: ${JSON.stringify(cc)} (expected 2-letter ISO)` });
+      }
+      normalizedCountries.push(norm);
+    }
+    const dedupedCountries = Array.from(new Set(normalizedCountries));
+
+    try {
+      const region = await prisma.region.create({
+        data: {
+          code: codeRaw,
+          parentCode: parentRaw,
+          name: body.name.trim(),
+          description:
+            typeof body.description === 'string' ? body.description.trim() || null : null,
+          countryCodes: dedupedCountries,
+          isActive: typeof body.isActive === 'boolean' ? body.isActive : true,
+          sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 0,
+        },
+      });
+      return reply.code(201).send(region);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        return reply.code(409).send({ error: `Region code already exists: ${codeRaw}` });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * PATCH /admin/regions/:code
+   * Update region fields. Code itself is immutable (it's referenced by SKUs).
+   */
+  app.patch('/regions/:code', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { code } = request.params as { code: string };
+    const body = (request.body || {}) as Record<string, unknown>;
+
+    const data: Record<string, unknown> = {};
+
+    if (body.parentCode !== undefined) {
+      const parentRaw =
+        typeof body.parentCode === 'string' ? body.parentCode.trim().toUpperCase() : '';
+      if (!isValidParentCode(parentRaw)) {
+        return reply.code(400).send({ error: 'parentCode invalid' });
+      }
+      data.parentCode = parentRaw;
+    }
+
+    if (body.name !== undefined) {
+      if (typeof body.name !== 'string' || body.name.trim().length === 0) {
+        return reply.code(400).send({ error: 'name must be a non-empty string' });
+      }
+      data.name = body.name.trim();
+    }
+
+    if (body.description !== undefined) {
+      data.description =
+        typeof body.description === 'string' ? body.description.trim() || null : null;
+    }
+
+    if (body.countryCodes !== undefined) {
+      if (!Array.isArray(body.countryCodes) || body.countryCodes.length === 0) {
+        return reply
+          .code(400)
+          .send({ error: 'countryCodes must be a non-empty array of ISO 3166-1 alpha-2 codes' });
+      }
+      const normalized: string[] = [];
+      for (const cc of body.countryCodes) {
+        const norm = normalizeCountryCode(cc);
+        if (!norm) {
+          return reply.code(400).send({ error: `Invalid country code: ${JSON.stringify(cc)}` });
+        }
+        normalized.push(norm);
+      }
+      data.countryCodes = Array.from(new Set(normalized));
+    }
+
+    if (body.isActive !== undefined) {
+      if (typeof body.isActive !== 'boolean') {
+        return reply.code(400).send({ error: 'isActive must be a boolean' });
+      }
+      data.isActive = body.isActive;
+    }
+
+    if (body.sortOrder !== undefined) {
+      if (typeof body.sortOrder !== 'number') {
+        return reply.code(400).send({ error: 'sortOrder must be a number' });
+      }
+      data.sortOrder = body.sortOrder;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return reply.code(400).send({ error: 'No updatable fields provided' });
+    }
+
+    try {
+      const updated = await prisma.region.update({
+        where: { code: code.toUpperCase() },
+        data,
+      });
+      return reply.send(updated);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        return reply.code(404).send({ error: 'Region not found' });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * DELETE /admin/regions/:code
+   * Hard delete a region. ShopifyProductTemplates referencing it have their
+   * regionCode set to NULL (ON DELETE SET NULL) — they become orphaned and
+   * the admin should reassign or delete them.
+   */
+  app.delete('/regions/:code', async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireAdminKey(request, reply)) return;
+
+    const { code } = request.params as { code: string };
+    const upper = code.toUpperCase();
+
+    try {
+      await prisma.region.delete({ where: { code: upper } });
+      return reply.send({ ok: true, deleted: upper });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2025') {
+        return reply.code(404).send({ error: 'Region not found' });
+      }
+      throw err;
+    }
+  });
 
   done();
 }
