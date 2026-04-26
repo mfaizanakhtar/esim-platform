@@ -6,6 +6,21 @@ Maps Shopify product variant SKUs → vendor product codes. At provisioning time
 
 ---
 
+## Shopify SKU Format
+
+Two stable formats coexist depending on `ShopifyProductTemplate.templateType`:
+
+| Template | SKU pattern | Examples |
+|----------|-------------|----------|
+| COUNTRY | `<CC>-<volume>-<days>D-<TYPE>` | `DE-5GB-30D-FIXED`, `JP-1GB-1D-DAYPASS` |
+| REGION  | `REGION-<regionCode>-<volume>-<days>D-<TYPE>` | `REGION-EU30-5GB-30D-FIXED`, `REGION-ASIA4-1GB-7D-FIXED`, `REGION-GCC6-2GB-1D-DAYPASS` |
+
+`<TYPE>` is `FIXED` (total-data plan) or `DAYPASS` (per-day plan). The region code is **stable** — country membership lives in `Region.countryCodes` and can change without renaming SKUs.
+
+For region SKUs, the matching layer (Phase 5) MUST apply strict-coverage filtering: a provider catalog row is only eligible if its `countryCodes` is a superset of `Region.countryCodes` for the SKU's region code.
+
+---
+
 ## How Mapping Works at Provisioning
 
 1. Webhook receives Shopify line item with a `sku` string

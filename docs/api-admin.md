@@ -244,6 +244,67 @@ List registered vendors.
 
 ---
 
+## Product Templates
+
+### POST /admin/product-templates/generate
+
+Generate product template records in DB. Two modes selected by `templateType`:
+
+**COUNTRY mode (default)** — country-keyed templates.
+
+| Body field | Default | Description |
+|------------|---------|-------------|
+| `templateType` | `"COUNTRY"` | — |
+| `countries` | auto-discover | Array of ISO 3166-1 alpha-2 codes; if omitted, derives from active provider catalog |
+| `overwrite` | `false` | Replace existing templates |
+| `dryRun` | `false` | Preview without writing |
+
+**Response:** `{ ok, generated, skippedExisting, skippedInvalid, errors[] }`
+
+---
+
+**REGION mode** — region-keyed templates from canonical `Region` rows.
+
+| Body field | Default | Description |
+|------------|---------|-------------|
+| `templateType` | — | Must be `"REGION"` |
+| `regionCodes` | all active | Array of region codes (uppercased); if omitted, uses every active region |
+| `priceMultiplier` | `2.5` | Multiply country base prices by this factor (regions cost more per GB) |
+| `overwrite` | `false` | Replace existing region templates |
+| `dryRun` | `false` | Preview planned actions |
+
+**Strict-coverage check:** before generating a region template, the endpoint verifies that at least one active provider catalog row covers EVERY country in `region.countryCodes`. Regions with no qualifying provider are skipped (`skippedNoCoverage`).
+
+**SKU format:** variants follow `REGION-<regionCode>-<volume>-<days>D-<TYPE>` (e.g. `REGION-EU30-5GB-30D-FIXED`, `REGION-ASIA4-1GB-1D-DAYPASS`). The variant matrix mirrors the country path (same data/validity tuples).
+
+**Dry-run response:**
+```json
+{
+  "dryRun": true,
+  "templateType": "REGION",
+  "priceMultiplier": 2.5,
+  "plans": [
+    { "code": "EU30", "countryCount": 30, "coverageOk": true,  "existing": false, "action": "create" },
+    { "code": "GCC6", "countryCount": 6,  "coverageOk": false, "existing": false, "action": "skip_no_coverage" }
+  ]
+}
+```
+
+**Live response:**
+```json
+{
+  "ok": true,
+  "templateType": "REGION",
+  "priceMultiplier": 2.5,
+  "generated": 3,
+  "skippedExisting": 1,
+  "skippedNoCoverage": 2,
+  "errors": []
+}
+```
+
+---
+
 ## Regions
 
 Canonical groupings of countries used by region-type Shopify product templates. The `code` is referenced in regional Shopify SKUs (`REGION-<code>-...`); `countryCodes` is the strict canonical coverage advertised to customers. See [`docs/database.md`](database.md#region) for schema.

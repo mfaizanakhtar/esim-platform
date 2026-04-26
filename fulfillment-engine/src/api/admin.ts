@@ -1298,18 +1298,267 @@ export default function adminRoutes(
     return variants;
   }
 
+  /** Same matrix as countries, but prices scaled by `multiplier` (regions cost more per GB). */
+  function buildRegionTemplateVariants(regionCode: string, multiplier: number) {
+    const variants: Array<{
+      sku: string;
+      price: string;
+      planType: string;
+      validity: string;
+      volume: string;
+      sortOrder: number;
+    }> = [];
+    let sortOrder = 0;
+
+    const scale = (basePrice: string) => {
+      const n = parseFloat(basePrice);
+      if (!Number.isFinite(n)) return basePrice;
+      // Round to 2dp; keep .99 ergonomics for prices ≥ $1.
+      const scaled = n * multiplier;
+      const rounded = Math.round(scaled * 100) / 100;
+      return rounded.toFixed(2);
+    };
+
+    for (const days of DAYPASS_VALIDITIES) {
+      for (const gb of DAYPASS_VOLUMES_GB) {
+        const vol = formatVolume(gb);
+        variants.push({
+          sku: `REGION-${regionCode}-${vol.replace(' ', '')}-${days}D-DAYPASS`,
+          price: scale(getPrice(gb, days)),
+          planType: 'Day-Pass',
+          validity: formatValidity(days),
+          volume: vol,
+          sortOrder: sortOrder++,
+        });
+      }
+    }
+
+    for (const days of FIXED_VALIDITIES) {
+      for (const gb of FIXED_VOLUMES_GB) {
+        const vol = formatVolume(gb);
+        variants.push({
+          sku: `REGION-${regionCode}-${vol.replace(' ', '')}-${days}D-FIXED`,
+          price: scale(getPrice(gb, days)),
+          planType: 'Total Data',
+          validity: formatValidity(days),
+          volume: vol,
+          sortOrder: sortOrder++,
+        });
+      }
+    }
+
+    return variants;
+  }
+
+  /**
+   * Strict-coverage filter: returns true if at least one active provider catalog
+   * row covers EVERY country in the region. Used to skip regions we can't
+   * actually fulfil before generating Shopify products for them.
+   */
+  async function regionHasProviderCoverage(regionCountries: string[]): Promise<boolean> {
+    const candidates = (await providerSkuCatalog.findMany({
+      where: { isActive: true, region: { not: null } },
+      select: { countryCodes: true },
+    })) as Array<{ countryCodes: unknown }>;
+
+    for (const row of candidates) {
+      const cc = Array.isArray(row.countryCodes)
+        ? (row.countryCodes as unknown[])
+            .filter((x): x is string => typeof x === 'string')
+            .map((x) => x.toUpperCase())
+        : [];
+      if (cc.length === 0) continue;
+      const coversAll = regionCountries.every((c) => cc.includes(c));
+      if (coversAll) return true;
+    }
+    return false;
+  }
+
   /**
    * POST /admin/product-templates/generate
-   * Generate product template records in DB for given countries.
+   * Generate product template records in DB.
+   *
+   * Two modes (selected by `templateType`, default `COUNTRY`):
+   *   COUNTRY  — country-keyed templates (legacy default). Body: `countries?`, `overwrite?`, `dryRun?`.
+   *   REGION   — region-keyed templates from canonical `Region` rows. Body:
+   *              `regionCodes?` (defaults to all active regions), `overwrite?`,
+   *              `dryRun?`, `priceMultiplier?` (default 2.5). Skips a region
+   *              entirely when no active provider catalog row covers all its
+   *              advertised countries (strict-coverage check).
    */
   app.post('/product-templates/generate', async (request: FastifyRequest, reply: FastifyReply) => {
     if (!requireAdminKey(request, reply)) return;
 
     const body = (request.body || {}) as {
+      templateType?: string;
       countries?: string[];
+      regionCodes?: string[];
+      priceMultiplier?: number;
       overwrite?: boolean;
       dryRun?: boolean;
     };
+
+    const templateType = (body.templateType ?? 'COUNTRY').toUpperCase();
+
+    if (templateType === 'REGION') {
+      const multiplier =
+        typeof body.priceMultiplier === 'number' && body.priceMultiplier > 0
+          ? body.priceMultiplier
+          : 2.5;
+
+      const regionCodesUpper = Array.isArray(body.regionCodes)
+        ? body.regionCodes.map((c) => String(c).toUpperCase())
+        : null;
+
+      const regions = await prisma.region.findMany({
+        where: regionCodesUpper
+          ? { code: { in: regionCodesUpper } }
+          : { isActive: true },
+        orderBy: [{ parentCode: 'asc' }, { sortOrder: 'asc' }, { code: 'asc' }],
+      });
+
+      if (regions.length === 0) {
+        return reply.send({
+          ok: true,
+          templateType: 'REGION',
+          generated: 0,
+          skippedExisting: 0,
+          skippedNoCoverage: 0,
+          errors: regionCodesUpper ? ['No matching regions found'] : ['No active regions'],
+        });
+      }
+
+      type RegionPlan = {
+        code: string;
+        countries: string[];
+        coverageOk: boolean;
+        existing: boolean;
+      };
+      const plans: RegionPlan[] = [];
+      for (const region of regions) {
+        const cc = Array.isArray(region.countryCodes)
+          ? (region.countryCodes as unknown[])
+              .filter((x): x is string => typeof x === 'string')
+              .map((x) => x.toUpperCase())
+          : [];
+        const coverageOk = cc.length > 0 ? await regionHasProviderCoverage(cc) : false;
+        const existing = !!(await prisma.shopifyProductTemplate.findUnique({
+          where: { regionCode: region.code },
+        }));
+        plans.push({ code: region.code, countries: cc, coverageOk, existing });
+      }
+
+      if (body.dryRun) {
+        return reply.send({
+          dryRun: true,
+          templateType: 'REGION',
+          priceMultiplier: multiplier,
+          plans: plans.map((p) => ({
+            code: p.code,
+            countryCount: p.countries.length,
+            coverageOk: p.coverageOk,
+            existing: p.existing,
+            action: !p.coverageOk
+              ? 'skip_no_coverage'
+              : p.existing && !body.overwrite
+                ? 'skip_existing'
+                : p.existing
+                  ? 'overwrite'
+                  : 'create',
+          })),
+        });
+      }
+
+      let generated = 0;
+      let skippedExisting = 0;
+      let skippedNoCoverage = 0;
+      const errors: string[] = [];
+
+      for (const region of regions) {
+        const plan = plans.find((p) => p.code === region.code)!;
+        if (!plan.coverageOk) {
+          skippedNoCoverage++;
+          continue;
+        }
+        if (plan.existing && !body.overwrite) {
+          skippedExisting++;
+          continue;
+        }
+
+        const variants = buildRegionTemplateVariants(region.code, multiplier);
+        const slug = region.code.toLowerCase();
+        const countryListHtml = plan.countries
+          .map((c) => {
+            const country = getCountryByCode(c);
+            return country ? country.name : c;
+          })
+          .join(', ');
+        const descriptionHtml = `<p>Instant digital eSIM for ${region.name}. Activate in minutes. Coverage: ${countryListHtml}.</p>`;
+
+        try {
+          await prisma.shopifyProductTemplate.upsert({
+            where: { regionCode: region.code },
+            update: {
+              templateType: 'REGION',
+              regionCode: region.code,
+              countryCode: null,
+              title: region.name,
+              handle: `region-${slug}`,
+              descriptionHtml,
+              status: 'ACTIVE',
+              vendor: 'SAILeSIM',
+              tags: ['esim', 'region', region.parentCode.toLowerCase(), slug],
+              variants: {
+                deleteMany: {},
+                create: variants.map((v) => ({
+                  sku: v.sku,
+                  price: v.price,
+                  planType: v.planType,
+                  validity: v.validity,
+                  volume: v.volume,
+                  sortOrder: v.sortOrder,
+                })),
+              },
+            },
+            create: {
+              templateType: 'REGION',
+              regionCode: region.code,
+              title: region.name,
+              handle: `region-${slug}`,
+              descriptionHtml,
+              status: 'ACTIVE',
+              vendor: 'SAILeSIM',
+              tags: ['esim', 'region', region.parentCode.toLowerCase(), slug],
+              variants: {
+                create: variants.map((v) => ({
+                  sku: v.sku,
+                  price: v.price,
+                  planType: v.planType,
+                  validity: v.validity,
+                  volume: v.volume,
+                  sortOrder: v.sortOrder,
+                })),
+              },
+            },
+          });
+          generated++;
+        } catch (err) {
+          errors.push(`${region.code}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      return reply.send({
+        ok: true,
+        templateType: 'REGION',
+        priceMultiplier: multiplier,
+        generated,
+        skippedExisting,
+        skippedNoCoverage,
+        errors,
+      });
+    }
+
+    // ── Default: COUNTRY templates (legacy behaviour) ─────────────────────
 
     // Discover countries (same logic as bulk-create)
     let codes: string[];
