@@ -9,6 +9,7 @@ describe('parseShopifySku', () => {
       dataMb: 2048,
       validityDays: 7,
       skuType: 'FIXED',
+      kind: 'COUNTRY',
     });
   });
 
@@ -18,6 +19,7 @@ describe('parseShopifySku', () => {
       dataMb: 500,
       validityDays: 30,
       skuType: 'DAYPASS',
+      kind: 'COUNTRY',
     });
   });
 
@@ -27,6 +29,7 @@ describe('parseShopifySku', () => {
       dataMb: 10240,
       validityDays: 30,
       skuType: 'FIXED',
+      kind: 'COUNTRY',
     });
   });
 
@@ -37,6 +40,7 @@ describe('parseShopifySku', () => {
       dataMb: 1024,
       validityDays: 7,
       skuType: 'FIXED',
+      kind: 'COUNTRY',
     });
   });
 
@@ -46,6 +50,7 @@ describe('parseShopifySku', () => {
       dataMb: 500,
       validityDays: 30,
       skuType: 'FIXED',
+      kind: 'COUNTRY',
     });
   });
 
@@ -55,6 +60,7 @@ describe('parseShopifySku', () => {
       dataMb: 1024,
       validityDays: 3,
       skuType: 'FIXED',
+      kind: 'COUNTRY',
     });
   });
 
@@ -64,6 +70,38 @@ describe('parseShopifySku', () => {
       dataMb: 500,
       validityDays: 1,
       skuType: 'DAYPASS',
+      kind: 'COUNTRY',
+    });
+  });
+
+  // REGION format: REGION-{REGION_CODE}-{DATA}-{VALIDITY}-{TYPE}
+  it('parses REGION FIXED SKU', () => {
+    expect(parseShopifySku('REGION-EU30-5GB-30D-FIXED')).toEqual({
+      regionCode: 'EU30',
+      dataMb: 5120,
+      validityDays: 30,
+      skuType: 'FIXED',
+      kind: 'REGION',
+    });
+  });
+
+  it('parses REGION DAYPASS SKU', () => {
+    expect(parseShopifySku('REGION-ASIA4-1GB-1D-DAYPASS')).toEqual({
+      regionCode: 'ASIA4',
+      dataMb: 1024,
+      validityDays: 1,
+      skuType: 'DAYPASS',
+      kind: 'REGION',
+    });
+  });
+
+  it('parses REGION code with embedded dash', () => {
+    expect(parseShopifySku('REGION-AMERICAS-NA3-2GB-7D-FIXED')).toEqual({
+      regionCode: 'AMERICAS-NA3',
+      dataMb: 2048,
+      validityDays: 7,
+      skuType: 'FIXED',
+      kind: 'REGION',
     });
   });
 
@@ -82,5 +120,11 @@ describe('parseShopifySku', () => {
 
   it('returns null for arbitrary string', () => {
     expect(parseShopifySku('SOME-RANDOM-SKU')).toBeNull();
+  });
+
+  it('rejects unsupported type suffixes (only FIXED/DAYPASS allowed)', () => {
+    expect(parseShopifySku('SA-2GB-7D-TRIAL')).toBeNull();
+    expect(parseShopifySku('REGION-EU30-5GB-30D-BETA')).toBeNull();
+    expect(parseShopifySku('ESIM-EU-1GB-7D-CUSTOM')).toBeNull();
   });
 });

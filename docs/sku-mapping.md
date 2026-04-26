@@ -57,12 +57,20 @@ POST /admin/sku-mappings/structured-map/jobs
 { "provider": "firoam", "unmappedOnly": true }
 ```
 
-**Matching logic:**
-1. Parse Shopify SKU → extract `{ regionCodes, dataMb, validityDays }`
-2. Compare against catalog `parsedJson` fields
-3. Best match per provider wins (ranked by `regionCodes` specificity)
+**Matching logic — branches by SKU `kind`:**
 
-No AI involved — fully deterministic. Good for well-structured SKU names.
+**COUNTRY SKUs** (`DE-5GB-30D-FIXED`, `EU-1GB-7D-DAYPASS`, etc.):
+1. Parse → extract `{ regionCode, dataMb, validityDays, skuType }`
+2. Filter catalog by `parsedJson.regionCodes ? regionCode` (JSONB)
+3. Best match per provider wins (smaller `regionCodes` = more targeted)
+
+**REGION SKUs** (`REGION-EU30-5GB-30D-FIXED`, `REGION-ASIA4-1GB-1D-DAYPASS`, etc.):
+1. Parse → extract `{ regionCode, dataMb, validityDays, skuType, kind: 'REGION' }`
+2. Look up `Region` row by `code`; fail (empty drafts) if missing or `countryCodes` is empty
+3. **Strict-coverage filter:** `catalog.countryCodes @> region.countryCodes` (JSONB containment) — provider catalog must cover EVERY advertised country
+4. Best match per provider wins (smaller `countryCodes` = tighter fit, less waste)
+
+Both branches enforce the same data/validity match (with relax options) and the same DAYPASS/FIXED type-parity rule. No AI involved — fully deterministic.
 
 ### 3. AI Mapping (GPT-4o-mini + pgvector)
 
@@ -83,12 +91,20 @@ POST /admin/sku-mappings/bulk
 
 **AI mapping flow:**
 1. Fetch all unmapped Shopify SKUs + full catalog
-2. Generate embeddings for each catalog entry (OpenAI `text-embedding-ada-002`, 1536 dims)
-3. For each batch of Shopify SKUs: cosine similarity search → top 20 catalog candidates
-4. Send candidates to GPT-4o-mini with structured output schema
-5. GPT proposes match with confidence
-6. Drafts streamed via SSE as they're produced
-7. User reviews drafts in dashboard → approves → bulk create
+2. Pre-fetch active `Region` rows once (powers the REGION post-filter — see below)
+3. Generate embeddings for each catalog entry (OpenAI `text-embedding-ada-002`, 1536 dims)
+4. For each batch of Shopify SKUs: cosine similarity search → top 20 catalog candidates
+5. Send candidates to GPT-4o-mini with structured output schema
+6. GPT proposes match with confidence
+7. **Hard post-filter** (deterministic, runs after GPT regardless of its output):
+   - Type-parity (DAYPASS SKU ↔ daypack catalog row)
+   - Data and validity match (subject to `relaxOptions`)
+   - **COUNTRY SKUs:** `entry.parsedJson.regionCodes` must include the SKU's regionCode
+   - **REGION SKUs:** `entry.countryCodes ⊇ region.countryCodes` (strict-coverage; uses the pre-fetched Region map)
+8. Drafts streamed via SSE as they're produced
+9. User reviews drafts in dashboard → approves → bulk create
+
+The post-filter is the safety net — even if GPT confidently proposes a sub-coverage REGION match, the strict-coverage rule rejects it deterministically.
 
 ---
 

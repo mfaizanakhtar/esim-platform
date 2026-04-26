@@ -331,6 +331,12 @@ describe('Admin Routes', () => {
     adminMocks.mockJobSend.mockResolvedValue('job-id-admin');
     adminMocks.mockHandleCancelEsim.mockResolvedValue(undefined);
     adminMocks.mockCancelShopifyOrder.mockResolvedValue(undefined);
+    // Default: AI map and structured map paths pre-fetch active Regions. Empty
+    // list keeps the legacy COUNTRY-only tests behaviour-equivalent. Tests that
+    // need REGION coverage override this in their own setup.
+    vi.mocked(
+      (prisma as unknown as { region: { findMany: ReturnType<typeof vi.fn> } }).region.findMany,
+    ).mockResolvedValue([]);
     app = Fastify({ logger: false });
     app.register(adminRoutes);
     await app.ready();
@@ -4399,6 +4405,7 @@ describe('Admin Routes', () => {
         dataMb: 1024,
         validityDays: 7,
         skuType: 'FIXED',
+        kind: 'COUNTRY',
       });
       expect(body.drafts).toHaveLength(1);
       expect(body.drafts[0].shopifySku).toBe('ESIM-EU-1GB-7D');
@@ -5002,6 +5009,166 @@ describe('Admin Routes', () => {
       expect(body.drafts).toHaveLength(1);
       expect(body.drafts[0].catalogId).toBe('cat-high');
       expect(body.drafts[0].confidence).toBe(1.0);
+    });
+  });
+
+  // ── Region-aware structured matching ─────────────────────────────────────
+
+  describe('POST /sku-mappings/structured-match — REGION SKU coverage', () => {
+    const prismaRegion = (
+      prisma as unknown as {
+        region: { findUnique: ReturnType<typeof vi.fn> };
+      }
+    ).region;
+
+    it('matches when provider catalog covers ALL canonical region countries', async () => {
+      prismaRegion.findUnique.mockResolvedValue({
+        code: 'EU3',
+        countryCodes: ['DE', 'FR', 'AT'],
+      });
+      // JSONB containment query returns the eligible catalog row.
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-eu-firoam',
+          provider: 'firoam',
+          productName: 'EU 5GB 30D',
+          region: 'EU',
+          dataAmount: '5GB',
+          validity: '30 days',
+          netPrice: '12.00',
+          productCode: 'EU-5GB-30D',
+          parsedJson: { regionCodes: ['EU'], dataMb: 5120, validityDays: 30 },
+          countryCodes: ['DE', 'FR', 'AT', 'BE', 'NL'],
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'REGION-EU3-5GB-30D-FIXED' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        drafts: Array<{ catalogId: string; confidence: number }>;
+        parsed: { kind: string; regionCode: string };
+      };
+      expect(body.parsed.kind).toBe('REGION');
+      expect(body.parsed.regionCode).toBe('EU3');
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].catalogId).toBe('cat-eu-firoam');
+      expect(body.drafts[0].confidence).toBe(1.0);
+      expect(prismaRegion.findUnique).toHaveBeenCalledWith({ where: { code: 'EU3' } });
+    });
+
+    it('returns no drafts when the canonical region row is missing', async () => {
+      prismaRegion.findUnique.mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'REGION-UNKNOWN-1GB-7D-FIXED' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json().drafts).toEqual([]);
+      // No catalog query should have run since the region wasn't found.
+      expect(vi.mocked(prisma.$queryRaw)).not.toHaveBeenCalled();
+    });
+
+    it('returns no drafts when region exists but has no countryCodes', async () => {
+      prismaRegion.findUnique.mockResolvedValue({
+        code: 'EU3',
+        countryCodes: [],
+      });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'REGION-EU3-1GB-7D-FIXED' },
+      });
+
+      expect(res.json().drafts).toEqual([]);
+      expect(vi.mocked(prisma.$queryRaw)).not.toHaveBeenCalled();
+    });
+
+    it('prefers tighter coverage when two providers both cover the region (smallest countryCodes wins)', async () => {
+      prismaRegion.findUnique.mockResolvedValue({
+        code: 'EU3',
+        countryCodes: ['DE', 'FR', 'AT'],
+      });
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-tight',
+          provider: 'firoam',
+          productName: 'EU 4-country',
+          region: 'EU',
+          dataAmount: '5GB',
+          validity: '30 days',
+          netPrice: '10.00',
+          productCode: 'EU-5GB-30D-A',
+          parsedJson: { regionCodes: ['EU'], dataMb: 5120, validityDays: 30 },
+          countryCodes: ['DE', 'FR', 'AT', 'BE'], // tight: only 1 extra country
+        },
+        {
+          id: 'cat-loose',
+          provider: 'firoam',
+          productName: 'EU 30-country',
+          region: 'EU',
+          dataAmount: '5GB',
+          validity: '30 days',
+          netPrice: '15.00',
+          productCode: 'EU-5GB-30D-B',
+          parsedJson: { regionCodes: ['EU'], dataMb: 5120, validityDays: 30 },
+          countryCodes: Array.from({ length: 30 }, (_, i) => `C${i}`), // loose
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'REGION-EU3-5GB-30D-FIXED' },
+      });
+
+      const body = res.json() as { drafts: Array<{ catalogId: string }> };
+      expect(body.drafts).toHaveLength(1);
+      expect(body.drafts[0].catalogId).toBe('cat-tight');
+    });
+
+    it('rejects DAYPASS REGION SKU paired with non-daypack catalog row', async () => {
+      prismaRegion.findUnique.mockResolvedValue({
+        code: 'EU3',
+        countryCodes: ['DE', 'FR', 'AT'],
+      });
+      vi.mocked(prisma.$queryRaw).mockResolvedValueOnce([
+        {
+          id: 'cat-fixed',
+          provider: 'firoam',
+          productName: 'EU fixed',
+          region: 'EU',
+          dataAmount: '1GB',
+          validity: '7 days',
+          netPrice: '5.00',
+          productCode: 'EU-1GB-7D-FIXED', // no '?' marker; not a daypack
+          productType: null,
+          parsedJson: { regionCodes: ['EU'], dataMb: 1024, validityDays: 7 },
+          countryCodes: ['DE', 'FR', 'AT', 'BE'],
+        },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/sku-mappings/structured-match',
+        headers: JSON_HEADERS,
+        payload: { sku: 'REGION-EU3-1GB-7D-DAYPASS' }, // SKU is daypass
+      });
+
+      // Type-mismatch filter should reject the only candidate.
+      expect(res.json().drafts).toEqual([]);
     });
   });
 
