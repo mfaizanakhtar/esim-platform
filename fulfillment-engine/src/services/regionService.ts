@@ -3,10 +3,20 @@ import prisma from '~/db/prisma';
 /**
  * Region discovery service.
  *
- * Aggregates the active provider catalog by `region` label per provider and
- * proposes canonical `Region` rows the admin can curate. The discovery is
- * read-only and side-effect-free; the admin reviews suggestions and saves
- * the ones they want via POST /admin/regions.
+ * Aggregates the active provider catalog to propose canonical `Region` rows the
+ * admin can curate. Read-only / side-effect-free.
+ *
+ * **Core rule:** a "regional plan" is a catalog row whose `countryCodes` array
+ * has 2+ entries. We do NOT use the top-level `region` field as the gate
+ * because providers store it inconsistently (TGT always null, FiRoam sets it
+ * to the country code for single-country plans, etc.). The country list is the
+ * universal regional signal.
+ *
+ * **Grouping label** (preference order):
+ *   1. `parsedJson.regionCodes[0]` if it looks like a region tag (e.g. "EU",
+ *      "GLOBAL") — populated by the AI parser
+ *   2. `region` field if it's a multi-char label (not a 2-letter ISO code)
+ *   3. Synthetic `MULTI-<count>` based on country list size — last resort
  *
  * See docs/implementations/0002-region-schema-crud.md for context.
  */
@@ -32,7 +42,7 @@ export interface RegionSuggestion {
 }
 
 export interface RegionGroup {
-  /** Normalized vendor region label (uppercase, trimmed). */
+  /** Group label (canonical region tag, vendor label, or synthetic). */
   label: string;
   /** Inferred canonical parent (e.g. "EU", "ASIA") — admin may override. */
   parentCode: string;
@@ -86,6 +96,43 @@ export function inferParentCode(label: string): string {
   return stripped.length >= 2 ? stripped : 'OTHER';
 }
 
+interface CatalogRow {
+  provider: string;
+  region: string | null;
+  countryCodes: unknown;
+  parsedJson: unknown;
+}
+
+/**
+ * Pick a stable group label for a multi-country catalog row. Already filtered
+ * to `countryCodes.length >= 2`, so the row is definitely a regional plan —
+ * we just need a stable name to group by.
+ */
+function deriveGroupLabel(row: CatalogRow, countryCount: number): string {
+  // 1. parsedJson.regionCodes[0] — the AI parser's canonical tag for THIS
+  //    multi-country row. Trust it regardless of length; the parser had full
+  //    context (productName + region + countryCodes) when assigning it.
+  const parsed = row.parsedJson as { regionCodes?: unknown } | null;
+  if (parsed && Array.isArray(parsed.regionCodes) && parsed.regionCodes.length > 0) {
+    const first = parsed.regionCodes[0];
+    if (typeof first === 'string' && first.trim()) {
+      return first.trim().toUpperCase();
+    }
+  }
+  // 2. Vendor `region` field — accept if it's >2 chars OR a known alias
+  //    (e.g. "EU", "ME"). Reject bare 2-letter codes that aren't aliases —
+  //    they're FiRoam's per-country tag (e.g. region:'DE') and would
+  //    misleadingly group multi-country rows by country.
+  if (typeof row.region === 'string') {
+    const r = row.region.trim().toUpperCase();
+    if (r.length > 2 || (r.length > 0 && PARENT_CODE_ALIASES[r])) {
+      return r;
+    }
+  }
+  // 3. Synthetic — group by country count so similarly-sized bundles cluster.
+  return `MULTI-${countryCount}`;
+}
+
 interface ProviderBucket {
   countries: Set<string>;
   skuCount: number;
@@ -93,11 +140,10 @@ interface ProviderBucket {
 
 /**
  * Run discovery against the live ProviderSkuCatalog and return one group per
- * normalized vendor region label.
+ * derived label.
  *
- * Only entries with both a non-empty `region` string AND a non-empty
- * `countryCodes` array contribute — the suggestion engine can't propose
- * coverage from rows that don't list their countries.
+ * Filter: `isActive = true` AND `countryCodes` is an array of length ≥ 2 (i.e.
+ * a real regional plan, not a single-country SKU).
  *
  * Maximum suggestion size is `unionLimit` (default 60) — beyond that the
  * "union" suggestion is dropped to avoid overwhelming proposals like a
@@ -108,18 +154,20 @@ export async function buildRegionSuggestions(
 ): Promise<RegionGroup[]> {
   const unionLimit = options.unionLimit ?? 60;
 
-  const entries = await prisma.providerSkuCatalog.findMany({
-    where: { isActive: true, region: { not: null } },
-    select: { provider: true, region: true, countryCodes: true },
-  });
+  // We can't filter by countryCodes length in Prisma's where clause for JSON
+  // arrays cleanly, so we fetch active rows and filter in memory. Catalog is
+  // O(thousands), so this is cheap.
+  const entries = (await prisma.providerSkuCatalog.findMany({
+    where: { isActive: true },
+    select: { provider: true, region: true, countryCodes: true, parsedJson: true },
+  })) as CatalogRow[];
 
   // label → provider → bucket
   const groupsMap = new Map<string, Map<string, ProviderBucket>>();
 
   for (const entry of entries) {
-    if (!entry.region) continue;
     const ccRaw = entry.countryCodes;
-    if (!Array.isArray(ccRaw) || ccRaw.length === 0) continue;
+    if (!Array.isArray(ccRaw)) continue;
 
     const normalized: string[] = [];
     for (const code of ccRaw) {
@@ -127,9 +175,11 @@ export async function buildRegionSuggestions(
       const upper = code.trim().toUpperCase();
       if (/^[A-Z]{2}$/.test(upper)) normalized.push(upper);
     }
-    if (normalized.length === 0) continue;
+    // Regional plans only — single-country SKUs are not what discovery is for.
+    if (normalized.length < 2) continue;
 
-    const label = normalizeLabel(entry.region);
+    const label = deriveGroupLabel(entry, normalized.length);
+
     let byProvider = groupsMap.get(label);
     if (!byProvider) {
       byProvider = new Map();

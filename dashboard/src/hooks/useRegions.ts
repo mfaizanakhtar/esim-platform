@@ -63,10 +63,16 @@ export function useRegions() {
   });
 }
 
+/**
+ * NOTE: disabled by default — the user must click a "Discover" button to fire
+ * this. Discovery scans the whole catalog and aggregates per-provider coverage,
+ * so we don't want to run it on every page mount.
+ */
 export function useRegionSuggestions() {
   return useQuery({
     queryKey: ['region-suggestions'],
     queryFn: () => apiClient.get<SuggestionsResponse>('/regions/suggestions'),
+    enabled: false,
   });
 }
 

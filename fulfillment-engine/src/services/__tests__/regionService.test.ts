@@ -44,31 +44,126 @@ describe('inferParentCode', () => {
   });
 });
 
-describe('buildRegionSuggestions', () => {
-  function entry(provider: string, region: string, countryCodes: string[]) {
-    return { provider, region, countryCodes };
-  }
+/**
+ * Build a catalog row mirror that matches the schema fields the discovery uses.
+ * Defaults to no region label and no parsedJson — caller specifies what matters.
+ */
+function row(opts: {
+  provider: string;
+  countryCodes: string[];
+  region?: string | null;
+  parsedJson?: { regionCodes?: string[]; dataMb?: number; validityDays?: number } | null;
+}) {
+  return {
+    provider: opts.provider,
+    region: opts.region ?? null,
+    countryCodes: opts.countryCodes,
+    parsedJson: opts.parsedJson ?? null,
+  };
+}
 
-  it('produces an empty list when catalog has no regional entries', async () => {
+describe('buildRegionSuggestions — filter & grouping', () => {
+  it('produces an empty list when catalog has no entries', async () => {
     mockFindMany.mockResolvedValue([]);
-    const groups = await buildRegionSuggestions();
-    expect(groups).toEqual([]);
+    expect(await buildRegionSuggestions()).toEqual([]);
   });
 
-  it('groups by normalized label and dedupes country codes per provider', async () => {
+  it('skips single-country rows (regional plans = 2+ countries)', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'EU', ['DE', 'FR']),
-      entry('firoam', 'eu', ['fr', 'AT']), // same group, lowercase, overlap with FR
-      entry('tgt', 'EU', ['DE', 'BE']),
+      // FiRoam stores `region` = country code for single-country plans — must NOT
+      // be treated as regional discovery candidates.
+      row({ provider: 'firoam', region: 'DE', countryCodes: ['DE'] }),
+      row({ provider: 'firoam', region: 'FR', countryCodes: ['FR'] }),
+      row({ provider: 'tgt', region: null, countryCodes: ['JP'] }),
     ]);
+    expect(await buildRegionSuggestions()).toEqual([]);
+  });
 
+  it('discovers multi-country rows even when `region` is null (TGT case)', async () => {
+    // TGT sync hard-codes region: null, so discovery must NOT depend on it.
+    mockFindMany.mockResolvedValue([
+      row({ provider: 'tgt', region: null, countryCodes: ['DE', 'FR', 'AT'] }),
+    ]);
     const groups = await buildRegionSuggestions();
     expect(groups).toHaveLength(1);
+    expect(groups[0].providers[0].provider).toBe('tgt');
+    expect(groups[0].providers[0].countries).toEqual(['AT', 'DE', 'FR']);
+  });
 
-    const eu = groups[0];
+  it('uses parsedJson.regionCodes[0] as the group label when available', async () => {
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: null,
+        countryCodes: ['DE', 'FR', 'AT'],
+        parsedJson: { regionCodes: ['EU'] },
+      }),
+      row({
+        provider: 'tgt',
+        region: null,
+        countryCodes: ['DE', 'FR', 'BE'],
+        parsedJson: { regionCodes: ['EU'] },
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    // Both rows tagged "EU" by the parser → grouped together
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe('EU');
+    expect(groups[0].parentCode).toBe('EU');
+    expect(groups[0].providers).toHaveLength(2);
+  });
+
+  it('falls back to vendor `region` when parsedJson missing AND region is multi-char', async () => {
+    mockFindMany.mockResolvedValue([
+      row({ provider: 'firoam', region: 'GCC', countryCodes: ['SA', 'AE', 'QA'] }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('GCC');
+    expect(groups[0].parentCode).toBe('GCC');
+  });
+
+  it('does NOT use vendor `region` when it looks like a 2-letter ISO country code', async () => {
+    // FiRoam may set region = 'DE' for a single-country plan, but if a row has
+    // 3 countries with region='DE', region is misleading — fall to MULTI-N.
+    mockFindMany.mockResolvedValue([
+      row({ provider: 'firoam', region: 'DE', countryCodes: ['DE', 'FR', 'AT'] }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('MULTI-3');
+  });
+
+  it('synthesizes MULTI-N label when no region info available', async () => {
+    mockFindMany.mockResolvedValue([
+      row({ provider: 'tgt', region: null, countryCodes: ['DE', 'FR', 'AT', 'BE'] }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('MULTI-4');
+    expect(groups[0].parentCode).toBe('MULTI4');
+  });
+
+  it('groups same-label rows from multiple providers into one group', async () => {
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: null,
+        countryCodes: ['DE', 'FR', 'AT'],
+        parsedJson: { regionCodes: ['EU'] },
+      }),
+      row({
+        provider: 'firoam',
+        region: null,
+        countryCodes: ['fr', 'AT', 'DE'], // overlap, lowercase
+        parsedJson: { regionCodes: ['EU'] },
+      }),
+      row({
+        provider: 'tgt',
+        region: null,
+        countryCodes: ['DE', 'BE'],
+        parsedJson: { regionCodes: ['EU'] },
+      }),
+    ]);
+    const [eu] = await buildRegionSuggestions();
     expect(eu.label).toBe('EU');
-    expect(eu.parentCode).toBe('EU');
-    expect(eu.providers).toHaveLength(2);
 
     const firoam = eu.providers.find((p) => p.provider === 'firoam')!;
     expect(firoam.countries).toEqual(['AT', 'DE', 'FR']);
@@ -78,33 +173,32 @@ describe('buildRegionSuggestions', () => {
     expect(tgt.countries).toEqual(['BE', 'DE']);
     expect(tgt.skuCount).toBe(1);
   });
+});
 
+describe('buildRegionSuggestions — intersection / union / suggestions', () => {
   it('computes intersection across providers', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'EU', ['DE', 'FR', 'AT']),
-      entry('tgt', 'EU', ['DE', 'FR', 'BE']),
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT'] }),
+      row({ provider: 'tgt', region: 'EU', countryCodes: ['DE', 'FR', 'BE'] }),
     ]);
-
     const [eu] = await buildRegionSuggestions();
     expect(eu.intersection).toEqual(['DE', 'FR']);
   });
 
   it('computes union across providers', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'EU', ['DE', 'FR', 'AT']),
-      entry('tgt', 'EU', ['DE', 'BE']),
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT'] }),
+      row({ provider: 'tgt', region: 'EU', countryCodes: ['DE', 'BE'] }),
     ]);
-
     const [eu] = await buildRegionSuggestions();
     expect(eu.union).toEqual(['AT', 'BE', 'DE', 'FR']);
   });
 
   it('emits an INTERSECTION suggestion when ≥2 countries are common', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'EU', ['DE', 'FR', 'AT']),
-      entry('tgt', 'EU', ['DE', 'FR', 'BE']),
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT'] }),
+      row({ provider: 'tgt', region: 'EU', countryCodes: ['DE', 'FR', 'BE'] }),
     ]);
-
     const [eu] = await buildRegionSuggestions();
     const intersect = eu.suggestions.find((s) => s.kind === 'INTERSECTION');
     expect(intersect).toMatchObject({
@@ -115,18 +209,11 @@ describe('buildRegionSuggestions', () => {
     });
   });
 
-  it('does NOT emit an INTERSECTION suggestion when fewer than 2 countries are common', async () => {
-    mockFindMany.mockResolvedValue([entry('firoam', 'EU', ['DE']), entry('tgt', 'EU', ['BE'])]);
-    const [eu] = await buildRegionSuggestions();
-    expect(eu.suggestions.find((s) => s.kind === 'INTERSECTION')).toBeUndefined();
-  });
-
   it('emits a UNION suggestion when union is larger than intersection', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'EU', ['DE', 'FR', 'AT']),
-      entry('tgt', 'EU', ['DE', 'BE']),
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT'] }),
+      row({ provider: 'tgt', region: 'EU', countryCodes: ['DE', 'BE'] }),
     ]);
-
     const [eu] = await buildRegionSuggestions();
     const union = eu.suggestions.find((s) => s.kind === 'UNION');
     expect(union).toMatchObject({
@@ -140,10 +227,9 @@ describe('buildRegionSuggestions', () => {
 
   it('lists providersAvailable for UNION when one provider covers everything', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'EU', ['DE', 'FR', 'AT', 'BE']),
-      entry('tgt', 'EU', ['DE']),
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT', 'BE'] }),
+      row({ provider: 'tgt', region: 'EU', countryCodes: ['DE', 'BE'] }),
     ]);
-
     const [eu] = await buildRegionSuggestions();
     const union = eu.suggestions.find((s) => s.kind === 'UNION');
     expect(union!.providersAvailable).toEqual(['firoam']);
@@ -155,62 +241,61 @@ describe('buildRegionSuggestions', () => {
       (_, i) => String.fromCharCode(65 + Math.floor(i / 26)) + String.fromCharCode(65 + (i % 26)),
     );
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'GLOBAL', twentyCountries),
-      entry('tgt', 'GLOBAL', ['US']),
+      row({ provider: 'firoam', region: 'GLOBAL', countryCodes: twentyCountries }),
+      row({ provider: 'tgt', region: 'GLOBAL', countryCodes: ['US', 'JP'] }),
     ]);
-
     const [global] = await buildRegionSuggestions({ unionLimit: 10 });
     expect(global.suggestions.find((s) => s.kind === 'UNION')).toBeUndefined();
   });
 
-  it('skips entries with no countryCodes', async () => {
+  it('does NOT emit an INTERSECTION suggestion when fewer than 2 countries are common', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'EU', []),
-      entry('firoam', 'EU', ['DE', 'FR']),
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'IT'] }),
+      row({ provider: 'tgt', region: 'EU', countryCodes: ['BE', 'NL'] }),
     ]);
     const [eu] = await buildRegionSuggestions();
-    expect(eu.providers[0].skuCount).toBe(1); // only the second entry counted
+    expect(eu.suggestions.find((s) => s.kind === 'INTERSECTION')).toBeUndefined();
+  });
+});
+
+describe('buildRegionSuggestions — edge cases', () => {
+  it('skips rows whose only valid country codes are <2 after normalization', async () => {
+    // Only "DE" is valid; "GERMANY" and "fr-INVALID" are not 2-letter ISO codes
+    // → ends up as 1 valid country → filtered out.
+    mockFindMany.mockResolvedValue([
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'GERMANY', 'fr-INVALID'] }),
+    ]);
+    expect(await buildRegionSuggestions()).toEqual([]);
   });
 
-  it('skips invalid country codes (non-2-letter, non-strings)', async () => {
+  it('keeps rows when at least 2 codes survive normalization', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'EU', ['DE', 'GERMANY', 'fr']) as unknown as Parameters<
-        typeof mockFindMany
-      >[0],
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'GERMANY', 'fr', 'AT'] }),
     ]);
     const [eu] = await buildRegionSuggestions();
-    expect(eu.providers[0].countries).toEqual(['DE', 'FR']);
-  });
-
-  it('groups distinct vendor labels into separate groups', async () => {
-    mockFindMany.mockResolvedValue([entry('firoam', 'EU', ['DE']), entry('tgt', 'Europe', ['FR'])]);
-    const groups = await buildRegionSuggestions();
-    // EU and EUROPE are different labels — they appear as separate groups,
-    // even though both infer parentCode EU. Admin reconciles.
-    expect(groups).toHaveLength(2);
-    expect(groups.map((g) => g.label).sort()).toEqual(['EU', 'EUROPE']);
-    expect(groups.every((g) => g.parentCode === 'EU')).toBe(true);
+    expect(eu.providers[0].countries).toEqual(['AT', 'DE', 'FR']);
   });
 
   it('sorts groups alphabetically by label', async () => {
     mockFindMany.mockResolvedValue([
-      entry('firoam', 'GCC', ['SA']),
-      entry('firoam', 'ASIA', ['SG']),
-      entry('firoam', 'EU', ['DE']),
+      row({ provider: 'firoam', region: 'GCC', countryCodes: ['SA', 'AE', 'QA'] }),
+      row({ provider: 'firoam', region: 'ASIA', countryCodes: ['SG', 'TH', 'MY'] }),
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT'] }),
     ]);
     const groups = await buildRegionSuggestions();
     expect(groups.map((g) => g.label)).toEqual(['ASIA', 'EU', 'GCC']);
   });
 
-  it('skips entries with null region (filtered at query time)', async () => {
-    // The where-clause excludes region=null at the DB level, so this is a
-    // sanity check that we ignore them defensively if they slip through.
+  it('groups distinct vendor labels into separate groups even when parentCode is the same', async () => {
     mockFindMany.mockResolvedValue([
-      { provider: 'firoam', region: null, countryCodes: ['DE'] },
-      entry('firoam', 'EU', ['DE']),
+      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR'] }),
+      row({ provider: 'tgt', region: 'Europe', countryCodes: ['DE', 'BE'] }),
     ]);
     const groups = await buildRegionSuggestions();
-    expect(groups).toHaveLength(1);
-    expect(groups[0].label).toBe('EU');
+    // EU and EUROPE are distinct vendor labels — admin reconciles by saving
+    // one canonical region rather than us auto-merging.
+    expect(groups).toHaveLength(2);
+    expect(groups.map((g) => g.label).sort()).toEqual(['EU', 'EUROPE']);
+    expect(groups.every((g) => g.parentCode === 'EU')).toBe(true);
   });
 });
