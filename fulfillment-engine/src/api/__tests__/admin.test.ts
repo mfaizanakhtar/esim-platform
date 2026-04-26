@@ -84,6 +84,14 @@ vi.mock('~/db/prisma', () => ({
       update: vi.fn(),
       delete: vi.fn(),
     },
+    shopifyProductTemplate: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+    },
     $queryRaw: vi.fn(),
     $executeRaw: vi.fn(),
   },
@@ -5456,6 +5464,225 @@ describe('Admin Routes', () => {
         const res = await app.inject({ method: 'DELETE', url: '/regions/NOPE', headers: AUTH });
         expect(res.statusCode).toBe(404);
       });
+    });
+  });
+
+  // ── POST /product-templates/generate (REGION branch) ────────────────────
+
+  describe('POST /product-templates/generate — REGION', () => {
+    const prismaRegion = (
+      prisma as unknown as {
+        region: {
+          findMany: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).region;
+
+    const prismaTpl = (
+      prisma as unknown as {
+        shopifyProductTemplate: {
+          findUnique: ReturnType<typeof vi.fn>;
+          upsert: ReturnType<typeof vi.fn>;
+        };
+      }
+    ).shopifyProductTemplate;
+
+    function makeRegion(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'reg-001',
+        code: 'EU3',
+        parentCode: 'EU',
+        name: 'Europe (3 countries)',
+        description: null,
+        countryCodes: ['DE', 'FR', 'AT'],
+        isActive: true,
+        sortOrder: 0,
+        createdAt: new Date('2026-04-26'),
+        updatedAt: new Date('2026-04-26'),
+        ...overrides,
+      };
+    }
+
+    it('skips a region with no provider coverage', async () => {
+      prismaRegion.findMany.mockResolvedValue([makeRegion()]);
+      prismaCatalog.findMany.mockResolvedValue([
+        // FiRoam EU SKU only covers DE+FR — missing AT, so cannot fulfil EU3.
+        { countryCodes: ['DE', 'FR'] },
+      ]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'REGION' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body).toMatchObject({
+        ok: true,
+        templateType: 'REGION',
+        generated: 0,
+        skippedNoCoverage: 1,
+      });
+      expect(prismaTpl.upsert).not.toHaveBeenCalled();
+    });
+
+    it('generates a region template with REGION-prefixed SKUs when coverage is sufficient', async () => {
+      prismaRegion.findMany.mockResolvedValue([makeRegion()]);
+      prismaCatalog.findMany.mockResolvedValue([
+        // Active provider catalog row covers all of DE, FR, AT (and more).
+        { countryCodes: ['DE', 'FR', 'AT', 'BE', 'NL'] },
+      ]);
+      prismaTpl.findUnique.mockResolvedValue(null);
+      prismaTpl.upsert.mockResolvedValue({});
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'REGION', regionCodes: ['EU3'], priceMultiplier: 2 },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body).toMatchObject({
+        ok: true,
+        templateType: 'REGION',
+        priceMultiplier: 2,
+        generated: 1,
+      });
+
+      // Verify upsert was called with REGION shape
+      expect(prismaTpl.upsert).toHaveBeenCalledTimes(1);
+      const call = prismaTpl.upsert.mock.calls[0][0];
+      expect(call.where).toEqual({ regionCode: 'EU3' });
+      expect(call.create.templateType).toBe('REGION');
+      expect(call.create.regionCode).toBe('EU3');
+      expect(call.create.handle).toBe('region-eu3');
+      expect(call.create.tags).toContain('region');
+
+      // Verify SKUs use REGION prefix and price was multiplied
+      const variants = call.create.variants.create as Array<{ sku: string; price: string }>;
+      expect(variants.length).toBeGreaterThan(0);
+      expect(variants.every((v) => v.sku.startsWith('REGION-EU3-'))).toBe(true);
+      // 1GB/1D base = $4.99 × 2 = $9.98
+      const oneGbOneDay = variants.find((v) => v.sku === 'REGION-EU3-1GB-1D-DAYPASS');
+      expect(oneGbOneDay?.price).toBe('9.98');
+    });
+
+    it('skips existing template by default; overwrites when overwrite=true', async () => {
+      prismaRegion.findMany.mockResolvedValue([makeRegion()]);
+      prismaCatalog.findMany.mockResolvedValue([{ countryCodes: ['DE', 'FR', 'AT'] }]);
+      prismaTpl.findUnique.mockResolvedValue({ id: 'existing-tpl' });
+
+      // Default: skip existing
+      const res1 = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'REGION' },
+      });
+      expect(res1.json()).toMatchObject({ generated: 0, skippedExisting: 1 });
+      expect(prismaTpl.upsert).not.toHaveBeenCalled();
+
+      // overwrite=true: generate
+      prismaTpl.upsert.mockResolvedValue({});
+      const res2 = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'REGION', overwrite: true },
+      });
+      expect(res2.json()).toMatchObject({ generated: 1, skippedExisting: 0 });
+      expect(prismaTpl.upsert).toHaveBeenCalledTimes(1);
+    });
+
+    it('dry-run reports planned actions without writing', async () => {
+      prismaRegion.findMany.mockResolvedValue([
+        makeRegion(),
+        makeRegion({ id: 'reg-002', code: 'GCC2', parentCode: 'GCC', countryCodes: ['SA', 'AE'] }),
+      ]);
+      prismaCatalog.findMany.mockResolvedValue([
+        { countryCodes: ['DE', 'FR', 'AT'] }, // covers EU3
+        // No catalog row covers SA + AE → GCC2 should report skip_no_coverage
+      ]);
+      prismaTpl.findUnique.mockResolvedValue(null);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'REGION', dryRun: true },
+      });
+
+      const body = res.json();
+      expect(body.dryRun).toBe(true);
+      expect(body.plans).toHaveLength(2);
+      expect(body.plans.find((p: { code: string }) => p.code === 'EU3').action).toBe('create');
+      expect(body.plans.find((p: { code: string }) => p.code === 'GCC2').action).toBe(
+        'skip_no_coverage',
+      );
+      expect(prismaTpl.upsert).not.toHaveBeenCalled();
+    });
+
+    it('uses default 2.5x multiplier when none provided', async () => {
+      prismaRegion.findMany.mockResolvedValue([makeRegion()]);
+      prismaCatalog.findMany.mockResolvedValue([{ countryCodes: ['DE', 'FR', 'AT'] }]);
+      prismaTpl.findUnique.mockResolvedValue(null);
+      prismaTpl.upsert.mockResolvedValue({});
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'REGION' },
+      });
+
+      expect(res.json().priceMultiplier).toBe(2.5);
+      const variants = prismaTpl.upsert.mock.calls[0][0].create.variants.create as Array<{
+        sku: string;
+        price: string;
+      }>;
+      // 1GB/1D base = $4.99 × 2.5 = $12.475 → rounds to $12.48
+      const oneGbOneDay = variants.find((v) => v.sku === 'REGION-EU3-1GB-1D-DAYPASS');
+      expect(oneGbOneDay?.price).toBe('12.48');
+    });
+
+    it('returns empty result when no active regions exist', async () => {
+      prismaRegion.findMany.mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { templateType: 'REGION' },
+      });
+
+      expect(res.json()).toMatchObject({
+        ok: true,
+        templateType: 'REGION',
+        generated: 0,
+        errors: ['No active regions'],
+      });
+    });
+
+    it('does NOT trigger REGION branch for default COUNTRY templateType', async () => {
+      // Stub catalog so the COUNTRY branch's discovery doesn't blow up.
+      prismaCatalog.findMany.mockResolvedValue([]);
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/product-templates/generate',
+        headers: JSON_HEADERS,
+        payload: { dryRun: true },
+      });
+
+      // COUNTRY branch returns shape with toGenerate, not templateType=REGION
+      const body = res.json();
+      expect(body.dryRun).toBe(true);
+      expect(body.templateType).toBeUndefined();
+      expect(prismaRegion.findMany).not.toHaveBeenCalled();
     });
   });
 });

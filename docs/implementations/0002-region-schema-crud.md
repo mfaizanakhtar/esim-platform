@@ -1,11 +1,11 @@
-# Region Schema + CRUD + Discovery
+# Region Schema + CRUD + Discovery + Template Generation
 
 **ID:** 0002 · **Status:** in progress · **Owner:** faizanakh
-**Shipped:** in progress · **PRs:** #226 (schema + CRUD), #_TBD_ (discovery)
+**Shipped:** in progress · **PRs:** #226 (schema + CRUD), #227 (discovery), #_TBD_ (template generation)
 
 ## What it does
 
-Introduces a first-class `Region` entity (e.g. `EU30`, `ASIA4`, `GCC6`) and extends `ShopifyProductTemplate` so country and region templates coexist. Adds admin CRUD endpoints under `/admin/regions` so operators can curate canonical country groupings via the dashboard. Adds `GET /admin/regions/suggestions`: a read-only discovery endpoint that aggregates the live `ProviderSkuCatalog` and proposes Region rows the admin can review and save. Together these are the schema + API foundation for regional SKUs — template generation and provider matching land in subsequent PRs.
+Introduces a first-class `Region` entity (e.g. `EU30`, `ASIA4`, `GCC6`) and extends `ShopifyProductTemplate` so country and region templates coexist. Adds admin CRUD endpoints under `/admin/regions` so operators can curate canonical country groupings via the dashboard. Adds `GET /admin/regions/suggestions`: a read-only discovery endpoint that aggregates the live `ProviderSkuCatalog` and proposes Region rows the admin can review and save. Extends `POST /admin/product-templates/generate` with a `templateType: "REGION"` branch that materializes per-region Shopify product templates with `REGION-<code>-...` SKUs, scaled prices, and a strict-coverage check that skips regions no provider can fulfil. Together these are the schema, discovery, and template foundation for regional SKUs — provider matching (structured + AI) lands in the next PR.
 
 ## Why
 
@@ -17,10 +17,10 @@ Both FiRoam and TGT sell regional packages (Asia, Europe, GCC, Global) at much b
 |------|------|
 | `fulfillment-engine/prisma/schema.prisma` | Adds `Region` model; `templateType` + `regionCode` on `ShopifyProductTemplate`; `countryCode` made nullable |
 | `fulfillment-engine/prisma/migrations/20260426000001_add_region_support/migration.sql` | Creates `Region` table + indexes; backfills `templateType='COUNTRY'`; adds `regionCode` FK with `ON DELETE SET NULL` |
-| `fulfillment-engine/src/api/admin.ts` | New `GET/POST/PATCH/DELETE /admin/regions` endpoints + `GET /admin/regions/suggestions` (region CRUD section near bottom of file) |
+| `fulfillment-engine/src/api/admin.ts` | New `GET/POST/PATCH/DELETE /admin/regions` endpoints + `GET /admin/regions/suggestions` + REGION branch on `POST /product-templates/generate` (with `buildRegionTemplateVariants` and `regionHasProviderCoverage` helpers) |
 | `fulfillment-engine/src/services/regionService.ts` | Discovery service: `buildRegionSuggestions()` aggregates provider catalog → groups → INTERSECTION/UNION suggestions; pure functions `normalizeLabel`/`inferParentCode` for label canonicalization |
 | `fulfillment-engine/src/services/__tests__/regionService.test.ts` | 18 unit tests covering normalization, intersection/union math, suggestion emission rules, edge cases (invalid country codes, empty arrays, unionLimit) |
-| `fulfillment-engine/src/api/__tests__/admin.test.ts` | Region CRUD test suite + suggestions endpoint integration tests (33+ cases total) |
+| `fulfillment-engine/src/api/__tests__/admin.test.ts` | Region CRUD + suggestions + REGION template generation integration tests (40+ cases total) |
 | `fulfillment-engine/src/services/pricingEngine.ts` | Skips variants whose template has no `countryCode` (region templates are not priced through the country-only path yet) |
 | `fulfillment-engine/src/services/competitorScraper.ts` | Filters out region templates when discovering countries to scrape |
 
@@ -55,6 +55,11 @@ Migration: `20260426000001_add_region_support`. Hand-written SQL — backfills `
 - **Discovery skips entries with empty `countryCodes`.** Some vendor regional SKUs have a `region` label but no member country list — we can't propose coverage from those rows, so they're filtered out at the suggestion stage.
 - **`UNION` suggestions can have empty `providersAvailable`.** That signals "no single provider can fulfil this region under strict-coverage matching" — the suggestion exists for visibility but the admin should usually prefer the INTERSECTION variant or restrict the region.
 - **Suggestion endpoint is read-only and idempotent.** It runs each call against the live catalog; no caching, no DB writes. Cheap because catalog rows are O(thousands), not O(millions).
+- **Region templates use the same fixed validity/volume matrix as country templates**, just with a price multiplier (default `2.5×`). This keeps the variant set predictable across regions and means existing pricing UI/code doesn't need a region-specific code path. Per-variant coverage filtering can be added later if specific (data, validity) combinations turn out not to be fulfillable.
+- **Strict-coverage check skips entire regions, not individual variants.** If no provider catalog row covers all of `region.countryCodes`, the region template isn't generated at all — better to emit nothing than emit a Shopify product no one can fulfil. Variant-level filtering would be a v2 enhancement when we have richer variant→provider matching data.
+- **Region template handle is `region-<slug>`, not `<slug>`.** Prevents collisions with future country slugs (e.g. an admin who later defines a `JP` region wouldn't conflict with the country-keyed `jp` template).
+- **`countryCode: null` is set explicitly on the REGION upsert update path.** If an admin reassigns a template's identity from COUNTRY to REGION (an unusual but possible flow), we must clear the old country pointer or the unique constraint stops them from creating the new region's country sibling.
+- **Default 2.5x multiplier is conservative.** It's a placeholder until competitor pricing for regions exists; admins can override per call via `priceMultiplier` until the pricing engine learns about regions properly (future work).
 
 ## Related docs
 
@@ -63,8 +68,9 @@ Migration: `20260426000001_add_region_support`. Hand-written SQL — backfills `
 
 ## Future work / known gaps
 
-- **Region template generation** (Phase 4) — extend `POST /admin/product-templates/generate` with a REGION branch + strict-coverage filter.
-- **Region-aware mapping** (Phase 5) — coverage filter in structured + AI mapping paths.
-- **Dashboard UI** for region CRUD + suggestions review — backend is ready; the React dashboard pages are deferred.
-- **Pricing for region templates** — pricing engine currently skips region templates; needs a region-specific cost-floor + competitor strategy later.
+- **Region-aware mapping** (Phase 5) — coverage filter in structured + AI mapping paths so regional Shopify SKUs only resolve to provider catalog rows that cover every country in the region.
+- **Per-variant coverage filtering** — current behaviour skips an entire region if any country isn't covered. Future improvement: skip individual (data, validity) variants where no provider has matching `parsedJson`, so partial regions can still expose the variants that ARE fulfillable.
+- **Push to Shopify** — Phase 4 generates DB records only. The existing `POST /admin/product-templates/push-to-shopify` flow needs verification (or extension) for region-flavoured templates.
+- **Dashboard UI** for region CRUD + suggestions review + generate trigger — backend is ready; the React dashboard pages are deferred.
+- **Pricing for region templates** — pricing engine currently skips region templates; the multiplier-based prices are placeholders until a region-specific cost-floor + competitor strategy exists.
 - **Discovery doesn't auto-merge synonyms** (e.g. `EU` and `Europe`) — intentional for safety, but a future enhancement could surface merge suggestions when two groups share a `parentCode`.
