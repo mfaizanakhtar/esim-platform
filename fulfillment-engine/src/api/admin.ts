@@ -2685,6 +2685,22 @@ Countries: ${countryList}`,
     const openai = new OpenAI({ apiKey: openaiApiKey });
     const BATCH_SIZE = 50;
 
+    // Pre-fetch active regions once. Used by the post-filter to apply strict
+    // coverage matching for REGION SKUs without an async lookup per draft.
+    const allRegions = await prisma.region.findMany({
+      where: { isActive: true },
+      select: { code: true, countryCodes: true },
+    });
+    const regionCountriesByCode = new Map<string, string[]>();
+    for (const r of allRegions) {
+      const cc = Array.isArray(r.countryCodes)
+        ? (r.countryCodes as unknown[])
+            .filter((c): c is string => typeof c === 'string')
+            .map((c) => c.toUpperCase())
+        : [];
+      regionCountriesByCode.set(r.code, cc);
+    }
+
     // 2. Build per-provider run list
     //    Single-provider mode: one entry using the given provider filter.
     //    Multi-provider mode: one entry per active provider, each with its own
@@ -2786,6 +2802,7 @@ Countries: ${countryList}`,
         validity: string | null;
         netPrice: unknown;
         parsedJson: ParsedCatalogAttributes | null;
+        countryCodes: unknown;
       }>;
 
       if (catalogEntries.length === 0) continue;
@@ -2942,7 +2959,20 @@ Only include mappings with confidence >= 0.3. If no good match for a SKU, omit i
                         relaxOptions?.requireValidity === false
                       );
                     }
-                    if (!entry.parsedJson.regionCodes.includes(parsedSku.regionCode)) return false;
+                    // Region check: COUNTRY SKUs match by parsedJson.regionCodes; REGION SKUs
+                    // require the catalog to cover ALL of the canonical region's countries.
+                    if (parsedSku.kind === 'REGION') {
+                      const required = regionCountriesByCode.get(parsedSku.regionCode);
+                      if (!required || required.length === 0) return false;
+                      const catalogCountries = Array.isArray(entry.countryCodes)
+                        ? (entry.countryCodes as unknown[])
+                            .filter((c): c is string => typeof c === 'string')
+                            .map((c) => c.toUpperCase())
+                        : [];
+                      if (!required.every((c) => catalogCountries.includes(c))) return false;
+                    } else if (!entry.parsedJson.regionCodes.includes(parsedSku.regionCode)) {
+                      return false;
+                    }
                     if (
                       relaxOptions?.requireData !== false &&
                       entry.parsedJson.dataMb !== parsedSku.dataMb
@@ -3051,7 +3081,21 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
                     )
                       continue;
                   } else {
-                    if (!entry.parsedJson.regionCodes.includes(parsedSku.regionCode)) continue;
+                    // Region check: COUNTRY SKUs match by parsedJson.regionCodes; REGION
+                    // SKUs require the catalog to cover ALL of the canonical region's
+                    // countries (strict superset).
+                    if (parsedSku.kind === 'REGION') {
+                      const required = regionCountriesByCode.get(parsedSku.regionCode);
+                      if (!required || required.length === 0) continue;
+                      const catalogCountries = Array.isArray(entry.countryCodes)
+                        ? (entry.countryCodes as unknown[])
+                            .filter((c): c is string => typeof c === 'string')
+                            .map((c) => c.toUpperCase())
+                        : [];
+                      if (!required.every((c) => catalogCountries.includes(c))) continue;
+                    } else if (!entry.parsedJson.regionCodes.includes(parsedSku.regionCode)) {
+                      continue;
+                    }
                     if (
                       relaxOptions?.requireData !== false &&
                       entry.parsedJson.dataMb !== parsedSku.dataMb
@@ -3613,56 +3657,104 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
     const parsed = parseShopifySku(sku);
     if (!parsed) return [];
 
-    const { regionCode, dataMb, validityDays, skuType } = parsed;
+    const { regionCode, dataMb, validityDays, skuType, kind } = parsed;
     const isDaypass = skuType === 'DAYPASS';
 
-    // JSONB containment query: regionCodes array must contain this regionCode.
-    // Strict mode (default): also requires regionCodes = [regionCode] exactly — rejects regional/global plans.
-    // relaxRegion=true: allows any catalog entry that covers this region (may include global/regional plans).
-    const strictRegion = !relaxOptions.relaxRegion;
     let rows: ParsedCatalogRow[];
-    if (provider) {
-      rows = strictRegion
+    /**
+     * For REGION SKUs (e.g. REGION-EU30-...), specificity is the size of the
+     * provider's `countryCodes` array — smaller catalogs that still cover the
+     * region are tighter, more cost-efficient fits. Tracked here so we don't
+     * recompute downstream.
+     */
+    const regionCoverageSizeById = new Map<string, number>();
+
+    if (kind === 'REGION') {
+      // Look up canonical region; without a Region row we cannot enforce strict coverage.
+      const region = await prisma.region.findUnique({ where: { code: regionCode } });
+      if (!region) return [];
+      const requiredCountries = Array.isArray(region.countryCodes)
+        ? (region.countryCodes as unknown[]).filter((c): c is string => typeof c === 'string')
+        : [];
+      if (requiredCountries.length === 0) return [];
+      const requiredJson = JSON.stringify(requiredCountries);
+
+      // JSONB `@>` returns true iff the left array contains every element on the right.
+      // That's exactly the strict-superset check: catalog covers all advertised countries.
+      rows = provider
         ? await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "productCode", "productType", "parsedJson"
+                   "productCode", "productType", "parsedJson", "countryCodes"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
-              AND jsonb_typeof("parsedJson"->'regionCodes') = 'array'
               AND provider = ${provider}
-              AND "parsedJson"->'regionCodes' ? ${regionCode}
-              AND jsonb_array_length("parsedJson"->'regionCodes') = 1
+              AND "countryCodes" @> ${requiredJson}::jsonb
           `
         : await prisma.$queryRaw<ParsedCatalogRow[]>`
             SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "productCode", "productType", "parsedJson"
+                   "productCode", "productType", "parsedJson", "countryCodes"
             FROM "ProviderSkuCatalog"
             WHERE "isActive" = true
               AND "parsedJson" IS NOT NULL
-              AND provider = ${provider}
-              AND "parsedJson"->'regionCodes' ? ${regionCode}
+              AND "countryCodes" @> ${requiredJson}::jsonb
           `;
+
+      for (const row of rows) {
+        const cc = (row as ParsedCatalogRow & { countryCodes?: unknown }).countryCodes;
+        const size = Array.isArray(cc)
+          ? (cc as unknown[]).filter((c) => typeof c === 'string').length
+          : Number.MAX_SAFE_INTEGER;
+        regionCoverageSizeById.set(row.id, size);
+      }
     } else {
-      rows = strictRegion
-        ? await prisma.$queryRaw<ParsedCatalogRow[]>`
-            SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "productCode", "productType", "parsedJson"
-            FROM "ProviderSkuCatalog"
-            WHERE "isActive" = true
-              AND "parsedJson" IS NOT NULL
-              AND jsonb_typeof("parsedJson"->'regionCodes') = 'array'
-              AND "parsedJson"->'regionCodes' ? ${regionCode}
-              AND jsonb_array_length("parsedJson"->'regionCodes') = 1
-          `
-        : await prisma.$queryRaw<ParsedCatalogRow[]>`
-            SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
-                   "productCode", "productType", "parsedJson"
-            FROM "ProviderSkuCatalog"
-            WHERE "isActive" = true
-              AND "parsedJson" IS NOT NULL
-              AND "parsedJson"->'regionCodes' ? ${regionCode}
-          `;
+      // JSONB containment query: regionCodes array must contain this regionCode.
+      // Strict mode (default): also requires regionCodes = [regionCode] exactly — rejects regional/global plans.
+      // relaxRegion=true: allows any catalog entry that covers this region (may include global/regional plans).
+      const strictRegion = !relaxOptions.relaxRegion;
+      if (provider) {
+        rows = strictRegion
+          ? await prisma.$queryRaw<ParsedCatalogRow[]>`
+              SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+                     "productCode", "productType", "parsedJson"
+              FROM "ProviderSkuCatalog"
+              WHERE "isActive" = true
+                AND "parsedJson" IS NOT NULL
+                AND jsonb_typeof("parsedJson"->'regionCodes') = 'array'
+                AND provider = ${provider}
+                AND "parsedJson"->'regionCodes' ? ${regionCode}
+                AND jsonb_array_length("parsedJson"->'regionCodes') = 1
+            `
+          : await prisma.$queryRaw<ParsedCatalogRow[]>`
+              SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+                     "productCode", "productType", "parsedJson"
+              FROM "ProviderSkuCatalog"
+              WHERE "isActive" = true
+                AND "parsedJson" IS NOT NULL
+                AND provider = ${provider}
+                AND "parsedJson"->'regionCodes' ? ${regionCode}
+            `;
+      } else {
+        rows = strictRegion
+          ? await prisma.$queryRaw<ParsedCatalogRow[]>`
+              SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+                     "productCode", "productType", "parsedJson"
+              FROM "ProviderSkuCatalog"
+              WHERE "isActive" = true
+                AND "parsedJson" IS NOT NULL
+                AND jsonb_typeof("parsedJson"->'regionCodes') = 'array'
+                AND "parsedJson"->'regionCodes' ? ${regionCode}
+                AND jsonb_array_length("parsedJson"->'regionCodes') = 1
+            `
+          : await prisma.$queryRaw<ParsedCatalogRow[]>`
+              SELECT id, provider, "productName", region, "dataAmount", validity, "netPrice",
+                     "productCode", "productType", "parsedJson"
+              FROM "ProviderSkuCatalog"
+              WHERE "isActive" = true
+                AND "parsedJson" IS NOT NULL
+                AND "parsedJson"->'regionCodes' ? ${regionCode}
+            `;
+      }
     }
 
     const candidates: { draft: AiMappingDraftInternal; specificity: number }[] = [];
@@ -3703,6 +3795,14 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         if (validityMatch) reasons.push('validity');
       }
 
+      // Specificity for tie-breaking when picking best per provider:
+      //   COUNTRY SKU → fewer parsedJson.regionCodes = more targeted catalog entry.
+      //   REGION SKU  → fewer countryCodes (still ⊇ region.countryCodes) = tighter coverage.
+      const specificity =
+        kind === 'REGION'
+          ? (regionCoverageSizeById.get(row.id) ?? Number.MAX_SAFE_INTEGER)
+          : p.regionCodes.length;
+
       candidates.push({
         draft: {
           shopifySku: sku,
@@ -3718,8 +3818,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
           packageType: isDaypass ? 'daypass' : 'fixed',
           daysCount: isDaypass ? validityDays : null,
         },
-        // Fewer region codes = more targeted product (SA-only beats Middle East beats Global)
-        specificity: p.regionCodes.length,
+        specificity,
       });
     }
 
