@@ -20,8 +20,13 @@ Keep `docs/` up to date whenever code changes. Documentation is as important as 
 | Railway services, build/deploy process | `docs/deployment.md` |
 | Encryption, auth, HMAC verification | `docs/security.md` |
 | System architecture, data flow | `docs/architecture.md` |
+| **Any new feature or behaviour change** | `docs/implementations/<NNNN>-<slug>.md` (see [INDEX](../../../docs/implementations/INDEX.md) and [_TEMPLATE](../../../docs/implementations/_TEMPLATE.md)) |
 
 When adding a **new** doc topic that doesn't fit any existing file, create a new file in `docs/` and add it to `docs/README.md`.
+
+### Implementation Log (`docs/implementations/`)
+
+The topic-based docs above describe the system as it currently is. The implementation log is **per-feature**: it records what was built, why, the key files, and the non-obvious gotchas. Every PR that adds or changes user-visible behaviour MUST add or update an entry. The `create-pr` skill enforces this with a hard gate (exit code 2) unless the commit message contains `[skip-impl-log]`.
 
 ---
 

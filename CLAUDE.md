@@ -15,6 +15,7 @@ eSIM fulfillment platform with Shopify integration. When orders are paid, eSIM c
 
 ## Start Here
 
+**Before any non-trivial task** → scan [`docs/implementations/INDEX.md`](docs/implementations/INDEX.md) to see what's already shipped (don't re-derive from `git log`).
 **For system documentation** → read [`docs/`](docs/) — full reference for architecture, APIs, DB schema, vendors, deployment.
 **For any backend task** → read [`fulfillment-engine/AGENTS.md`](fulfillment-engine/AGENTS.md) first.
 **For monorepo/infra tasks** → read [`AGENTS.md`](AGENTS.md) for deployment and env var contract.
@@ -27,6 +28,7 @@ eSIM fulfillment platform with Shopify integration. When orders are paid, eSIM c
 3. **All vendor API calls happen in worker jobs**, not HTTP handlers
 4. **Sensitive data (LPA, activation codes, ICCID) must be encrypted at rest**
 5. **Always update `docs/` when making meaningful changes** — see skill below
+6. **Any PR adding or changing user-visible behaviour must add or update an entry in [`docs/implementations/`](docs/implementations/)** — the create-pr skill enforces this; use `[skip-impl-log]` in the commit message only for genuine exceptions (pure refactors, doc-only PRs, CI tweaks)
 
 ## Documentation Rule
 

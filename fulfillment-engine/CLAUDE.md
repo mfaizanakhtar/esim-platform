@@ -13,6 +13,10 @@ npm run prisma:generate  # Regenerate Prisma client after schema changes
 npm run prisma:migrate   # Apply pending migrations
 ```
 
+## Before You Start
+
+Scan [`../docs/implementations/INDEX.md`](../docs/implementations/INDEX.md) to see what's already shipped — saves you from re-deriving the picture from `git log`.
+
 ## Critical Rules
 
 - **Never provision eSIM in webhook handler** — enqueue `provision-esim` job instead
@@ -21,6 +25,7 @@ npm run prisma:migrate   # Apply pending migrations
 - **All vendor calls in worker jobs** — never in HTTP route handlers
 - **Use Zod** for all external API response validation (FiRoam, TGT, Shopify)
 - **Use `z.coerce.number()` and `.nullable().optional()`** for all Shopify webhook fields
+- **PRs that change behaviour must update [`../docs/implementations/`](../docs/implementations/)** — the create-pr skill blocks otherwise (`[skip-impl-log]` to bypass for refactors/fixes)
 
 ## Key Files
 
