@@ -51,13 +51,13 @@ Maps a Shopify SKU to a vendor product code. Multiple mappings per SKU (tried in
 | `name` | String? | Friendly name |
 | `region` | String? | e.g., `EU`, `Global` |
 | `dataAmount` | String? | e.g., `5GB` |
-| `validity` | String? | e.g., `30 days` |
+| `validity` | String? | e.g., `30 days`. **For `daypass` packages this column is informational only** — the customer email's `Validity` line is derived from `daysCount` (see `docs/worker-jobs.md` and `docs/sku-mapping.md`). For `fixed` packages this is the display source of truth. |
 | `isActive` | Boolean | Soft-delete flag |
 | `priority` | Int | Lower = tried first. `1` is highest priority |
 | `priorityLocked` | Boolean | Protects from smart-pricing reorder |
 | `mappingLocked` | Boolean | Requires unlock to edit or delete |
 | `packageType` | String | `fixed` or `daypass` |
-| `daysCount` | Int? | Daypass packages only — number of days |
+| `daysCount` | Int? | Daypass packages only — number of days. Sent to FiRoam as `daypassDays` **and** used to render the email's `Validity` line, so the two cannot drift apart. |
 | `providerCatalogId` | String? | FK to `ProviderSkuCatalog` |
 | `createdAt` | DateTime | |
 | `updatedAt` | DateTime | |
