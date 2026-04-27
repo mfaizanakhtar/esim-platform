@@ -2147,9 +2147,16 @@ Countries: ${countryList}`,
                 : undefined,
             });
 
-            // 2. Replace product image.
-            if (template.imageUrl) {
-              await shopify.replaceProductMedia(template.shopifyProductId, [template.imageUrl]);
+            // 2. Replace product image. For country templates, compute the
+            //    flag URL fresh from countryCode so we always push the latest
+            //    URL format (e.g. SVG) without requiring callers to regenerate
+            //    templates first. Region templates fall back to whatever's
+            //    stored on the row (region templates don't currently set one).
+            const freshImageUrl = template.countryCode
+              ? `https://flagcdn.com/${template.countryCode.toLowerCase()}.svg`
+              : template.imageUrl;
+            if (freshImageUrl) {
+              await shopify.replaceProductMedia(template.shopifyProductId, [freshImageUrl]);
             }
 
             // 3. Update prices on EXISTING variants only (matched by SKU).
