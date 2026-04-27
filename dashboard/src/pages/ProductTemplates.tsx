@@ -4,6 +4,7 @@ import {
   useGenerateTemplates,
   useGenerateSeo,
   usePushToShopify,
+  useUpdateOnShopify,
   useDeleteTemplate,
   type ProductTemplateSummary,
   type GenerateResult,
@@ -13,6 +14,7 @@ import {
   Plus,
   Sparkles,
   Upload,
+  RefreshCw,
   Trash2,
   CheckCircle2,
   Clock,
@@ -327,6 +329,7 @@ export function ProductTemplates() {
   const generateMutation = useGenerateTemplates();
   const seoMutation = useGenerateSeo();
   const pushMutation = usePushToShopify();
+  const updateMutation = useUpdateOnShopify();
   const deleteMutation = useDeleteTemplate();
 
   const [search, setSearch] = useState('');
@@ -363,7 +366,11 @@ export function ProductTemplates() {
 
   const selectedCodes = [...selected];
   const anyPending =
-    generateMutation.isPending || seoMutation.isPending || pushMutation.isPending || deleteMutation.isPending;
+    generateMutation.isPending ||
+    seoMutation.isPending ||
+    pushMutation.isPending ||
+    updateMutation.isPending ||
+    deleteMutation.isPending;
 
   function toggleSelect(code: string) {
     setSelected((prev) => {
@@ -540,6 +547,35 @@ export function ProductTemplates() {
     });
   }
 
+  function handleUpdateAll() {
+    if (pushedCount === 0) {
+      showToast('No templates have been pushed yet — use Push first.', 'info');
+      return;
+    }
+    setConfirm({
+      title: 'Update on Shopify',
+      message: `Refresh ${pushedCount} pushed template(s) on Shopify (title, description, image, prices on existing variants). New SKUs will NOT be created — use Push for that.`,
+      actions: [
+        {
+          label: 'Update',
+          variant: 'primary',
+          onClick: () =>
+            updateMutation.mutate(
+              {},
+              {
+                onSuccess: (d) =>
+                  showToast(
+                    d.total > 0 ? `Updating ${d.total} template(s) on Shopify` : 'Nothing to update',
+                    'info',
+                  ),
+                onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
+              },
+            ),
+        },
+      ],
+    });
+  }
+
   // ─── Selection action handlers ──────────────────────────────────
 
   function handlePushSelected() {
@@ -556,6 +592,33 @@ export function ProductTemplates() {
               {
                 onSuccess: (d) => {
                   showToast(`Pushing ${d.total} template(s) to Shopify`, 'info');
+                  setSelected(new Set());
+                },
+                onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
+              },
+            ),
+        },
+      ],
+    });
+  }
+
+  function handleUpdateSelected() {
+    setConfirm({
+      title: 'Update Selected on Shopify',
+      message: `Refresh ${selectedCodes.length} selected template(s) on Shopify (image, title, description, prices on existing variants). No new SKUs will be created.`,
+      actions: [
+        {
+          label: 'Update',
+          variant: 'primary',
+          onClick: () =>
+            updateMutation.mutate(
+              { countries: selectedCodes },
+              {
+                onSuccess: (d) => {
+                  showToast(
+                    d.total > 0 ? `Updating ${d.total} template(s) on Shopify` : 'Nothing to update',
+                    'info',
+                  );
                   setSelected(new Set());
                 },
                 onError: (e) => showToast(`Failed: ${(e as Error).message}`, 'error'),
@@ -675,6 +738,20 @@ export function ProductTemplates() {
           <Upload className={`h-4 w-4 ${pushMutation.isPending ? 'animate-pulse' : ''}`} />
           {pushMutation.isPending ? 'Pushing...' : 'Push All to Shopify'}
         </button>
+
+        <button
+          onClick={handleUpdateAll}
+          disabled={anyPending || pushedCount === 0}
+          title={
+            pushedCount === 0
+              ? 'No templates pushed yet — use Push first'
+              : 'Refresh image / title / description / prices on existing Shopify products. Does NOT create new SKUs.'
+          }
+          className="flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
+        >
+          <RefreshCw className={`h-4 w-4 ${updateMutation.isPending ? 'animate-spin' : ''}`} />
+          {updateMutation.isPending ? 'Updating...' : 'Update on Shopify'}
+        </button>
       </div>
 
       {/* Zone 2: Stats + Search */}
@@ -717,6 +794,15 @@ export function ProductTemplates() {
           >
             <Upload className="h-3.5 w-3.5" />
             Push Selected
+          </button>
+          <button
+            onClick={handleUpdateSelected}
+            disabled={anyPending}
+            title="Refresh image / title / description / prices on already-pushed Shopify products. Does NOT create new SKUs."
+            className="flex items-center gap-1.5 px-2.5 py-1 text-sm border rounded-md hover:bg-muted disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            Update Selected
           </button>
           <button
             onClick={handleRegenerateSeoSelected}

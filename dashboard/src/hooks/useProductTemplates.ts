@@ -94,6 +94,11 @@ interface PushResult {
   message?: string;
 }
 
+interface UpdateInput {
+  countries?: string[];
+  dryRun?: boolean;
+}
+
 interface DeleteResult {
   ok: boolean;
   deleted: string;
@@ -144,6 +149,20 @@ export function usePushToShopify() {
   return useMutation({
     mutationFn: (input: PushInput) =>
       apiClient.post<PushResult>('/product-templates/push-to-shopify', input),
+    onSuccess: () => delayedRefetch(qc),
+  });
+}
+
+/**
+ * Update already-pushed Shopify products from the latest template data.
+ * Refreshes title/description/image/price on existing variants. Never creates
+ * new SKUs and never deletes variants — safe to run after metadata-only edits.
+ */
+export function useUpdateOnShopify() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateInput) =>
+      apiClient.post<PushResult>('/product-templates/update-on-shopify', input),
     onSuccess: () => delayedRefetch(qc),
   });
 }

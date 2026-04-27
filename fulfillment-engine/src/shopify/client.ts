@@ -1297,6 +1297,221 @@ export class ShopifyClient {
     }
   }
   /* v8 ignore stop */
+
+  /* v8 ignore start — Shopify GraphQL helpers exercised via integration */
+  /**
+   * Replace the product's media (images). Deletes existing media, then creates
+   * new media from the supplied URLs. Used by the template-update flow to
+   * refresh product images without touching variants/SKUs.
+   */
+  async replaceProductMedia(productId: string, imageUrls: string[]): Promise<void> {
+    const accessToken = await this.getAccessToken();
+    const baseUrl = `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'X-Shopify-Access-Token': accessToken,
+    };
+
+    // 1. Read existing media GIDs.
+    const fetchQuery = `
+      query getMedia($id: ID!) {
+        product(id: $id) {
+          media(first: 50) { nodes { id } }
+        }
+      }
+    `;
+    const fetchResp = await axios.post(
+      baseUrl,
+      { query: fetchQuery, variables: { id: productId } },
+      { headers },
+    );
+    const existingMediaIds: string[] =
+      fetchResp.data?.data?.product?.media?.nodes?.map((n: { id: string }) => n.id) ?? [];
+
+    // 2. Delete existing media (if any).
+    if (existingMediaIds.length > 0) {
+      const deleteMutation = `
+        mutation productDeleteMedia($productId: ID!, $mediaIds: [ID!]!) {
+          productDeleteMedia(productId: $productId, mediaIds: $mediaIds) {
+            deletedMediaIds
+            mediaUserErrors { field message }
+          }
+        }
+      `;
+      const delResp = await axios.post(
+        baseUrl,
+        { query: deleteMutation, variables: { productId, mediaIds: existingMediaIds } },
+        { headers },
+      );
+      const errs = delResp.data?.data?.productDeleteMedia?.mediaUserErrors ?? [];
+      if (errs.length > 0) {
+        throw new Error(
+          `productDeleteMedia error: ${errs.map((e: { message: string }) => e.message).join(', ')}`,
+        );
+      }
+    }
+
+    // 3. Create new media.
+    if (imageUrls.length > 0) {
+      const createMutation = `
+        mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
+          productCreateMedia(productId: $productId, media: $media) {
+            media { id }
+            mediaUserErrors { field message }
+          }
+        }
+      `;
+      const createResp = await axios.post(
+        baseUrl,
+        {
+          query: createMutation,
+          variables: {
+            productId,
+            media: imageUrls.map((url) => ({
+              originalSource: url,
+              mediaContentType: 'IMAGE',
+            })),
+          },
+        },
+        { headers },
+      );
+      const errs = createResp.data?.data?.productCreateMedia?.mediaUserErrors ?? [];
+      if (errs.length > 0) {
+        throw new Error(
+          `productCreateMedia error: ${errs.map((e: { message: string }) => e.message).join(', ')}`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Fetch all variants of a product, indexed by SKU. Used to match template
+   * variants to existing Shopify variants when updating without creating new
+   * SKUs.
+   */
+  async getProductVariantsBySku(
+    productId: string,
+  ): Promise<Map<string, { gid: string; price: string }>> {
+    const accessToken = await this.getAccessToken();
+    const query = `
+      query getVariants($id: ID!, $cursor: String) {
+        product(id: $id) {
+          variants(first: 250, after: $cursor) {
+            nodes { id sku price }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+      }
+    `;
+    interface VariantNode {
+      id: string;
+      sku: string | null;
+      price: string;
+    }
+    interface VariantConn {
+      nodes: VariantNode[];
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    }
+    interface VariantsResponse {
+      data?: { product?: { variants?: VariantConn } };
+    }
+
+    const out = new Map<string, { gid: string; price: string }>();
+    let cursor: string | null = null;
+    let hasMore = true;
+    while (hasMore) {
+      const resp: { data: VariantsResponse } = await axios.post(
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+        { query, variables: { id: productId, cursor } },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': accessToken,
+          },
+        },
+      );
+      const conn = resp.data?.data?.product?.variants;
+      if (!conn) break;
+      for (const node of conn.nodes ?? []) {
+        if (node.sku) out.set(node.sku, { gid: node.id, price: node.price });
+      }
+      hasMore = !!conn.pageInfo?.hasNextPage;
+      cursor = hasMore ? conn.pageInfo.endCursor : null;
+    }
+    return out;
+  }
+
+  /**
+   * Update existing variants on Shopify by matching SKU. Variants whose SKU
+   * isn't on Shopify are SKIPPED (this method NEVER creates new variants).
+   * Returns counts of matched / skipped.
+   */
+  async updateExistingVariantsBySku(
+    productId: string,
+    templateVariants: Array<{ sku: string; price: string }>,
+  ): Promise<{ matched: number; skipped: number; skippedSkus: string[] }> {
+    const accessToken = await this.getAccessToken();
+    const existing = await this.getProductVariantsBySku(productId);
+
+    const updates: Array<{ id: string; price: string }> = [];
+    const skippedSkus: string[] = [];
+    for (const tv of templateVariants) {
+      const match = existing.get(tv.sku);
+      if (!match) {
+        skippedSkus.push(tv.sku);
+        continue;
+      }
+      // Only push an update if price actually changed (saves API calls).
+      if (match.price !== tv.price) {
+        updates.push({ id: match.gid, price: tv.price });
+      }
+    }
+
+    if (updates.length === 0) {
+      return {
+        matched: templateVariants.length - skippedSkus.length,
+        skipped: skippedSkus.length,
+        skippedSkus,
+      };
+    }
+
+    const mutation = `
+      mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+          productVariants { id }
+          userErrors { field message }
+        }
+      }
+    `;
+    const BATCH_SIZE = 250;
+    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+      const batch = updates.slice(i, i + BATCH_SIZE);
+      const resp = await axios.post(
+        `https://${this.config.shopDomain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+        { query: mutation, variables: { productId, variants: batch } },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': accessToken,
+          },
+        },
+      );
+      const errs = resp.data?.data?.productVariantsBulkUpdate?.userErrors ?? [];
+      if (errs.length > 0) {
+        throw new Error(
+          `productVariantsBulkUpdate error: ${errs.map((e: { message: string }) => e.message).join(', ')}`,
+        );
+      }
+    }
+
+    return {
+      matched: templateVariants.length - skippedSkus.length,
+      skipped: skippedSkus.length,
+      skippedSkus,
+    };
+  }
+  /* v8 ignore stop */
+
   async updateVariantPrices(
     productId: string,
     variants: Array<{ variantId: string; price: string }>,

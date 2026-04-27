@@ -1,6 +1,6 @@
 # Resend-email handler hydrates eSIM details from SKU mapping
 
-**ID:** 0004 · **Status:** shipped · **Owner:** Faizan Akhter
+**ID:** 0005 · **Status:** shipped · **Owner:** Faizan Akhter
 **Shipped:** 2026-04-27 · **PRs:** TBD
 
 ## What it does
