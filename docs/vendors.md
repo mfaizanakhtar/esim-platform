@@ -94,7 +94,11 @@ FiRoam uses multiple field name variants depending on API version — the client
 
 ### Catalog Sync
 
-`GET /admin/sku-mappings/catalog/sync?provider=firoam` calls `getSkus()` → stores all SKU entries in `ProviderSkuCatalog`.
+`POST /admin/provider-catalog/sync` with `{provider:'firoam'}` calls `getSkus()` → for each SKU calls `getPackages()` → upserts every package into `ProviderSkuCatalog` keyed on `(provider, skuId, productCode)`.
+
+**`countryCodes` normalization** (important): FiRoam's `getPackages()` response includes `supportCountry` as an array of **display names** (e.g. `["Germany","France"]`), not ISO codes. The sync runs each entry through `normalizeFiroamCountries()` (in `src/utils/firoamCountryCodes.ts`), which uses `firoamNameToCode()` to map names to ISO 3166-1 alpha-2 codes before storing in the canonical `countryCodes` column. Names not in the lookup map are dropped with a warning log (`firoam-sync: dropped country names not in firoamNameToCode map`) so unmappable countries can be spotted and added. The raw response is still preserved in `rawPayload.skuCountryCodes` for debugging.
+
+This invariant is what lets region discovery, structured-match REGION branch (JSONB `@>`), and AI mapping post-filter all rely on `countryCodes` being uniform ISO codes regardless of provider.
 
 ---
 

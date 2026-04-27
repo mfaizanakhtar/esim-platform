@@ -94,6 +94,10 @@ model ProviderSkuCatalog {
   productName   String
   productType   String?
   region        String?
+  // ISO 3166-1 alpha-2 codes, uppercase, deduped, sorted. FiRoam normalizes
+  // its display-name `supportCountry` field via firoamNameToCode at sync time
+  // so this column is uniform across providers — region discovery, structured/AI
+  // mapping coverage, and country-template generation all depend on this.
   countryCodes  Json?
   dataAmount    String?
   validity      String?
