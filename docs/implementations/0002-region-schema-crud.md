@@ -1,7 +1,7 @@
 # Region Schema + CRUD + Discovery + Templates + Mapping + Dashboard
 
 **ID:** 0002 · **Status:** shipped · **Owner:** faizanakh
-**Shipped:** 2026-04-26 · **PRs:** #226 (schema + CRUD), #227 (discovery), #228 (template generation), #229 (region-aware mapping), #230 (dashboard parity), #231 (discovery filter hotfix), #_TBD_ (FiRoam countryCodes normalization)
+**Shipped:** 2026-04-26 · **PRs:** #226 (schema + CRUD), #227 (discovery), #228 (template generation), #229 (region-aware mapping), #230 (dashboard parity), #231 (discovery filter hotfix), #232 (FiRoam countryCodes normalization), #_TBD_ (smarter group labeling)
 
 ## What it does
 
@@ -90,7 +90,8 @@ Migration: `20260426000001_add_region_support`. Hand-written SQL — backfills `
 ## Bug fixes after launch
 
 - **PR #231** — `regionService` discovery was filtering on `region IS NOT NULL`, which excluded all TGT regional rows (TGT sync hard-codes `region: null`) and grouped FiRoam single-country rows misleadingly (FiRoam stored country codes there). Switched the regional signal to `countryCodes.length >= 2` and made discovery on `/regions` button-triggered instead of auto-fetching.
-- **PR #_TBD_** — FiRoam sync was storing `pkgData.supportCountry` (display names like `["Germany","France"]`) verbatim into `ProviderSkuCatalog.countryCodes`, while every reader assumed ISO 3166-1 alpha-2. Silently broke FiRoam discovery, structured-match REGION branch (JSONB `@>`), and AI mapping post-filter for FiRoam regional SKUs. Fixed at the source: new `normalizeFiroamCountries()` helper (`src/utils/firoamCountryCodes.ts`) maps display names to ISO codes via `firoamNameToCode()` at sync time. Drops unmappable names with a warning log. Locked the invariant ("`countryCodes` is always ISO uppercase deduped sorted") in the schema comment + `docs/database.md`. Also added `force?: boolean` to `POST /admin/provider-catalog/parse-all` as an escape hatch to refresh stale parsed output (clears `parsedJson` on matching rows so the existing loop re-processes them).
+- **PR #232** — FiRoam sync was storing `pkgData.supportCountry` (display names like `["Germany","France"]`) verbatim into `ProviderSkuCatalog.countryCodes`, while every reader assumed ISO 3166-1 alpha-2. Silently broke FiRoam discovery, structured-match REGION branch (JSONB `@>`), and AI mapping post-filter for FiRoam regional SKUs. Fixed at the source: new `normalizeFiroamCountries()` helper (`src/utils/firoamCountryCodes.ts`) maps display names to ISO codes via `firoamNameToCode()` at sync time. Drops unmappable names with a warning log. Locked the invariant ("`countryCodes` is always ISO uppercase deduped sorted") in the schema comment + `docs/database.md`. Also added `force?: boolean` to `POST /admin/provider-catalog/parse-all` as an escape hatch to refresh stale parsed output (clears `parsedJson` on matching rows so the existing loop re-processes them).
+- **PR #_TBD_** — Discovery group labels were dominated by enumerated `parsedJson.regionCodes` from the AI parser, burying real regional packs (GCC, ME, Global) under arbitrary first-letter country codes (`QA`, `AE`, `AD`). Rewrote `deriveGroupLabel` with deterministic 5-tier dispatch: (1) single-entry parser tag, (2) canonical-region subset match (new `src/utils/canonicalRegions.ts` with GCC, NORDIC, BENELUX, BALTIC, ANZ, ASEAN, ME, EU, EEA), (3) productName keyword match (Global, Middle East, ASEAN, Latam, Caribbean, Africa, etc.), (4) vendor `region` field, (5) `MULTI-N` fallback. Multi-entry `parsedJson.regionCodes` (the broken case) now falls through to deterministic tiers. No AI in the runtime path. New canonical or keyword can be added with a one-line table edit.
 
 ## Future work / known gaps
 
