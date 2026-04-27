@@ -12,5 +12,6 @@ Status vocabulary: `in-progress`, `shipped`, `deprecated`, `planned`.
 |----|---------|--------|---------|--------|
 | 0001 | Implementation Log + Enforcement | shipped | Per-feature record system at `docs/implementations/` with three-layer enforcement (CLAUDE.md rule, `create-pr` skill gate, CI guardrail) | [0001-implementation-log.md](0001-implementation-log.md) |
 | 0002 | Regional SKU catalog (end-to-end) | shipped | `Region` entity, CRUD, discovery suggestions, REGION template generation, strict-coverage structured + AI mapping, and `/regions` dashboard page with 1-click Accept — full no-curl workflow | [0002-region-schema-crud.md](0002-region-schema-crud.md) |
+| 0003 | Update on Shopify (non-destructive sync) | shipped | New dashboard button + endpoint that refreshes image / title / description / prices on already-pushed Shopify products without re-creating SKUs. Also switches flag images to SVG to fix blurry upscale + first-paint lag | [0003-update-on-shopify.md](0003-update-on-shopify.md) |
 
 > Backfill of existing shipped features (multi-eSIM orders, vector embeddings + SSE, smart pricing, FiRoam/TGT integrations, Shopify extensions, AI mapping, etc.) is tracked as a follow-up plan and will populate this table.
