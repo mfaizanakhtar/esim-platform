@@ -80,7 +80,7 @@ Synced vendor product catalog. Source of truth for AI mapping.
 | `productName` | String | Display name |
 | `productType` | String? | |
 | `region` | String? | Vendor's region label |
-| `countryCodes` | Json? | Array of ISO country codes |
+| `countryCodes` | Json? | Array of ISO 3166-1 alpha-2 codes (uppercase, deduped, sorted). **Invariant** every reader depends on (region discovery, structured/AI mapping coverage, country-template generation). FiRoam's API returns display names in `supportCountry`; the FiRoam sync normalizes them via `firoamNameToCode()` before storing here. Unknown names are dropped and logged. |
 | `dataAmount` | String? | e.g., `5GB` |
 | `validity` | String? | e.g., `30 days` |
 | `netPrice` | Decimal? | Cost price |

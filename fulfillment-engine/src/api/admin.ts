@@ -22,6 +22,7 @@ import {
 } from '~/services/embeddingService';
 import { parseShopifySku } from '~/utils/parseShopifySku';
 import { getCountryByCode, firoamNameToCode } from '~/utils/countryCodes';
+import { normalizeFiroamCountries } from '~/utils/firoamCountryCodes';
 import { buildRegionSuggestions } from '~/services/regionService';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
@@ -4197,8 +4198,18 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             skuCountryCodes: pkgData.supportCountry,
           } as unknown as Prisma.InputJsonValue;
 
-          const countryCodes = pkgData.supportCountry?.length
-            ? (pkgData.supportCountry as unknown as Prisma.InputJsonValue)
+          // FiRoam returns display names (e.g. "Germany", "France") in
+          // supportCountry; normalize to ISO 3166-1 alpha-2 codes here so the
+          // canonical column matches what every reader expects (region
+          // discovery, structured/AI mapping coverage filters, country
+          // template generation). Raw names remain in rawPayload.skuCountryCodes
+          // for debugging.
+          const normalizedCountryCodes = normalizeFiroamCountries(pkgData.supportCountry, {
+            skuId,
+            productCode: pkg.apiCode,
+          });
+          const countryCodes = normalizedCountryCodes.length
+            ? (normalizedCountryCodes as unknown as Prisma.InputJsonValue)
             : Prisma.JsonNull;
 
           const upserted = await providerSkuCatalog.upsert({
@@ -4545,7 +4556,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       return reply.code(500).send({ error: 'OPENAI_API_KEY not configured' });
     }
 
-    const body = (request.body || {}) as { provider?: string };
+    const body = (request.body || {}) as { provider?: string; force?: boolean };
 
     const LOCK_ID = 0xca7a;
     const [lockResult] = await prisma.$queryRaw<[{ acquired: boolean }]>`
@@ -4557,6 +4568,19 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         started: false,
         message: 'Another parse-all is already in progress',
       });
+    }
+
+    // force=true: clear parsedJson on matching rows so the existing
+    // "parsedJson IS NULL" loop re-processes them. Without this, force mode
+    // would re-process already-parsed rows infinitely (no progress cursor).
+    if (body.force) {
+      if (body.provider) {
+        await prisma.$executeRaw`
+          UPDATE "ProviderSkuCatalog" SET "parsedJson" = NULL WHERE provider = ${body.provider}
+        `;
+      } else {
+        await prisma.$executeRaw`UPDATE "ProviderSkuCatalog" SET "parsedJson" = NULL`;
+      }
     }
 
     // Fire and forget — reply immediately so the HTTP request doesn't time out
