@@ -1,7 +1,7 @@
 # Pricer Monotonic Fix + Payment-Fee Overhead
 
-**ID:** 0018 · **Status:** shipped · **Owner:** faizanakhter
-**Shipped:** 2026-04-27 · **PRs:** _pending_
+**ID:** 0018 · **Status:** shipped · **Owner:** mfaizanakhtar
+**Shipped:** 2026-04-27 · **PRs:** `#241`
 
 ## What it does
 

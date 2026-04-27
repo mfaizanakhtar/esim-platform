@@ -33,13 +33,13 @@ export interface PricingParams {
   survivalMargin: number; // default 0.15 (15%)
   undercutPercent: number; // default 0.10 (10%)
   minimumPrice: number; // default 2.99
-  monotonicStep: number; // default 0.50 (post-rounding step between adjacent variants)
+  monotonicStep: number; // default 1.0 (post-rounding step between adjacent variants)
   noDataBuffer: number; // default 1.0 (multiplier on floor when no competitor data)
   roundingMode: RoundingMode; // default '49_99'
   // Per-transaction payment processing fees absorbed into the cost floor before margin tiers.
   // Approximates retail-side fees against cost; the markup absorbs the small delta.
-  paymentFeePercent: number; // default 0.029 (Shopify Payments 2.9%)
-  paymentFeeFixed: number; // default 0.30 ($0.30 per transaction)
+  paymentFeePercent: number; // default 0 (Shopify Payments recommended: 0.029 = 2.9%)
+  paymentFeeFixed: number; // default 0 (Shopify Payments recommended: $0.30 per transaction)
 }
 
 export const DEFAULT_PRICING_PARAMS: PricingParams = {

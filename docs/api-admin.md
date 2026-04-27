@@ -474,7 +474,7 @@ Hard-delete a region. Templates referencing it (via `regionCode`) are not cascad
 
 ## Pricing
 
-### POST /pricing/generate-suggestions
+### POST /admin/pricing/generate-suggestions
 
 Kick off an async smart-pricing run that computes `proposedPrice` for every variant in the requested countries.
 
