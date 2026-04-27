@@ -194,4 +194,15 @@ describe('findProductNameTag', () => {
     expect(findProductNameTag(undefined)).toBeNull();
     expect(findProductNameTag(42)).toBeNull();
   });
+
+  it('matches "AsiaN" without space (FiRoam quirk: "West Asia8", "Central Asia3")', () => {
+    expect(findProductNameTag('West Asia8 - 5GB 30D')).toEqual({ tag: 'ASIA', parent: 'ASIA' });
+    expect(findProductNameTag('Central Asia3 - ')).toEqual({ tag: 'ASIA', parent: 'ASIA' });
+    expect(findProductNameTag('Asia30')).toEqual({ tag: 'ASIA', parent: 'ASIA' });
+  });
+
+  it('still does NOT match "Asian" (avoids false positive)', () => {
+    expect(findProductNameTag('Asian Premium plan')).toBeNull();
+    expect(findProductNameTag('Asiana airlines bundle')).toBeNull();
+  });
 });

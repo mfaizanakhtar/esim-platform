@@ -148,10 +148,14 @@ function deriveGroupLabel(row: CatalogRow, isoCountries: string[]): string {
   const fromName = findProductNameTag(row.productName);
   if (fromName) return fromName.tag;
 
-  // Tier 4: vendor `region` field (multi-char or in known alias map).
+  // Tier 4: vendor `region` field. Accept multi-char tags or 2-char known
+  // aliases (EU, ME, AS, AF, …). Reject pure-digit values — FiRoam stores
+  // internal SKU IDs (e.g. "99111", "99988") in this column for some packs;
+  // those would otherwise leak through as group labels.
   if (typeof row.region === 'string') {
     const r = row.region.trim().toUpperCase();
-    if (r.length > 2 || (r.length > 0 && PARENT_CODE_ALIASES[r])) {
+    const isPureDigits = /^\d+$/.test(r);
+    if (!isPureDigits && (r.length > 2 || (r.length > 0 && PARENT_CODE_ALIASES[r]))) {
       return r;
     }
   }

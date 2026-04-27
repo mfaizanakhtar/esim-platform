@@ -229,6 +229,50 @@ describe('buildRegionSuggestions — filter & grouping', () => {
     expect(groups[0].label).toBe('GCC');
   });
 
+  it('Tier 4: rejects pure-numeric vendor region (FiRoam internal SKU IDs leak through otherwise)', async () => {
+    // FiRoam stores its internal SKU group ID (e.g. "99111", "99988") in the
+    // `region` column for some packs. None of the prior tiers match
+    // (no parsedJson, no canonical subset for HK+MO, no productName keyword)
+    // → Tier 4 must NOT use the numeric ID. Falls to MULTI-N.
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: '99111',
+        productName: 'Macao & HK',
+        countryCodes: ['HK', 'MO'],
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('MULTI-2');
+    expect(groups[0].parentCode).toBe('MULTI2');
+  });
+
+  it('Tier 4: real region label (not numeric) still wins', async () => {
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: 'CUSTOM-LABEL',
+        countryCodes: ['BR', 'NG', 'KE'],
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('CUSTOM-LABEL');
+  });
+
+  it('Tier 3: catches "Asia\\d" patterns like "West Asia8" / "Central Asia3"', async () => {
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: '99682', // numeric — Tier 4 rejects
+        productName: 'West Asia8 - 5GB 30D',
+        // Mixed Asia + GCC countries — not subset of any canonical region
+        countryCodes: ['AE', 'ID', 'MY', 'OM', 'QA', 'SA', 'SG', 'TH', 'TR'],
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('ASIA');
+  });
+
   it('groups same-label rows from multiple providers into one group', async () => {
     mockFindMany.mockResolvedValue([
       row({
