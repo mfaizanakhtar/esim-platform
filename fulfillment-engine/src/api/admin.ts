@@ -21,6 +21,7 @@ import {
   type ParsedCatalogAttributes,
 } from '~/services/embeddingService';
 import { parseShopifySku } from '~/utils/parseShopifySku';
+import { buildEmailMetadataFromMapping } from '~/utils/mappingDisplay';
 import { getCountryByCode, firoamNameToCode } from '~/utils/countryCodes';
 import { normalizeFiroamCountries } from '~/utils/firoamCountryCodes';
 import { buildRegionSuggestions } from '~/services/regionService';
@@ -270,10 +271,26 @@ export default function adminRoutes(
       return reply.code(500).send({ error: 'Failed to decrypt eSIM payload' });
     }
 
+    // Hydrate the eSIM Details box (productName / region / dataAmount / validity)
+    // from the highest-priority active SKU mapping for this delivery's SKU.
+    // Without this, the email template renders without the Details section.
+    let mappingMetadata: ReturnType<typeof buildEmailMetadataFromMapping> = {};
+    if (delivery.sku) {
+      const mapping = await prisma.providerSkuMapping.findFirst({
+        where: { shopifySku: delivery.sku, isActive: true },
+        orderBy: { priority: 'asc' },
+      });
+      if (mapping) mappingMetadata = buildEmailMetadataFromMapping(mapping);
+    }
+
     const emailResult = await sendDeliveryEmail({
       to: delivery.customerEmail,
       orderNumber: delivery.orderName,
       esimPayload,
+      productName: mappingMetadata.name,
+      region: mappingMetadata.region,
+      dataAmount: mappingMetadata.dataAmount,
+      validity: mappingMetadata.validity,
     });
 
     if (!emailResult.success) {
