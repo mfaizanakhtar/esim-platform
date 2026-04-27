@@ -370,6 +370,107 @@ describe('provisionEsim Worker Job', () => {
         }),
       );
     });
+
+    it('derives daypass validity from daysCount, ignoring stale mapping.validity text', async () => {
+      const mockDelivery = createMockDelivery({ id: 'delivery-123' });
+      const mockMapping = createMockMapping({
+        shopifySku: 'DE-2GB-2D-DAYPASS',
+        providerSku: '120:826-0-?-1-G-D:14094',
+        packageType: 'daypass',
+        daysCount: 2,
+        validity: '1 day', // intentionally stale — must be ignored for daypass
+      });
+      const mockFiRoamResult = {
+        raw: { code: 0, data: { orderNum: 'EP-DAYPASS-2D' } },
+        canonical: {
+          vendorId: 'EP-DAYPASS-2D',
+          lpa: 'LPA:1$smdp.io$ac',
+          activationCode: 'ac',
+          iccid: '8901000000000000099',
+        },
+        db: { id: 'esim-order-99' },
+      };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
+      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
+
+      await handleProvision({ deliveryId: 'delivery-123', sku: 'DE-2GB-2D-DAYPASS' });
+
+      expect(vi.mocked(finalizeDelivery)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ validity: '2 days' }),
+        }),
+      );
+    });
+
+    it('uses singular "1 day" when daypass daysCount is 1', async () => {
+      const mockDelivery = createMockDelivery({ id: 'delivery-123' });
+      const mockMapping = createMockMapping({
+        shopifySku: 'DE-2GB-1D-DAYPASS',
+        providerSku: '120:826-0-?-1-G-D:14094',
+        packageType: 'daypass',
+        daysCount: 1,
+        validity: '7 days', // stale — must be ignored
+      });
+      const mockFiRoamResult = {
+        raw: { code: 0, data: { orderNum: 'EP-DAYPASS-1D' } },
+        canonical: {
+          vendorId: 'EP-DAYPASS-1D',
+          lpa: 'LPA:1$smdp.io$ac',
+          activationCode: 'ac',
+          iccid: '8901000000000000098',
+        },
+        db: { id: 'esim-order-98' },
+      };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
+      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
+
+      await handleProvision({ deliveryId: 'delivery-123', sku: 'DE-2GB-1D-DAYPASS' });
+
+      expect(vi.mocked(finalizeDelivery)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ validity: '1 day' }),
+        }),
+      );
+    });
+
+    it('keeps mapping.validity verbatim for fixed packages', async () => {
+      const mockDelivery = createMockDelivery({ id: 'delivery-123' });
+      const mockMapping = createMockMapping({
+        providerSku: '120:826-0-?-1-G-D:14094',
+        packageType: 'fixed',
+        daysCount: null,
+        validity: '30 days',
+      });
+      const mockFiRoamResult = {
+        raw: { code: 0, data: { orderNum: 'EP-FIXED' } },
+        canonical: {
+          vendorId: 'EP-FIXED',
+          lpa: 'LPA:1$smdp.io$ac',
+          activationCode: 'ac',
+          iccid: '8901000000000000097',
+        },
+        db: { id: 'esim-order-97' },
+      };
+
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.esimDelivery.update).mockResolvedValue(mockDelivery);
+      vi.mocked(prisma.providerSkuMapping.findMany).mockResolvedValue([mockMapping]);
+      mockAddEsimOrder.mockResolvedValue(mockFiRoamResult);
+
+      await handleProvision({ deliveryId: 'delivery-123', sku: 'ESIM-USA-10GB' });
+
+      expect(vi.mocked(finalizeDelivery)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ validity: '30 days' }),
+        }),
+      );
+    });
   });
 
   describe('Already Delivered Guard', () => {

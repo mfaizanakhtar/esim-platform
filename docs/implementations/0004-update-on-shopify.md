@@ -1,6 +1,6 @@
 # Update on Shopify (non-destructive template sync)
 
-**ID:** 0003 · **Status:** shipped · **Owner:** mfaizanakhtar
+**ID:** 0004 · **Status:** shipped · **Owner:** mfaizanakhtar
 **Shipped:** 2026-04-27 · **PRs:** TBD
 
 ## What it does
