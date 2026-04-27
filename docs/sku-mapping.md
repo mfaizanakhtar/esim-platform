@@ -166,6 +166,8 @@ At provisioning: `?` is replaced with `7` → `826-0-7-1-G-D`
 
 **Type-parity rule:** Shopify SKU `productCode` must contain `?` to match as daypass. This prevents mismatches between fixed and daypass catalog entries.
 
+**Validity display:** For daypass mappings the customer email's `Validity` line is derived from `daysCount` (formatted as `"N day"` / `"N days"`), not from the free-text `validity` column. This guarantees the displayed duration cannot drift from what was actually ordered at the vendor. The `validity` column may exist on a daypass row for legacy reasons but is ignored by the email path. Fixed-package mappings continue to use `validity` verbatim.
+
 ---
 
 ## Smart Pricing

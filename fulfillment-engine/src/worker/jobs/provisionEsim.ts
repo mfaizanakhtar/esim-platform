@@ -12,6 +12,7 @@ import {
 } from '~/vendor/tgtConfig';
 import { getJobQueue } from '~/queue/jobQueue';
 import { getShopifyClient } from '~/shopify/client';
+import { buildEmailMetadataFromMapping } from '~/utils/mappingDisplay';
 
 interface ProvisionJobData {
   deliveryId: string;
@@ -108,12 +109,7 @@ export async function handleProvision(data: ProvisionJobData) {
             },
           );
           resolvedProvider = mapping.provider;
-          mappingInfo = {
-            name: mapping.name || undefined,
-            region: mapping.region || undefined,
-            dataAmount: mapping.dataAmount || undefined,
-            validity: mapping.validity || undefined,
-          };
+          mappingInfo = buildEmailMetadataFromMapping(mapping);
           break; // success — stop trying further providers
         } catch (err) {
           lastError = err;

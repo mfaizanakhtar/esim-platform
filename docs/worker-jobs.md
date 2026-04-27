@@ -65,6 +65,11 @@ The worker runs as a separate Railway service (`esim-worker`) using the same cod
 - Checks if already delivered before doing anything
 - First writer wins if two workers race
 
+### Email validity field
+- `metadata.validity` is assembled in `provision-esim` before `finalize-delivery` is called.
+- For `packageType='daypass'`: derived from `daysCount` as `"N day"` / `"N days"`. Same value sent to FiRoam — the email cannot show a different duration than was ordered.
+- For `packageType='fixed'`: passes `ProviderSkuMapping.validity` through verbatim.
+
 ---
 
 ## tgt-poll-order

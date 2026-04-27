@@ -39,6 +39,8 @@ Re-enqueue a failed or stuck delivery.
 ### POST /admin/deliveries/:id/resend-email
 Resend the delivery email for an already-delivered eSIM.
 
+If the delivery has a `sku`, the handler hydrates the email's "eSIM Details" box (productName / region / dataAmount / validity) from the highest-priority active `ProviderSkuMapping` for that SKU. For daypass mappings the validity is derived from `daysCount` (matching the provision-time path). If the delivery has no `sku`, the email is sent without the details box.
+
 **Response:** `{ ok: true, messageId }`
 
 ---

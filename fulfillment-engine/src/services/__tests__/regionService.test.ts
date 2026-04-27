@@ -52,10 +52,12 @@ function row(opts: {
   provider: string;
   countryCodes: string[];
   region?: string | null;
+  productName?: string | null;
   parsedJson?: { regionCodes?: string[]; dataMb?: number; validityDays?: number } | null;
 }) {
   return {
     provider: opts.provider,
+    productName: opts.productName ?? null,
     region: opts.region ?? null,
     countryCodes: opts.countryCodes,
     parsedJson: opts.parsedJson ?? null,
@@ -123,10 +125,12 @@ describe('buildRegionSuggestions — filter & grouping', () => {
   });
 
   it('does NOT use vendor `region` when it looks like a 2-letter ISO country code', async () => {
-    // FiRoam may set region = 'DE' for a single-country plan, but if a row has
-    // 3 countries with region='DE', region is misleading — fall to MULTI-N.
+    // FiRoam may set region = 'BR' for a single-country plan; if a row has 3
+    // countries with region='BR', region is misleading. Use countries that
+    // don't match any canonical region and lack productName/keyword to verify
+    // we fall through to MULTI-N.
     mockFindMany.mockResolvedValue([
-      row({ provider: 'firoam', region: 'DE', countryCodes: ['DE', 'FR', 'AT'] }),
+      row({ provider: 'firoam', region: 'BR', countryCodes: ['BR', 'NG', 'KE'] }),
     ]);
     const groups = await buildRegionSuggestions();
     expect(groups[0].label).toBe('MULTI-3');
@@ -134,11 +138,139 @@ describe('buildRegionSuggestions — filter & grouping', () => {
 
   it('synthesizes MULTI-N label when no region info available', async () => {
     mockFindMany.mockResolvedValue([
-      row({ provider: 'tgt', region: null, countryCodes: ['DE', 'FR', 'AT', 'BE'] }),
+      // Mix from disjoint regions so no canonical subset matches.
+      row({ provider: 'tgt', region: null, countryCodes: ['BR', 'NG', 'KE', 'ZA'] }),
     ]);
     const groups = await buildRegionSuggestions();
     expect(groups[0].label).toBe('MULTI-4');
     expect(groups[0].parentCode).toBe('MULTI4');
+  });
+
+  it('Tier 2: tags a pure GCC pack as GCC even when vendor region is misleading', async () => {
+    mockFindMany.mockResolvedValue([
+      // TGT real-world case: 5-country GCC pack, vendor region null, parsedJson
+      // is an enumeration (the broken parser output).
+      row({
+        provider: 'tgt',
+        region: null,
+        countryCodes: ['AE', 'BH', 'KW', 'QA', 'SA'],
+        parsedJson: { regionCodes: ['QA', 'AE', 'BH', 'KW', 'SA'] },
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('GCC');
+    expect(groups[0].parentCode).toBe('GCC');
+  });
+
+  it('Tier 2: tags 9-country Middle East pack as ME (subset of ME, not GCC)', async () => {
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: null,
+        countryCodes: ['AE', 'BH', 'EG', 'IQ', 'JO', 'OM', 'QA', 'SA', 'TR'],
+        parsedJson: {
+          regionCodes: ['AE', 'BH', 'EG', 'IQ', 'JO', 'OM', 'QA', 'SA', 'TR'],
+        },
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('ME');
+    expect(groups[0].parentCode).toBe('ME');
+  });
+
+  it('Tier 3: tags 130-country Global pack via productName keyword', async () => {
+    // 130 mixed countries — not a subset of any canonical region.
+    const big = Array.from({ length: 130 }, (_, i) => {
+      const a = String.fromCharCode(65 + Math.floor(i / 26));
+      const b = String.fromCharCode(65 + (i % 26));
+      return a + b;
+    });
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: null,
+        productName: 'Global - 5GB 30D',
+        countryCodes: big,
+        parsedJson: { regionCodes: big },
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('GLOBAL');
+    expect(groups[0].parentCode).toBe('GLOBAL');
+  });
+
+  it('Tier 1 (single-entry parsedJson) still wins for clean parser output', async () => {
+    mockFindMany.mockResolvedValue([
+      // parsedJson tagged "GLOBAL" — single canonical entry → trust it
+      row({
+        provider: 'firoam',
+        region: null,
+        countryCodes: ['BR', 'NG', 'KE'],
+        parsedJson: { regionCodes: ['GLOBAL'] },
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('GLOBAL');
+  });
+
+  it('multi-entry parsedJson.regionCodes (enumeration) is ignored — Tier 2 catches it', async () => {
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: null,
+        // Parser returned 5-element enumeration (the broken case)
+        countryCodes: ['AE', 'BH', 'KW', 'QA', 'SA'],
+        parsedJson: { regionCodes: ['AE', 'BH', 'KW', 'QA', 'SA'] },
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    // Should NOT label as 'AE' (the first enumerated entry) — falls through
+    // to canonical subset match → GCC
+    expect(groups[0].label).toBe('GCC');
+  });
+
+  it('Tier 4: rejects pure-numeric vendor region (FiRoam internal SKU IDs leak through otherwise)', async () => {
+    // FiRoam stores its internal SKU group ID (e.g. "99111", "99988") in the
+    // `region` column for some packs. None of the prior tiers match
+    // (no parsedJson, no canonical subset for HK+MO, no productName keyword)
+    // → Tier 4 must NOT use the numeric ID. Falls to MULTI-N.
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: '99111',
+        productName: 'Macao & HK',
+        countryCodes: ['HK', 'MO'],
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('MULTI-2');
+    expect(groups[0].parentCode).toBe('MULTI2');
+  });
+
+  it('Tier 4: real region label (not numeric) still wins', async () => {
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: 'CUSTOM-LABEL',
+        countryCodes: ['BR', 'NG', 'KE'],
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('CUSTOM-LABEL');
+  });
+
+  it('Tier 3: catches "Asia\\d" patterns like "West Asia8" / "Central Asia3"', async () => {
+    mockFindMany.mockResolvedValue([
+      row({
+        provider: 'firoam',
+        region: '99682', // numeric — Tier 4 rejects
+        productName: 'West Asia8 - 5GB 30D',
+        // Mixed Asia + GCC countries — not subset of any canonical region
+        countryCodes: ['AE', 'ID', 'MY', 'OM', 'QA', 'SA', 'SG', 'TH', 'TR'],
+      }),
+    ]);
+    const groups = await buildRegionSuggestions();
+    expect(groups[0].label).toBe('ASIA');
   });
 
   it('groups same-label rows from multiple providers into one group', async () => {
@@ -249,9 +381,13 @@ describe('buildRegionSuggestions — intersection / union / suggestions', () => 
   });
 
   it('does NOT emit an INTERSECTION suggestion when fewer than 2 countries are common', async () => {
+    // Both rows are EU-subset (so they group under 'EU') but their countries
+    // don't overlap → intersection empty. Pick countries that match EU only,
+    // NOT smaller canonical sets like BENELUX, otherwise they'd split into
+    // separate groups.
     mockFindMany.mockResolvedValue([
       row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'IT'] }),
-      row({ provider: 'tgt', region: 'EU', countryCodes: ['BE', 'NL'] }),
+      row({ provider: 'tgt', region: 'EU', countryCodes: ['ES', 'FR'] }),
     ]);
     const [eu] = await buildRegionSuggestions();
     expect(eu.suggestions.find((s) => s.kind === 'INTERSECTION')).toBeUndefined();
@@ -278,24 +414,29 @@ describe('buildRegionSuggestions — edge cases', () => {
 
   it('sorts groups alphabetically by label', async () => {
     mockFindMany.mockResolvedValue([
-      row({ provider: 'firoam', region: 'GCC', countryCodes: ['SA', 'AE', 'QA'] }),
-      row({ provider: 'firoam', region: 'ASIA', countryCodes: ['SG', 'TH', 'MY'] }),
-      row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR', 'AT'] }),
+      // Each row's countries match a different canonical subset → labeled
+      // GCC, ASEAN, EU respectively. Verify alphabetical sort.
+      row({ provider: 'firoam', region: null, countryCodes: ['SA', 'AE', 'QA'] }),
+      row({ provider: 'firoam', region: null, countryCodes: ['SG', 'TH', 'MY'] }),
+      row({ provider: 'firoam', region: null, countryCodes: ['DE', 'FR', 'AT'] }),
     ]);
     const groups = await buildRegionSuggestions();
-    expect(groups.map((g) => g.label)).toEqual(['ASIA', 'EU', 'GCC']);
+    expect(groups.map((g) => g.label)).toEqual(['ASEAN', 'EU', 'GCC']);
   });
 
-  it('groups distinct vendor labels into separate groups even when parentCode is the same', async () => {
+  it('canonical subset takes priority over vendor label — different vendor labels merge into one group', async () => {
+    // Both rows are EU subsets — even though FiRoam tags 'EU' and TGT tags
+    // 'Europe', the canonical subset matcher unifies them into a single 'EU'
+    // group. This is the new behavior: we DO want cross-vendor merging when
+    // the underlying coverage matches a canonical region.
     mockFindMany.mockResolvedValue([
       row({ provider: 'firoam', region: 'EU', countryCodes: ['DE', 'FR'] }),
       row({ provider: 'tgt', region: 'Europe', countryCodes: ['DE', 'BE'] }),
     ]);
     const groups = await buildRegionSuggestions();
-    // EU and EUROPE are distinct vendor labels — admin reconciles by saving
-    // one canonical region rather than us auto-merging.
-    expect(groups).toHaveLength(2);
-    expect(groups.map((g) => g.label).sort()).toEqual(['EU', 'EUROPE']);
-    expect(groups.every((g) => g.parentCode === 'EU')).toBe(true);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe('EU');
+    expect(groups[0].parentCode).toBe('EU');
+    expect(groups[0].providers).toHaveLength(2);
   });
 });

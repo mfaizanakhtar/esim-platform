@@ -1,4 +1,5 @@
 import prisma from '~/db/prisma';
+import { findCanonicalSubsetTag, findProductNameTag } from '~/utils/canonicalRegions';
 
 /**
  * Region discovery service.
@@ -13,10 +14,15 @@ import prisma from '~/db/prisma';
  * universal regional signal.
  *
  * **Grouping label** (preference order):
- *   1. `parsedJson.regionCodes[0]` if it looks like a region tag (e.g. "EU",
- *      "GLOBAL") — populated by the AI parser
- *   2. `region` field if it's a multi-char label (not a 2-letter ISO code)
- *   3. Synthetic `MULTI-<count>` based on country list size — last resort
+ *   1. `parsedJson.regionCodes` ONLY if it's a single canonical-looking tag
+ *      ("EU", "GLOBAL", "ASIA"). Multi-entry enumerations (the buggy AI
+ *      output) fall through.
+ *   2. Country set is a strict subset of a canonical region (GCC, ASEAN,
+ *      NORDIC, EU, ME, …) — see `utils/canonicalRegions.ts`.
+ *   3. `productName` contains an obvious region keyword ("Global",
+ *      "Middle East", "ASEAN", "Europe", …).
+ *   4. `region` field if multi-char or in PARENT_CODE_ALIASES.
+ *   5. Synthetic `MULTI-<count>` based on country list size.
  *
  * See docs/implementations/0002-region-schema-crud.md for context.
  */
@@ -63,24 +69,32 @@ const PARENT_CODE_ALIASES: Record<string, string> = {
   EU: 'EU',
   EUROPE: 'EU',
   EEA: 'EU',
+  NORDIC: 'EU',
+  BENELUX: 'EU',
+  BALTIC: 'EU',
+  BALKANS: 'EU',
   ASIA: 'ASIA',
   APAC: 'ASIA',
   AS: 'ASIA',
+  ASEAN: 'ASIA',
   GCC: 'GCC',
   'MIDDLE EAST': 'ME',
   ME: 'ME',
   AMERICAS: 'AMERICAS',
   AMERICA: 'AMERICAS',
   'NORTH AMERICA': 'AMERICAS',
+  'NORTH-AMERICA': 'AMERICAS',
   'SOUTH AMERICA': 'AMERICAS',
   LATAM: 'AMERICAS',
   NA: 'AMERICAS',
+  CARIBBEAN: 'AMERICAS',
   GLOBAL: 'GLOBAL',
   WORLD: 'GLOBAL',
   WORLDWIDE: 'GLOBAL',
   AFRICA: 'AFRICA',
   AF: 'AFRICA',
   OCEANIA: 'OCEANIA',
+  ANZ: 'OCEANIA',
 };
 
 export function normalizeLabel(raw: string): string {
@@ -98,6 +112,7 @@ export function inferParentCode(label: string): string {
 
 interface CatalogRow {
   provider: string;
+  productName: string | null;
   region: string | null;
   countryCodes: unknown;
   parsedJson: unknown;
@@ -108,29 +123,45 @@ interface CatalogRow {
  * to `countryCodes.length >= 2`, so the row is definitely a regional plan —
  * we just need a stable name to group by.
  */
-function deriveGroupLabel(row: CatalogRow, countryCount: number): string {
-  // 1. parsedJson.regionCodes[0] — the AI parser's canonical tag for THIS
-  //    multi-country row. Trust it regardless of length; the parser had full
-  //    context (productName + region + countryCodes) when assigning it.
+function deriveGroupLabel(row: CatalogRow, isoCountries: string[]): string {
+  // Tier 1: parser produced a SINGLE canonical-looking tag.
+  //   Multi-entry regionCodes is the broken case (parser enumerated countries
+  //   instead of identifying a region); fall through to deterministic tiers.
   const parsed = row.parsedJson as { regionCodes?: unknown } | null;
-  if (parsed && Array.isArray(parsed.regionCodes) && parsed.regionCodes.length > 0) {
+  if (parsed && Array.isArray(parsed.regionCodes) && parsed.regionCodes.length === 1) {
     const first = parsed.regionCodes[0];
-    if (typeof first === 'string' && first.trim()) {
-      return first.trim().toUpperCase();
+    if (typeof first === 'string') {
+      const t = first.trim().toUpperCase();
+      // Accept if it's clearly a region tag (>2 chars) or in our alias map
+      // (covers 2-letter region tags like "EU", "ME", "AS", "AF").
+      if (t.length > 2 || (t.length > 0 && PARENT_CODE_ALIASES[t])) {
+        return t;
+      }
     }
   }
-  // 2. Vendor `region` field — accept if it's >2 chars OR a known alias
-  //    (e.g. "EU", "ME"). Reject bare 2-letter codes that aren't aliases —
-  //    they're FiRoam's per-country tag (e.g. region:'DE') and would
-  //    misleadingly group multi-country rows by country.
+
+  // Tier 2: country set is a strict subset of a known canonical region.
+  const subset = findCanonicalSubsetTag(isoCountries);
+  if (subset) return subset.tag;
+
+  // Tier 3: product name contains an explicit region keyword.
+  const fromName = findProductNameTag(row.productName);
+  if (fromName) return fromName.tag;
+
+  // Tier 4: vendor `region` field. Accept multi-char tags or 2-char known
+  // aliases (EU, ME, AS, AF, …). Reject pure-digit values — FiRoam stores
+  // internal SKU IDs (e.g. "99111", "99988") in this column for some packs;
+  // those would otherwise leak through as group labels.
   if (typeof row.region === 'string') {
     const r = row.region.trim().toUpperCase();
-    if (r.length > 2 || (r.length > 0 && PARENT_CODE_ALIASES[r])) {
+    const isPureDigits = /^\d+$/.test(r);
+    if (!isPureDigits && (r.length > 2 || (r.length > 0 && PARENT_CODE_ALIASES[r]))) {
       return r;
     }
   }
-  // 3. Synthetic — group by country count so similarly-sized bundles cluster.
-  return `MULTI-${countryCount}`;
+
+  // Tier 5: synthetic — group by country count so similarly-sized bundles cluster.
+  return `MULTI-${isoCountries.length}`;
 }
 
 interface ProviderBucket {
@@ -159,7 +190,13 @@ export async function buildRegionSuggestions(
   // O(thousands), so this is cheap.
   const entries = (await prisma.providerSkuCatalog.findMany({
     where: { isActive: true },
-    select: { provider: true, region: true, countryCodes: true, parsedJson: true },
+    select: {
+      provider: true,
+      productName: true,
+      region: true,
+      countryCodes: true,
+      parsedJson: true,
+    },
   })) as CatalogRow[];
 
   // label → provider → bucket
@@ -178,7 +215,7 @@ export async function buildRegionSuggestions(
     // Regional plans only — single-country SKUs are not what discovery is for.
     if (normalized.length < 2) continue;
 
-    const label = deriveGroupLabel(entry, normalized.length);
+    const label = deriveGroupLabel(entry, normalized);
 
     let byProvider = groupsMap.get(label);
     if (!byProvider) {

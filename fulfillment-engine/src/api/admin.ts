@@ -21,7 +21,9 @@ import {
   type ParsedCatalogAttributes,
 } from '~/services/embeddingService';
 import { parseShopifySku } from '~/utils/parseShopifySku';
+import { buildEmailMetadataFromMapping } from '~/utils/mappingDisplay';
 import { getCountryByCode, firoamNameToCode } from '~/utils/countryCodes';
+import { normalizeFiroamCountries } from '~/utils/firoamCountryCodes';
 import { buildRegionSuggestions } from '~/services/regionService';
 
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
@@ -269,10 +271,26 @@ export default function adminRoutes(
       return reply.code(500).send({ error: 'Failed to decrypt eSIM payload' });
     }
 
+    // Hydrate the eSIM Details box (productName / region / dataAmount / validity)
+    // from the highest-priority active SKU mapping for this delivery's SKU.
+    // Without this, the email template renders without the Details section.
+    let mappingMetadata: ReturnType<typeof buildEmailMetadataFromMapping> = {};
+    if (delivery.sku) {
+      const mapping = await prisma.providerSkuMapping.findFirst({
+        where: { shopifySku: delivery.sku, isActive: true },
+        orderBy: { priority: 'asc' },
+      });
+      if (mapping) mappingMetadata = buildEmailMetadataFromMapping(mapping);
+    }
+
     const emailResult = await sendDeliveryEmail({
       to: delivery.customerEmail,
       orderNumber: delivery.orderName,
       esimPayload,
+      productName: mappingMetadata.name,
+      region: mappingMetadata.region,
+      dataAmount: mappingMetadata.dataAmount,
+      validity: mappingMetadata.validity,
     });
 
     if (!emailResult.success) {
@@ -1152,7 +1170,7 @@ export default function adminRoutes(
               tags: ['esim', code.toLowerCase()],
               options: ['Plan Type', 'Validity', 'Volume'],
               variants,
-              imageUrl: `https://flagcdn.com/w640/${code.toLowerCase()}.png`,
+              imageUrl: `https://flagcdn.com/${code.toLowerCase()}.svg`,
             });
             created++;
             logger.info(
@@ -1632,11 +1650,11 @@ export default function adminRoutes(
             update: {
               title: country.name,
               handle: country.slug,
-              descriptionHtml: `<p><img src="https://flagcdn.com/w80/${ccLower}.png" alt="${country.name} flag" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
+              descriptionHtml: `<p><img src="https://flagcdn.com/${ccLower}.svg" alt="${country.name} flag" width="20" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
               status: 'ACTIVE',
               vendor: 'SAILeSIM',
               tags: ['esim', ccLower, country.region],
-              imageUrl: `https://flagcdn.com/w640/${ccLower}.png`,
+              imageUrl: `https://flagcdn.com/${ccLower}.svg`,
               variants: {
                 deleteMany: {},
                 create: variants.map((v) => ({
@@ -1653,11 +1671,11 @@ export default function adminRoutes(
               countryCode: code,
               title: country.name,
               handle: country.slug,
-              descriptionHtml: `<p><img src="https://flagcdn.com/w80/${ccLower}.png" alt="${country.name} flag" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
+              descriptionHtml: `<p><img src="https://flagcdn.com/${ccLower}.svg" alt="${country.name} flag" width="20" style="vertical-align:middle;margin-right:8px" /> Instant digital eSIM for ${country.name}. Activate in minutes. No physical SIM required.</p>`,
               status: 'ACTIVE',
               vendor: 'SAILeSIM',
               tags: ['esim', ccLower, country.region],
-              imageUrl: `https://flagcdn.com/w640/${ccLower}.png`,
+              imageUrl: `https://flagcdn.com/${ccLower}.svg`,
               variants: {
                 create: variants.map((v) => ({
                   sku: v.sku,
@@ -2056,6 +2074,150 @@ Countries: ${countryList}`,
       });
     },
   );
+
+  /* v8 ignore start — Shopify-side mutations exercised via integration */
+  /**
+   * Update already-pushed Shopify products to match the latest template data.
+   * Touches: title, description, status, tags, vendor, SEO, image, prices on
+   * EXISTING variants (matched by SKU). NEVER creates new variants and NEVER
+   * deletes variants — so a template's newly added SKUs are silently skipped
+   * (logged in skippedSkus). Use the regular /push-to-shopify with force:true
+   * to handle SKU schema changes.
+   */
+  app.post(
+    '/product-templates/update-on-shopify',
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!requireAdminKey(request, reply)) return;
+
+      const body = (request.body || {}) as {
+        countries?: string[];
+        dryRun?: boolean;
+      };
+
+      const where: Record<string, unknown> = { shopifyProductId: { not: null } };
+      if (body.countries && body.countries.length > 0) {
+        where.countryCode = { in: body.countries.map((c) => c.toUpperCase()) };
+      }
+
+      const templates = await prisma.shopifyProductTemplate.findMany({
+        where,
+        include: { variants: { orderBy: { sortOrder: 'asc' } } },
+      });
+
+      if (templates.length === 0) {
+        return reply.send({
+          ok: true,
+          total: 0,
+          message: 'No pushed templates to update (push them with /push-to-shopify first).',
+        });
+      }
+
+      if (body.dryRun) {
+        return reply.send({
+          dryRun: true,
+          toUpdate: templates.map((t) => ({
+            countryCode: t.countryCode,
+            title: t.title,
+            shopifyProductId: t.shopifyProductId,
+            variantCount: t.variants.length,
+          })),
+        });
+      }
+
+      const shopify = getShopifyClient();
+
+      void (async () => {
+        let updated = 0;
+        let errors = 0;
+        const allSkipped: string[] = [];
+
+        for (const template of templates) {
+          if (!template.shopifyProductId) continue;
+          try {
+            // 1. Update product-level fields (title, description, etc.).
+            await shopify.updateProduct({
+              productId: template.shopifyProductId,
+              title: template.title,
+              descriptionHtml: template.descriptionHtml,
+              status: template.status as 'ACTIVE' | 'DRAFT',
+              tags: template.tags as string[],
+              vendor: template.vendor,
+              seo: template.seoTitle
+                ? { title: template.seoTitle, description: template.seoDescription ?? '' }
+                : undefined,
+            });
+
+            // 2. Replace product image. For country templates, compute the
+            //    flag URL fresh from countryCode so we always push the latest
+            //    URL format (e.g. SVG) without requiring callers to regenerate
+            //    templates first. Region templates fall back to whatever's
+            //    stored on the row (region templates don't currently set one).
+            const freshImageUrl = template.countryCode
+              ? `https://flagcdn.com/${template.countryCode.toLowerCase()}.svg`
+              : template.imageUrl;
+            if (freshImageUrl) {
+              await shopify.replaceProductMedia(template.shopifyProductId, [freshImageUrl]);
+            }
+
+            // 3. Update prices on EXISTING variants only (matched by SKU).
+            const result = await shopify.updateExistingVariantsBySku(
+              template.shopifyProductId,
+              template.variants.map((v) => ({ sku: v.sku, price: v.price.toString() })),
+            );
+            if (result.skipped > 0) {
+              allSkipped.push(...result.skippedSkus);
+              logger.warn(
+                { code: template.countryCode, skipped: result.skippedSkus },
+                'Skipped variants not yet on Shopify (would require new SKU creation)',
+              );
+            }
+
+            await prisma.shopifyProductTemplate.update({
+              where: { id: template.id },
+              data: { shopifyPushedAt: new Date() },
+            });
+
+            updated++;
+            logger.info(
+              {
+                code: template.countryCode,
+                productId: template.shopifyProductId,
+                matched: result.matched,
+                skipped: result.skipped,
+              },
+              'Updated Shopify product from template',
+            );
+          } catch (err) {
+            errors++;
+            logger.error(
+              { code: template.countryCode, err },
+              'Failed to update Shopify product from template',
+            );
+          }
+
+          // Rate limit
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+
+        logger.info(
+          {
+            updated,
+            errors,
+            total: templates.length,
+            skippedNewSkus: allSkipped.length,
+          },
+          'Template update on Shopify complete',
+        );
+      })();
+
+      return reply.send({
+        ok: true,
+        total: templates.length,
+        background: 'update_started',
+      });
+    },
+  );
+  /* v8 ignore stop */
 
   // ─── Pricing Engine ──────────────────────────────────────────────────
   /* v8 ignore start — pricing admin endpoints, integration-tested in production */
@@ -4216,8 +4378,18 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
             skuCountryCodes: pkgData.supportCountry,
           } as unknown as Prisma.InputJsonValue;
 
-          const countryCodes = pkgData.supportCountry?.length
-            ? (pkgData.supportCountry as unknown as Prisma.InputJsonValue)
+          // FiRoam returns display names (e.g. "Germany", "France") in
+          // supportCountry; normalize to ISO 3166-1 alpha-2 codes here so the
+          // canonical column matches what every reader expects (region
+          // discovery, structured/AI mapping coverage filters, country
+          // template generation). Raw names remain in rawPayload.skuCountryCodes
+          // for debugging.
+          const normalizedCountryCodes = normalizeFiroamCountries(pkgData.supportCountry, {
+            skuId,
+            productCode: pkg.apiCode,
+          });
+          const countryCodes = normalizedCountryCodes.length
+            ? (normalizedCountryCodes as unknown as Prisma.InputJsonValue)
             : Prisma.JsonNull;
 
           const upserted = await providerSkuCatalog.upsert({
@@ -4564,7 +4736,7 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
       return reply.code(500).send({ error: 'OPENAI_API_KEY not configured' });
     }
 
-    const body = (request.body || {}) as { provider?: string };
+    const body = (request.body || {}) as { provider?: string; force?: boolean };
 
     const LOCK_ID = 0xca7a;
     const [lockResult] = await prisma.$queryRaw<[{ acquired: boolean }]>`
@@ -4576,6 +4748,19 @@ Only include mappings with confidence >= 0.3. If no good match, omit the SKU.`;
         started: false,
         message: 'Another parse-all is already in progress',
       });
+    }
+
+    // force=true: clear parsedJson on matching rows so the existing
+    // "parsedJson IS NULL" loop re-processes them. Without this, force mode
+    // would re-process already-parsed rows infinitely (no progress cursor).
+    if (body.force) {
+      if (body.provider) {
+        await prisma.$executeRaw`
+          UPDATE "ProviderSkuCatalog" SET "parsedJson" = NULL WHERE provider = ${body.provider}
+        `;
+      } else {
+        await prisma.$executeRaw`UPDATE "ProviderSkuCatalog" SET "parsedJson" = NULL`;
+      }
     }
 
     // Fire and forget — reply immediately so the HTTP request doesn't time out
