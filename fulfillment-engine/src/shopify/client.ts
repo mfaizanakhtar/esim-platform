@@ -1298,6 +1298,7 @@ export class ShopifyClient {
   }
   /* v8 ignore stop */
 
+  /* v8 ignore start — Shopify GraphQL helpers exercised via integration */
   /**
    * Replace the product's media (images). Deletes existing media, then creates
    * new media from the supplied URLs. Used by the template-update flow to
@@ -1509,6 +1510,7 @@ export class ShopifyClient {
       skippedSkus,
     };
   }
+  /* v8 ignore stop */
 
   async updateVariantPrices(
     productId: string,

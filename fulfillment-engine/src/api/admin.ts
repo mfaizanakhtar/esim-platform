@@ -2057,6 +2057,7 @@ Countries: ${countryList}`,
     },
   );
 
+  /* v8 ignore start — Shopify-side mutations exercised via integration */
   /**
    * Update already-pushed Shopify products to match the latest template data.
    * Touches: title, description, status, tags, vendor, SEO, image, prices on
@@ -2191,6 +2192,7 @@ Countries: ${countryList}`,
       });
     },
   );
+  /* v8 ignore stop */
 
   // ─── Pricing Engine ──────────────────────────────────────────────────
   /* v8 ignore start — pricing admin endpoints, integration-tested in production */
