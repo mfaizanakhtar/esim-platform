@@ -12,5 +12,6 @@ Status vocabulary: `in-progress`, `shipped`, `deprecated`, `planned`.
 |----|---------|--------|---------|--------|
 | 0001 | Implementation Log + Enforcement | shipped | Per-feature record system at `docs/implementations/` with three-layer enforcement (CLAUDE.md rule, `create-pr` skill gate, CI guardrail) | [0001-implementation-log.md](0001-implementation-log.md) |
 | 0002 | Regional SKU catalog (end-to-end) | shipped | `Region` entity, CRUD, discovery suggestions, REGION template generation, strict-coverage structured + AI mapping, and `/regions` dashboard page with 1-click Accept — full no-curl workflow | [0002-region-schema-crud.md](0002-region-schema-crud.md) |
+| 0003 | Pricer monotonic fix + payment-fee overhead | shipped | Partial-order monotonic sweep (catches diagonals), country-only group key, payment-fee absorption in cost-floor calc, and a read-only audit script | [0003-pricer-monotonic-fix-and-payment-fees.md](0003-pricer-monotonic-fix-and-payment-fees.md) |
 
 > Backfill of existing shipped features (multi-eSIM orders, vector embeddings + SSE, smart pricing, FiRoam/TGT integrations, Shopify extensions, AI mapping, etc.) is tracked as a follow-up plan and will populate this table.

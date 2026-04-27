@@ -107,15 +107,19 @@ export interface PricingParams {
   monotonicStep: number;
   noDataBuffer: number;
   roundingMode: RoundingMode;
+  paymentFeePercent: number;
+  paymentFeeFixed: number;
 }
 
 export const DEFAULT_PRICING_PARAMS: PricingParams = {
   survivalMargin: 0.15,
   undercutPercent: 0.1,
   minimumPrice: 2.99,
-  monotonicStep: 1.0,
+  monotonicStep: 0.5,
   noDataBuffer: 1.0,
   roundingMode: '49_99',
+  paymentFeePercent: 0.029,
+  paymentFeeFixed: 0.3,
 };
 
 // ─── Delayed refetch for background tasks ────────────────────────────
