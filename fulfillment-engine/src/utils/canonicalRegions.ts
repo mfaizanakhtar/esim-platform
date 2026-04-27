@@ -141,7 +141,11 @@ export const PRODUCT_NAME_RULES: Array<{ pattern: RegExp; tag: string; parent: s
   { pattern: /\beu(rope)?\b/i, tag: 'EU', parent: 'EU' },
   { pattern: /\bafrica\b/i, tag: 'AFRICA', parent: 'AFRICA' },
   { pattern: /\boceania\b/i, tag: 'OCEANIA', parent: 'OCEANIA' },
-  { pattern: /\basia\b|\bapac\b/i, tag: 'ASIA', parent: 'ASIA' },
+  // Asia followed by digits (e.g. "West Asia8", "Central Asia3") OR word boundary.
+  // (?:\d+|\b) avoids false positives like "Asian" while catching FiRoam's
+  // numeric-suffix naming. Same idea kept narrowly scoped to Asia for now —
+  // other region names in the catalog all use spaces (e.g. "Europe 30").
+  { pattern: /\basia(?:\d+|\b)|\bapac\b/i, tag: 'ASIA', parent: 'ASIA' },
 ];
 
 // ── Matchers ──────────────────────────────────────────────────────────────
