@@ -141,7 +141,7 @@ export const PRODUCT_NAME_RULES: Array<{ pattern: RegExp; tag: string; parent: s
   { pattern: /\beu(rope)?\b/i, tag: 'EU', parent: 'EU' },
   { pattern: /\bafrica\b/i, tag: 'AFRICA', parent: 'AFRICA' },
   { pattern: /\boceania\b/i, tag: 'OCEANIA', parent: 'OCEANIA' },
-  { pattern: /\basia\b|apac/i, tag: 'ASIA', parent: 'ASIA' },
+  { pattern: /\basia\b|\bapac\b/i, tag: 'ASIA', parent: 'ASIA' },
 ];
 
 // ── Matchers ──────────────────────────────────────────────────────────────
