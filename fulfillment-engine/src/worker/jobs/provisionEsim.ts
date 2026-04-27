@@ -12,6 +12,7 @@ import {
 } from '~/vendor/tgtConfig';
 import { getJobQueue } from '~/queue/jobQueue';
 import { getShopifyClient } from '~/shopify/client';
+import { buildEmailMetadataFromMapping } from '~/utils/mappingDisplay';
 
 interface ProvisionJobData {
   deliveryId: string;
@@ -108,19 +109,7 @@ export async function handleProvision(data: ProvisionJobData) {
             },
           );
           resolvedProvider = mapping.provider;
-          // For daypass, the email's "Validity" is derived from `daysCount` (the
-          // same value sent to the vendor) so the displayed duration cannot drift
-          // from what was actually ordered. Fixed packages keep the catalog string.
-          const displayValidity =
-            mapping.packageType === 'daypass' && mapping.daysCount
-              ? `${mapping.daysCount} ${mapping.daysCount === 1 ? 'day' : 'days'}`
-              : mapping.validity || undefined;
-          mappingInfo = {
-            name: mapping.name || undefined,
-            region: mapping.region || undefined,
-            dataAmount: mapping.dataAmount || undefined,
-            validity: displayValidity,
-          };
+          mappingInfo = buildEmailMetadataFromMapping(mapping);
           break; // success — stop trying further providers
         } catch (err) {
           lastError = err;

@@ -759,6 +759,74 @@ describe('Admin Routes', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json()).toMatchObject({ ok: true, messageId: 'msg-abc-123' });
     });
+
+    it('hydrates eSIM details from the SKU mapping (daypass derives validity from daysCount)', async () => {
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+        makeDelivery({
+          status: 'delivered',
+          payloadEncrypted: 'enc',
+          customerEmail: 'c@t.com',
+          sku: 'DE-2GB-2D-DAYPASS',
+        }),
+      );
+      vi.mocked(prisma.providerSkuMapping.findFirst).mockResolvedValue(
+        makeMapping({
+          shopifySku: 'DE-2GB-2D-DAYPASS',
+          name: 'Germany 2GB (Daily, 2 Days)',
+          region: 'Europe',
+          dataAmount: '2GB',
+          packageType: 'daypass',
+          daysCount: 2,
+          validity: '1 day', // intentionally stale — must be overridden
+        }),
+      );
+      adminMocks.mockDecrypt.mockResolvedValue(encPayload);
+      adminMocks.mockSendDeliveryEmail.mockResolvedValue({ success: true, messageId: 'msg-1' });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/deliveries/del-001/resend-email',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(adminMocks.mockSendDeliveryEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productName: 'Germany 2GB (Daily, 2 Days)',
+          region: 'Europe',
+          dataAmount: '2GB',
+          validity: '2 days',
+        }),
+      );
+    });
+
+    it('skips mapping lookup when delivery has no sku', async () => {
+      vi.mocked(prisma.esimDelivery.findUnique).mockResolvedValue(
+        makeDelivery({
+          status: 'delivered',
+          payloadEncrypted: 'enc',
+          customerEmail: 'c@t.com',
+          sku: null,
+        }),
+      );
+      adminMocks.mockDecrypt.mockResolvedValue(encPayload);
+      adminMocks.mockSendDeliveryEmail.mockResolvedValue({ success: true, messageId: 'msg-2' });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/deliveries/del-001/resend-email',
+        headers: AUTH,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(prisma.providerSkuMapping.findFirst).not.toHaveBeenCalled();
+      expect(adminMocks.mockSendDeliveryEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          productName: undefined,
+          region: undefined,
+          dataAmount: undefined,
+          validity: undefined,
+        }),
+      );
+    });
   });
 
   // ── GET /providers ──────────────────────────────────────────────────────
