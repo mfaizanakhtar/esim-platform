@@ -405,6 +405,28 @@ function SmartPricingDialog({
               <option value="99">.99 only</option>
             </select>
           </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Payment Fee %</label>
+            <div className="mt-1">
+              <NumericInput
+                value={+(local.paymentFeePercent * 100).toFixed(2)}
+                onChange={(v) => setLocal((p) => ({ ...p, paymentFeePercent: v / 100 }))}
+                suffix="%"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">Shopify default: 2.9%</p>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground">Payment Fee Fixed</label>
+            <div className="mt-1">
+              <NumericInput
+                value={local.paymentFeeFixed}
+                onChange={(v) => setLocal((p) => ({ ...p, paymentFeeFixed: v }))}
+                prefix="$"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">Shopify default: $0.30</p>
+          </div>
         </div>
 
         <p className="text-xs text-muted-foreground italic">

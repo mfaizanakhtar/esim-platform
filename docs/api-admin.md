@@ -469,3 +469,38 @@ Partial update. Region `code` is immutable (it's referenced by SKUs). Other fiel
 Hard-delete a region. Templates referencing it (via `regionCode`) are not cascaded — their `regionCode` is set to `NULL` (orphaned), so the admin can reassign or delete them.
 
 **Response:** `{ ok: true, deleted: "EU30" }`, or `404` if not found.
+
+---
+
+## Pricing
+
+### POST /admin/pricing/generate-suggestions
+
+Kick off an async smart-pricing run that computes `proposedPrice` for every variant in the requested countries.
+
+**Body:**
+```json
+{
+  "countries": ["US", "GB"],
+  "params": {
+    "survivalMargin": 0.15,
+    "undercutPercent": 0.1,
+    "minimumPrice": 2.99,
+    "monotonicStep": 0.5,
+    "noDataBuffer": 1.0,
+    "roundingMode": "49_99",
+    "paymentFeePercent": 0.029,
+    "paymentFeeFixed": 0.30
+  }
+}
+```
+
+All `params` fields are optional and merged over `DEFAULT_PRICING_PARAMS`.
+
+- `paymentFeePercent` (0–0.20): per-transaction percentage fee (Shopify Payments default 0.029).
+- `paymentFeeFixed` (0–5.00): per-transaction fixed fee in USD (Shopify Payments default 0.30).
+- `monotonicStep` (≥ 0): minimum dollar gap between adjacent variants in the data×validity partial order. Catches diagonal violations (more data AND more days must always cost more).
+
+Payment fees are absorbed into `cost` *before* margin tiers, so the cost floor lifts to cover Shopify processing.
+
+**Response:** `{ ok: true, background: "suggestions_started", params: <effective params> }`. Returns `400` if any param is out of range, or `409` if a smart-pricing run is already in progress.

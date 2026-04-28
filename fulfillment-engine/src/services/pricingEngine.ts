@@ -33,9 +33,13 @@ export interface PricingParams {
   survivalMargin: number; // default 0.15 (15%)
   undercutPercent: number; // default 0.10 (10%)
   minimumPrice: number; // default 2.99
-  monotonicStep: number; // default 1.00
+  monotonicStep: number; // default 1.0 (post-rounding step between adjacent variants)
   noDataBuffer: number; // default 1.0 (multiplier on floor when no competitor data)
   roundingMode: RoundingMode; // default '49_99'
+  // Per-transaction payment processing fees absorbed into the cost floor before margin tiers.
+  // Approximates retail-side fees against cost; the markup absorbs the small delta.
+  paymentFeePercent: number; // default 0 (Shopify Payments recommended: 0.029 = 2.9%)
+  paymentFeeFixed: number; // default 0 (Shopify Payments recommended: $0.30 per transaction)
 }
 
 export const DEFAULT_PRICING_PARAMS: PricingParams = {
@@ -45,6 +49,10 @@ export const DEFAULT_PRICING_PARAMS: PricingParams = {
   monotonicStep: 1.0,
   noDataBuffer: 1.0,
   roundingMode: '49_99',
+  // Backend defaults are 0 so existing flows are unchanged. The dashboard ships
+  // Shopify-shaped recommendations (2.9% + $0.30) which the user can opt into.
+  paymentFeePercent: 0,
+  paymentFeeFixed: 0,
 };
 
 function getMultiplier(cost: number, tiers: MarginTier[]): number {
@@ -54,6 +62,12 @@ function getMultiplier(cost: number, tiers: MarginTier[]): number {
   return tiers[tiers.length - 1]?.multiplier ?? 1.25;
 }
 
+export function applyPaymentFees(cost: number, params: PricingParams): number {
+  const pct = Math.max(0, params.paymentFeePercent ?? 0);
+  const fixed = Math.max(0, params.paymentFeeFixed ?? 0);
+  return cost + cost * pct + fixed;
+}
+
 export function calculateFloors(
   cost: number,
   params: PricingParams,
@@ -61,9 +75,10 @@ export function calculateFloors(
 ): { standardFloor: number; survivalFloor: number } {
   const cfp = costFloorParams ?? DEFAULT_COST_FLOOR_PARAMS;
   const minPrice = cfp.minimumPrice;
+  const grossCost = applyPaymentFees(cost, params);
   return {
-    standardFloor: Math.max(minPrice, cost * getMultiplier(cost, cfp.marginTiers)),
-    survivalFloor: Math.max(minPrice, cost * (1 + params.survivalMargin)),
+    standardFloor: Math.max(minPrice, grossCost * getMultiplier(grossCost, cfp.marginTiers)),
+    survivalFloor: Math.max(minPrice, grossCost * (1 + params.survivalMargin)),
   };
 }
 
@@ -132,36 +147,40 @@ interface VariantForPricing {
   priceLocked: boolean;
 }
 
+/**
+ * Enforce strict monotonic pricing across the (dataMb × validityDays) partial order.
+ *
+ * For any pair A, B where A.dataMb ≤ B.dataMb AND A.validityDays ≤ B.validityDays
+ * AND (A.dataMb < B.dataMb OR A.validityDays < B.validityDays), require:
+ *   B.price ≥ A.price + step
+ *
+ * Catches "diagonal" violations (e.g. 1GB/3d vs 2GB/2d) that the previous 2-pass
+ * algorithm missed. Locked variants are not modified but still anchor the order.
+ *
+ * O(N²) per call — N is small (≤ ~50 variants per country).
+ */
 export function enforceMonotonicPricing(variants: VariantForPricing[], step: number): void {
-  // Pass 1: Within each validity, more data = more expensive
-  const byValidity = new Map<number, VariantForPricing[]>();
-  for (const v of variants) {
-    if (!byValidity.has(v.validityDays)) byValidity.set(v.validityDays, []);
-    byValidity.get(v.validityDays)!.push(v);
-  }
-  for (const group of byValidity.values()) {
-    group.sort((a, b) => a.dataMb - b.dataMb);
-    for (let i = 1; i < group.length; i++) {
-      if (group[i].priceLocked) continue;
-      if (group[i].price <= group[i - 1].price) {
-        group[i].price = group[i - 1].price + step;
+  // Sweep in partial-order: predecessors must come before successors.
+  const sorted = [...variants].sort(
+    (a, b) =>
+      a.dataMb + a.validityDays - (b.dataMb + b.validityDays) ||
+      a.dataMb - b.dataMb ||
+      a.validityDays - b.validityDays,
+  );
+  for (const b of sorted) {
+    let maxPredecessor = -Infinity;
+    for (const a of sorted) {
+      if (a === b) continue;
+      const dataLE = a.dataMb <= b.dataMb;
+      const daysLE = a.validityDays <= b.validityDays;
+      const strict = a.dataMb < b.dataMb || a.validityDays < b.validityDays;
+      if (dataLE && daysLE && strict) {
+        if (a.price > maxPredecessor) maxPredecessor = a.price;
       }
     }
-  }
-
-  // Pass 2: Within each data amount, more validity = more expensive
-  const byData = new Map<number, VariantForPricing[]>();
-  for (const v of variants) {
-    if (!byData.has(v.dataMb)) byData.set(v.dataMb, []);
-    byData.get(v.dataMb)!.push(v);
-  }
-  for (const group of byData.values()) {
-    group.sort((a, b) => a.validityDays - b.validityDays);
-    for (let i = 1; i < group.length; i++) {
-      if (group[i].priceLocked) continue;
-      if (group[i].price <= group[i - 1].price) {
-        group[i].price = group[i - 1].price + step;
-      }
+    if (b.priceLocked) continue;
+    if (maxPredecessor !== -Infinity && b.price <= maxPredecessor) {
+      b.price = maxPredecessor + step;
     }
   }
 }
@@ -366,7 +385,7 @@ export async function generateSuggestions(
       // Still track for monotonic enforcement
       const parsed = parseShopifySku(variant.sku);
       if (parsed) {
-        const key = `${variant.template.countryCode}:${variant.planType}`;
+        const key = `${variant.template.countryCode}`;
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key)!.push({
           id: variant.id,
@@ -438,8 +457,10 @@ export async function generateSuggestions(
         params,
       );
 
-      // Track for monotonic enforcement
-      const key = `${variant.template.countryCode}:${variant.planType}`;
+      // Track for monotonic enforcement. Group by country only so diagonals across
+      // planType (Day-Pass vs Total Data) are also enforced — customers see them on
+      // the same product page and expect a coherent ladder.
+      const key = `${variant.template.countryCode}`;
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key)!.push({
         id: variant.id,
@@ -469,15 +490,20 @@ export async function generateSuggestions(
     }
   }
 
-  // Monotonic enforcement + rounding
+  // Round first, then enforce monotonic on rounded prices, so the step survives rounding.
+  // Without this ordering, two variants both clamped to the $2.99 minimum would get
+  // bumped to $3.49 / etc by monotonic but rounding back up could erode the step;
+  // by rounding first, the partial-order sweep guarantees rounded[B] ≥ rounded[A] + step.
   for (const [, group] of groups) {
+    for (const v of group) {
+      if (!v.priceLocked) v.price = roundPrice(v.price, params.roundingMode);
+    }
     enforceMonotonicPricing(group, params.monotonicStep);
     for (const v of group) {
       if (v.priceLocked) continue;
-      const rounded = roundPrice(v.price, params.roundingMode);
       await prisma.shopifyProductTemplateVariant.update({
         where: { id: v.id },
-        data: { proposedPrice: rounded },
+        data: { proposedPrice: v.price },
       });
     }
   }

@@ -2369,6 +2369,25 @@ Countries: ${countryList}`,
 
       const params = { ...DEFAULT_PRICING_PARAMS, ...body.params };
 
+      // Guard absurd values for the payment-fee inputs (Shopify-shaped: 2.9% + $0.30).
+      if (
+        params.paymentFeePercent < 0 ||
+        params.paymentFeePercent > 0.2 ||
+        !Number.isFinite(params.paymentFeePercent)
+      ) {
+        return reply.status(400).send({ error: 'paymentFeePercent must be between 0 and 0.20' });
+      }
+      if (
+        params.paymentFeeFixed < 0 ||
+        params.paymentFeeFixed > 5 ||
+        !Number.isFinite(params.paymentFeeFixed)
+      ) {
+        return reply.status(400).send({ error: 'paymentFeeFixed must be between 0 and 5.00' });
+      }
+      if (params.monotonicStep < 0 || !Number.isFinite(params.monotonicStep)) {
+        return reply.status(400).send({ error: 'monotonicStep must be ≥ 0' });
+      }
+
       void (async () => {
         const run = await prisma.pricingRun.create({
           data: {

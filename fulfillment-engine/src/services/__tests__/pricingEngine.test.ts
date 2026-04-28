@@ -24,6 +24,8 @@ describe('DEFAULT_PRICING_PARAMS', () => {
       monotonicStep: 1.0,
       noDataBuffer: 1.0,
       roundingMode: '49_99',
+      paymentFeePercent: 0,
+      paymentFeeFixed: 0,
     });
   });
 });
@@ -421,8 +423,10 @@ describe('enforceMonotonicPricing', () => {
       enforceMonotonicPricing(variants, step);
       // Locked variant stays at 5, even though it should be >= 11
       expect(variants[1].price).toBe(5);
-      // Unlocked variant 3 gets bumped relative to variant 2 (locked at 5): 5 + 1 = 6
-      expect(variants[2].price).toBe(6);
+      // Variant 3 must respect ALL predecessors (v1 at 10, v2 locked at 5).
+      // Max predecessor = 10, so v3 = 10 + step = 11. The locked-low v2 cannot
+      // suppress the bump from v1.
+      expect(variants[2].price).toBe(11);
     });
 
     it('locked variant acts as a fixed point for subsequent variants', () => {
@@ -503,5 +507,105 @@ describe('enforceMonotonicPricing', () => {
       // Equal prices trigger a bump (<=)
       expect(variants[1].price).toBe(11);
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // Partial-order coverage (diagonal): the original 2-pass algorithm missed
+  // pairs where BOTH dataMb and validityDays differ. The new sweep catches them.
+  // -------------------------------------------------------------------------
+  describe('diagonal violations', () => {
+    it('bumps a successor with both more data AND more days', () => {
+      const variants = [
+        { id: '1', dataMb: 1024, validityDays: 3, price: 5, priceLocked: false },
+        { id: '2', dataMb: 2048, validityDays: 5, price: 5, priceLocked: false },
+      ];
+      enforceMonotonicPricing(variants, step);
+      // v2 has more of both → must be ≥ v1 + step
+      expect(variants[1].price).toBe(6);
+    });
+
+    it('the 2GB/2d == 2GB/3d == $2.99 bug — strict step enforced', () => {
+      const variants = [
+        { id: '1', dataMb: 2048, validityDays: 2, price: 2.99, priceLocked: false },
+        { id: '2', dataMb: 2048, validityDays: 3, price: 2.99, priceLocked: false },
+      ];
+      enforceMonotonicPricing(variants, 0.5);
+      expect(variants[0].price).toBe(2.99);
+      expect(variants[1].price).toBe(3.49);
+    });
+
+    it('cascades across mixed dimensions', () => {
+      const variants = [
+        { id: '1', dataMb: 1024, validityDays: 1, price: 3, priceLocked: false },
+        { id: '2', dataMb: 1024, validityDays: 3, price: 3, priceLocked: false },
+        { id: '3', dataMb: 2048, validityDays: 1, price: 3, priceLocked: false },
+        { id: '4', dataMb: 2048, validityDays: 3, price: 3, priceLocked: false },
+      ];
+      enforceMonotonicPricing(variants, 1.0);
+      // v1 stays at 3; v2 and v3 bump to 4 (one predecessor at 3); v4 bumps to 5
+      // (max predecessor among {v1=3, v2=4, v3=4} is 4)
+      expect(variants[0].price).toBe(3);
+      expect(variants[1].price).toBe(4);
+      expect(variants[2].price).toBe(4);
+      expect(variants[3].price).toBe(5);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Payment fee absorption — Shopify-shaped 2.9% + $0.30 lifts the cost floor.
+// ---------------------------------------------------------------------------
+describe('calculateFloors with payment fees', () => {
+  it('applies fees before margin tiers (default zero leaves baseline math)', () => {
+    const { standardFloor } = calculateFloors(2, DEFAULT_PRICING_PARAMS);
+    // Default fees are 0, so this matches the original tier 2 result: 2 * 2.5 = 5.0
+    expect(standardFloor).toBe(5.0);
+  });
+
+  it('Shopify defaults (2.9% + $0.30) lift a $2 cost into a higher floor', () => {
+    const params: PricingParams = {
+      ...DEFAULT_PRICING_PARAMS,
+      paymentFeePercent: 0.029,
+      paymentFeeFixed: 0.3,
+    };
+    const { standardFloor, survivalFloor } = calculateFloors(2, params);
+    // grossCost = 2 + 2*0.029 + 0.30 = 2.358
+    // multiplier(2.358) → tier 2 (2.358 < 3) → 2.5x
+    // standardFloor = 2.358 * 2.5 = 5.895
+    expect(standardFloor).toBeCloseTo(5.895, 5);
+    // survivalFloor = 2.358 * 1.15 = 2.7117 → clamped to minimumPrice 2.99
+    expect(survivalFloor).toBe(2.99);
+  });
+
+  it('fixed-only fee (no percent) shifts cost up by the fixed amount', () => {
+    const params: PricingParams = {
+      ...DEFAULT_PRICING_PARAMS,
+      paymentFeePercent: 0,
+      paymentFeeFixed: 0.5,
+    };
+    const { standardFloor } = calculateFloors(2, params);
+    // grossCost = 2.5; tier 2 → 2.5 * 2.5 = 6.25
+    expect(standardFloor).toBe(6.25);
+  });
+
+  it('large fees can push a low cost into a different margin tier', () => {
+    const params: PricingParams = {
+      ...DEFAULT_PRICING_PARAMS,
+      paymentFeePercent: 0,
+      paymentFeeFixed: 1.5,
+    };
+    // raw cost 2 falls in tier 2 (2.5x), but grossCost 3.5 falls in tier 3 (2.0x)
+    const { standardFloor } = calculateFloors(2, params);
+    expect(standardFloor).toBe(7.0); // 3.5 * 2.0
+  });
+
+  it('rejects negative fees by clamping to 0 in applyPaymentFees', () => {
+    const params: PricingParams = {
+      ...DEFAULT_PRICING_PARAMS,
+      paymentFeePercent: -1,
+      paymentFeeFixed: -10,
+    };
+    const { standardFloor } = calculateFloors(2, params);
+    expect(standardFloor).toBe(5.0);
   });
 });
